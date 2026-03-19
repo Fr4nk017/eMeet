@@ -1,0 +1,98 @@
+import type { ReactNode } from 'react'
+import BottomNavBar from './BottomNavBar'
+
+interface LayoutProps {
+  children: ReactNode
+  /** Si se muestra el header con el logo */
+  showHeader?: boolean
+  /** Título opcional en el header */
+  headerTitle?: string
+}
+
+/**
+ * Layout principal de la app.
+ *
+ * Estructura:
+ *  ┌─────────────────┐
+ *  │   Header (opt)  │  ← Logo eMeet + acciones
+ *  ├─────────────────┤
+ *  │                 │
+ *  │    Contenido    │  ← Slot children (cada pantalla)
+ *  │                 │
+ *  ├─────────────────┤
+ *  │  Bottom NavBar  │  ← Navegación fija inferior
+ *  └─────────────────┘
+ *
+ * El padding-bottom en el contenido compensa la altura de la NavBar (64px).
+ */
+export default function Layout({
+  children,
+  showHeader = true,
+  headerTitle,
+}: LayoutProps) {
+  return (
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(124,58,237,0.2),_transparent_28%),linear-gradient(180deg,_#101426_0%,_#1A1A2E_45%,_#15172B_100%)]">
+      <div className="mx-auto flex min-h-screen w-full max-w-[1400px] items-stretch gap-8 px-0 sm:px-4 lg:px-8 lg:py-6">
+        <section className="relative flex w-full min-w-0 flex-col overflow-hidden bg-surface sm:rounded-[32px] sm:border sm:border-white/5 sm:shadow-[0_24px_80px_rgba(5,10,30,0.45)] lg:h-[calc(100vh-3rem)] lg:max-w-[430px]">
+          {showHeader && (
+            <header className="flex items-center justify-between px-4 py-3 bg-surface/95 backdrop-blur-sm border-b border-white/5 z-40 flex-shrink-0 lg:px-5 lg:py-4">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-extrabold tracking-tight lg:text-[1.75rem]">
+                  <span className="text-white">e</span>
+                  <span className="text-primary">Meet</span>
+                </span>
+              </div>
+
+              {headerTitle && (
+                <h1 className="text-base font-semibold text-white lg:text-lg">{headerTitle}</h1>
+              )}
+
+              <div className="w-8" />
+            </header>
+          )}
+
+          <main className="flex min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-16 lg:pb-[72px]">
+            <div className="w-full">{children}</div>
+          </main>
+
+          <BottomNavBar />
+        </section>
+
+        <aside className="hidden min-w-0 flex-1 lg:flex lg:flex-col lg:justify-between lg:py-10">
+          <div className="max-w-2xl">
+            <p className="mb-4 inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-4 py-2 text-sm font-medium text-primary-light">
+              eMeet web preview
+            </p>
+            <h2 className="max-w-3xl text-5xl font-black leading-[1.02] tracking-tight text-white xl:text-6xl">
+              Descubre eventos cercanos con una interfaz pensada para decidir rápido.
+            </h2>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
+              La versión web ahora mantiene una columna principal tipo app móvil, pero dentro de un canvas de escritorio más claro y aprovechable. Así el feed se entiende mejor sin perder la lógica tipo Tinder.
+            </p>
+          </div>
+
+          <div className="grid max-w-3xl grid-cols-3 gap-4">
+            <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+              <p className="text-sm font-semibold text-white">Feed principal</p>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                Stack de tarjetas con swipe, guardado y estados visuales claros.
+              </p>
+            </div>
+            <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+              <p className="text-sm font-semibold text-white">Exploración</p>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                Búsqueda, filtros por categoría y acceso rápido a eventos destacados.
+              </p>
+            </div>
+            <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+              <p className="text-sm font-semibold text-white">Base para API</p>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                La estructura ya está lista para conectar autenticación, favoritos y backend real.
+              </p>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  )
+}
