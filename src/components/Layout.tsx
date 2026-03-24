@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import BottomNavBar from './BottomNavBar'
+import BellavistaMap from './BellavistaMap'
 
 interface LayoutProps {
   children: ReactNode
@@ -58,20 +59,24 @@ export default function Layout({
           <BottomNavBar />
         </section>
 
-        <aside className="hidden min-w-0 flex-1 lg:flex lg:flex-col lg:justify-between lg:py-10">
-          <div className="max-w-2xl">
-            <p className="mb-4 inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-4 py-2 text-sm font-medium text-primary-light">
+        <aside className="hidden min-w-0 flex-1 lg:flex lg:flex-col lg:gap-5 lg:py-8">
+          {/* Título compacto */}
+          <div className="flex-shrink-0 max-w-2xl">
+            <p className="mb-3 inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-4 py-2 text-sm font-medium text-primary-light">
               eMeet web preview
             </p>
-            <h2 className="max-w-3xl text-5xl font-black leading-[1.02] tracking-tight text-white xl:text-6xl">
+            <h2 className="max-w-3xl text-4xl font-black leading-[1.05] tracking-tight text-white xl:text-5xl">
               Descubre eventos cercanos con una interfaz pensada para decidir rápido.
             </h2>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
-              La versión web ahora mantiene una columna principal tipo app móvil, pero dentro de un canvas de escritorio más claro y aprovechable. Así el feed se entiende mejor sin perder la lógica tipo Tinder.
-            </p>
           </div>
 
-          <div className="grid max-w-3xl grid-cols-3 gap-4">
+          {/* Mapa Google Maps — Barrio Bellavista */}
+          <div className="min-h-0 flex-1 overflow-hidden rounded-[28px] border border-white/10 shadow-[0_24px_60px_rgba(0,0,0,0.45)]">
+            <BellavistaMap />
+          </div>
+
+          {/* Cards de features */}
+          <div className="flex-shrink-0 grid max-w-3xl grid-cols-3 gap-4">
             <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
               <p className="text-sm font-semibold text-white">Feed principal</p>
               <p className="mt-2 text-sm leading-6 text-slate-300">
