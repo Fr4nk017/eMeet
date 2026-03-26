@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { GoogleMap, useJsApiLoader, OverlayView } from '@react-google-maps/api'
 import type { Libraries } from '@react-google-maps/api'
 
@@ -8,6 +8,7 @@ const CENTER: google.maps.LatLngLiteral = { lat: -33.4364, lng: -70.6358 }
 
 interface Place {
   id: string
+  placeId: string
   name: string
   category: string
   position: google.maps.LatLng
@@ -15,6 +16,8 @@ interface Place {
   type: string
   address: string
   isOpen?: boolean | null
+  photoUrl?: string
+  photoLoading?: boolean
 }
 
 const DARK_STYLE: google.maps.MapTypeStyle[] = [
@@ -83,6 +86,94 @@ export default function BellavistaMap() {
   const [loading, setLoading] = useState(false)
   const mapRef = useRef<google.maps.Map | null>(null)
   const serviceRef = useRef<google.maps.places.PlacesService | null>(null)
+  const hoverTimeoutRef = useRef<number | null>(null)
+  // Cache para no repetir llamadas getDetails del mismo lugar
+  const detailsCacheRef = useRef<Record<string, string | null>>({})
+  const [activeFilters, setActiveFilters] = useState<Set<string>>(
+    new Set(['restaurant', 'bar', 'night_club', 'cafe'])
+  )
+  const [userLocation, setUserLocation] = useState<google.maps.LatLngLiteral | null>(null)
+  const [locating, setLocating] = useState(false)
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+    }
+  }, [])
+
+  const handleMarkerEnter = (place: Place) => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+
+    // Si ya tenemos foto en cache, mostrar directo
+    if (detailsCacheRef.current[place.placeId] !== undefined) {
+      setActivePlace({ ...place, photoUrl: detailsCacheRef.current[place.placeId] ?? undefined })
+      return
+    }
+
+    // Mostrar card de inmediato (sin foto) mientras carga
+    setActivePlace({ ...place, photoLoading: true })
+
+    // Pedir detalles del lugar para obtener foto confiable
+    if (!serviceRef.current) return
+    serviceRef.current.getDetails(
+      {
+        placeId: place.placeId,
+        fields: ['photos', 'opening_hours', 'rating'],
+      },
+      (result, status) => {
+        let photoUrl: string | null = null
+        if (status === google.maps.places.PlacesServiceStatus.OK && result?.photos?.length) {
+          photoUrl = result.photos[0].getUrl({ maxWidth: 400 })
+        }
+        // Guardar en cache
+        detailsCacheRef.current[place.placeId] = photoUrl
+
+        // Actualizar card solo si sigue siendo el lugar activo
+        setActivePlace((prev) =>
+          prev?.placeId === place.placeId
+            ? { ...prev, photoUrl: photoUrl ?? undefined, photoLoading: false }
+            : prev
+        )
+      }
+    )
+  }
+
+  const handleMarkerLeave = () => {
+    hoverTimeoutRef.current = window.setTimeout(() => setActivePlace(null), 180)
+  }
+
+  const handleCardEnter = () => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+  }
+
+  const handleCardLeave = () => {
+    setActivePlace(null)
+  }
+
+  const toggleFilter = (type: string) => {
+    setActiveFilters((prev) => {
+      if (prev.size === 1 && prev.has(type)) return prev // al menos 1 activo
+      const next = new Set(prev)
+      next.has(type) ? next.delete(type) : next.add(type)
+      return next
+    })
+  }
+
+  const goToMyLocation = () => {
+    if (!navigator.geolocation || locating) return
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        setUserLocation(loc)
+        mapRef.current?.panTo(loc)
+        mapRef.current?.setZoom(15)
+        setLocating(false)
+      },
+      () => setLocating(false),
+      { timeout: 10000 }
+    )
+  }
 
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? '',
@@ -121,6 +212,7 @@ export default function BellavistaMap() {
         if (status === google.maps.places.PlacesServiceStatus.OK && results) {
           const mapped = results.slice(0, 8).map((place, idx) => ({
             id: `${search.type}-${idx}`,
+            placeId: place.place_id || `${search.type}-${idx}`,
             name: place.name || 'Sin nombre',
             category: TYPE_CONFIG[search.type]?.category || 'Lugar',
             position: place.geometry?.location || new google.maps.LatLng(0, 0),
@@ -168,6 +260,8 @@ export default function BellavistaMap() {
     searchPlaces()
   }, [searchPlaces])
 
+  const visiblePlaces = places.filter((p) => activeFilters.has(p.type))
+
   if (loadError) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-card px-6 text-center">
@@ -201,16 +295,70 @@ export default function BellavistaMap() {
     >
       {/* ── Indicador de carga ──────────────────────────────────────────── */}
       {loading && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40">
-          <div className="flex items-center gap-2 bg-slate-950/80 px-4 py-2 rounded-full border border-white/10 backdrop-blur-md shadow-lg">
+        <div className="absolute top-4 right-4 z-40">
+          <div className="flex items-center gap-1.5 bg-slate-950/85 px-3 py-1.5 rounded-full border border-white/10 backdrop-blur-md shadow-lg">
             <div className="h-3 w-3 animate-spin rounded-full border border-primary border-t-transparent" />
-            <span className="text-xs font-medium text-slate-300">Buscando lugares...</span>
+            <span className="text-xs font-medium text-slate-300">Buscando...</span>
           </div>
         </div>
       )}
 
+      {/* ── Filtros por categoría ───────────────────────────────────────── */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex gap-2">
+        {(['restaurant', 'bar', 'night_club', 'cafe'] as const).map((type) => {
+          const cfg = TYPE_CONFIG[type]
+          const isOn = activeFilters.has(type)
+          return (
+            <button
+              key={type}
+              type="button"
+              onClick={() => toggleFilter(type)}
+              style={{
+                backgroundColor: isOn ? cfg.color : 'rgba(10,12,30,0.88)',
+                borderColor: cfg.color,
+                color: isOn ? '#fff' : cfg.color,
+                boxShadow: isOn ? `0 0 10px ${cfg.color}55` : 'none',
+              }}
+              className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold backdrop-blur-md transition-all duration-200 whitespace-nowrap select-none"
+            >
+              <span>{cfg.emoji}</span>
+              <span>{cfg.category}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* ── Botón mi ubicación ──────────────────────────────────────────── */}
+      <div className="absolute bottom-24 right-3 z-30">
+        <button
+          type="button"
+          onClick={goToMyLocation}
+          disabled={locating}
+          title="Ir a mi ubicación"
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-[rgba(10,12,30,0.92)] backdrop-blur-md shadow-lg transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-60"
+        >
+          {locating ? (
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-blue-400" />
+          ) : (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-5 w-5 text-blue-400"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+            </svg>
+          )}
+        </button>
+      </div>
+
       {/* ── Marcadores de lugares reales ────────────────────────────────── */}
-      {places.map((place) => {
+      {visiblePlaces.map((place) => {
         const config = TYPE_CONFIG[place.type] || TYPE_CONFIG.restaurant
         const isActive = activePlace?.id === place.id
 
@@ -223,79 +371,160 @@ export default function BellavistaMap() {
           >
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                setActivePlace((prev) => (prev?.id === place.id ? null : place))
-              }}
+              onMouseEnter={() => handleMarkerEnter(place)}
+              onMouseLeave={handleMarkerLeave}
+              onClick={(e) => e.stopPropagation()}
               style={{
-                backgroundColor: config.color,
-                border: `2px solid rgba(255,255,255,${isActive ? '0.45' : '0.18'})`,
+                backgroundColor: isActive ? config.color : 'rgba(20, 22, 48, 0.85)',
+                border: `2px solid ${config.color}`,
                 boxShadow: isActive
-                  ? `0 0 0 3px ${config.color}50, 0 8px 28px rgba(0,0,0,0.6)`
-                  : '0 4px 16px rgba(0,0,0,0.5)',
-                transform: isActive ? 'scale(1.12)' : 'scale(1)',
+                  ? `0 0 0 4px ${config.color}40, 0 6px 20px rgba(0,0,0,0.6)`
+                  : `0 2px 8px rgba(0,0,0,0.5)`,
+                width: '34px',
+                height: '34px',
+                transform: isActive ? 'scale(1.25)' : 'scale(1)',
               }}
-              className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-bold text-white transition-all duration-200"
+              className="flex cursor-pointer items-center justify-center rounded-full text-base transition-all duration-200"
             >
-              <span>{config.emoji}</span>
-              <span className="max-w-[120px] truncate">{place.name}</span>
+              <span style={{ filter: isActive ? 'none' : 'grayscale(0.2)' }}>
+                {config.emoji}
+              </span>
             </button>
           </OverlayView>
         )
       })}
 
-      {/* ── Mini card del lugar activo ──────────────────────────────────── */}
+      {/* ── Marcador de ubicación del usuario ──────────────────────────── */}
+      {userLocation && (
+        <OverlayView
+          position={userLocation}
+          mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+          getPixelPositionOffset={(w, h) => ({ x: -w / 2, y: -h / 2 })}
+        >
+          <div className="relative flex items-center justify-center">
+            {/* Aro pulsante exterior */}
+            <span className="absolute inline-flex h-10 w-10 animate-ping rounded-full bg-blue-400 opacity-20" />
+            {/* Punto central */}
+            <span
+              className="relative flex h-5 w-5 items-center justify-center rounded-full border-2 border-white shadow-lg"
+              style={{ backgroundColor: '#3B82F6' }}
+            >
+              <span className="h-2 w-2 rounded-full bg-white" />
+            </span>
+          </div>
+        </OverlayView>
+      )}
+
+      {/* ── Hover card del lugar ──────────────────────────────────────── */}
       {activePlace && (() => {
         const config = TYPE_CONFIG[activePlace.type] || TYPE_CONFIG.restaurant
         return (
           <OverlayView
             position={activePlace.position}
             mapPaneName={OverlayView.FLOAT_PANE}
-            getPixelPositionOffset={(w, h) => ({ x: -w / 2, y: -h - 26 })}
+            getPixelPositionOffset={(w, h) => ({ x: -w / 2, y: -h - 22 })}
           >
             <div
+              onMouseEnter={handleCardEnter}
+              onMouseLeave={handleCardLeave}
               onClick={(e) => e.stopPropagation()}
-              className="w-56 overflow-hidden rounded-2xl border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.65)]"
+              className="w-60 overflow-hidden rounded-2xl border border-white/10 shadow-[0_24px_64px_rgba(0,0,0,0.75)]"
               style={{
-                background: 'rgba(13, 16, 38, 0.96)',
-                backdropFilter: 'blur(24px)',
-                WebkitBackdropFilter: 'blur(24px)',
+                background: 'rgba(10, 12, 30, 0.97)',
+                backdropFilter: 'blur(28px)',
+                WebkitBackdropFilter: 'blur(28px)',
               }}
             >
-              {/* Header */}
-              <div
-                className="flex items-center gap-2.5 px-4 py-3"
-                style={{ background: config.color }}
-              >
-                <span className="text-xl">{config.emoji}</span>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-white leading-tight">
-                    {activePlace.name}
-                  </p>
-                  <p className="text-xs text-white/75">{config.category}</p>
+              {/* Foto del lugar */}
+              {activePlace.photoLoading ? (
+                /* Skeleton mientras carga la foto */
+                <div
+                  className="flex h-32 w-full items-center justify-center"
+                  style={{ background: `${config.color}18` }}
+                >
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white/80" />
                 </div>
-              </div>
+              ) : activePlace.photoUrl ? (
+                <div className="relative h-32 w-full overflow-hidden">
+                  <img
+                    src={activePlace.photoUrl}
+                    alt={activePlace.name}
+                    className="h-full w-full object-cover"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      // Si la imagen falla, ocultar el elemento y mostrar fallback
+                      const target = e.currentTarget as HTMLImageElement
+                      target.style.display = 'none'
+                    }}
+                  />
+                  {/* Gradiente sobre la foto */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                  {/* Badge categoría encima de la foto */}
+                  <span
+                    className="absolute bottom-2 left-3 rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
+                    style={{ backgroundColor: config.color }}
+                  >
+                    {config.emoji} {config.category}
+                  </span>
+                </div>
+              ) : (
+                /* Fallback si no hay foto disponible */
+                <div
+                  className="flex h-14 items-center justify-center gap-2"
+                  style={{ background: `${config.color}18` }}
+                >
+                  <span className="text-3xl">{config.emoji}</span>
+                  <span className="text-xs text-white/40">Sin foto disponible</span>
+                </div>
+              )}
 
-              {/* Detalles */}
-              <div className="space-y-2 px-4 py-3">
+              {/* Info */}
+              <div className="px-4 py-3 space-y-1.5">
+                <p className="text-sm font-bold text-white leading-snug">{activePlace.name}</p>
+
                 {activePlace.rating > 0 && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-yellow-400 text-xs">
+                    <span className="text-yellow-400 text-xs tracking-tight">
                       {'★'.repeat(Math.round(activePlace.rating))}
                       {'☆'.repeat(5 - Math.round(activePlace.rating))}
                     </span>
-                    <span className="text-white text-xs font-semibold">{activePlace.rating.toFixed(1)}</span>
+                    <span className="text-slate-300 text-xs font-semibold">
+                      {activePlace.rating.toFixed(1)}
+                    </span>
                   </div>
                 )}
-                {activePlace.address && (
-                  <p className="text-slate-300 text-xs leading-4">{activePlace.address}</p>
-                )}
-                {activePlace.isOpen !== null && (
-                  <p className={`text-xs font-medium ${activePlace.isOpen ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {activePlace.isOpen ? '🟢 Abierto ahora' : '🔴 Cerrado'}
+
+                {activePlace.isOpen !== null && activePlace.isOpen !== undefined && (
+                  <p
+                    className={`text-[11px] font-medium ${
+                      activePlace.isOpen ? 'text-emerald-400' : 'text-red-400'
+                    }`}
+                  >
+                    {activePlace.isOpen ? '● Abierto ahora' : '● Cerrado'}
                   </p>
                 )}
+
+                {/* Enlace a Google Maps */}
+                <a
+                  href={`https://www.google.com/maps/place/?q=place_id:${activePlace.placeId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:brightness-110"
+                  style={{ backgroundColor: TYPE_CONFIG[activePlace.type]?.color ?? '#F97316' }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                  </svg>
+                  Cómo llegar
+                </a>
               </div>
+
+              {/* Flecha apuntando al marcador */}
+              <div
+                className="absolute -bottom-[7px] left-1/2 -translate-x-1/2 h-3.5 w-3.5 rotate-45 border-r border-b border-white/10"
+                style={{ background: 'rgba(10, 12, 30, 0.97)' }}
+              />
             </div>
           </OverlayView>
         )
