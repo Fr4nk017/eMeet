@@ -87,6 +87,7 @@ export default function BellavistaMap() {
   const mapRef = useRef<google.maps.Map | null>(null)
   const serviceRef = useRef<google.maps.places.PlacesService | null>(null)
   const hoverTimeoutRef = useRef<number | null>(null)
+  const searchDebounceRef = useRef<number | null>(null)
   // Cache para no repetir llamadas getDetails del mismo lugar
   const detailsCacheRef = useRef<Record<string, string | null>>({})
   const [activeFilters, setActiveFilters] = useState<Set<string>>(
@@ -98,6 +99,7 @@ export default function BellavistaMap() {
   useEffect(() => {
     return () => {
       if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
     }
   }, [])
 
@@ -255,9 +257,10 @@ export default function BellavistaMap() {
     setTimeout(() => searchPlaces(), 500)
   }, [searchPlaces])
 
-  // Re-buscar cuando se mueva/zoom el mapa
+  // Re-buscar cuando se mueva/zoom el mapa (con debounce para no saturar la API)
   const onBoundsChanged = useCallback(() => {
-    searchPlaces()
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    searchDebounceRef.current = window.setTimeout(() => searchPlaces(), 600)
   }, [searchPlaces])
 
   const visiblePlaces = places.filter((p) => activeFilters.has(p.type))
