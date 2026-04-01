@@ -38,6 +38,7 @@
 | **Framer Motion** | 11 | Animaciones declarativas y gestos de arrastre (swipe) |
 | **React Router v6** | 6.27 | Navegación SPA entre pantallas |
 | **react-icons** | 5.3 | Set de iconos SVG (HeroIcons v2) |
+| **@react-google-maps/api** | 2.20.8 | Integración de Google Maps con Places API (búsqueda de locales cercanos) |
 
 ### ¿Por qué Vite y no Create React App?
 
@@ -67,9 +68,10 @@ src/
 │   └── AuthContext.tsx      # Estado global de autenticación (Context API)
 │
 ├── components/
-│   ├── Layout.tsx           # Wrapper con header y BottomNavBar
+│   ├── Layout.tsx           # Wrapper con header, BottomNavBar y sidebar de mapa
 │   ├── BottomNavBar.tsx     # Navegación inferior fija con NavLink activos
-│   └── SwipeCard.tsx        # Tarjeta de evento con arrastre Framer Motion
+│   ├── SwipeCard.tsx        # Tarjeta de evento con arrastre Framer Motion
+│   └── BellavistaMap.tsx    # Mapa Google Maps con Places API (locales cercanos)
 │
 └── pages/
     ├── FeedPage.tsx         # Pantalla principal: stack de swipe
@@ -191,17 +193,30 @@ npm run preview
 
 ## Variables de entorno
 
-Crear un archivo `.env` en la raíz cuando se integre el backend:
+Copiar `.env.example` como `.env.local` y completar los valores reales:
 
-```env
-# URL base de la API REST
-VITE_API_URL=https://api.emeet.cl
-
-# Clave de Google Maps (para el mapa de eventos)
-VITE_MAPS_API_KEY=tu_clave_aqui
+```bash
+cp .env.example .env.local
 ```
 
-> **Nota:** Todas las variables expuestas al cliente deben tener el prefijo `VITE_`. Nunca incluir claves secretas de backend en este archivo.
+Editar `.env.local`:
+
+```env
+# Clave de Google Maps JavaScript API + Places API
+VITE_GOOGLE_MAPS_API_KEY=tu_clave_aqui
+
+# URL base de la API REST (cuando se integre el backend)
+# VITE_API_URL=https://api.emeet.cl
+```
+
+### Cómo obtener la API key de Google Maps
+
+1. Ir a [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Crear un proyecto (o usar uno existente)
+3. Habilitar las APIs: **Maps JavaScript API** y **Places API**
+4. Generar una API key y (recomendado) restringirla a tu dominio
+
+> **Nota:** Todas las variables expuestas al cliente deben tener el prefijo `VITE_`. El archivo `.env.local` nunca debe subirse a git (ya está en `.gitignore`).
 
 ---
 
@@ -210,7 +225,7 @@ VITE_MAPS_API_KEY=tu_clave_aqui
 | Prioridad | Feature |
 |---|---|
 | 🔴 Alta | Integración con API REST (reemplazar mock data) |
-| 🔴 Alta | Mapa interactivo de eventos cercanos (Google Maps / Leaflet) |
+| ✅ Hecho | Mapa interactivo de eventos cercanos (Google Maps + Places API) |
 | 🟡 Media | Sistema de notificaciones (recordatorios de eventos guardados) |
 | 🟡 Media | Detalle expandido de evento (pantalla completa con info extra) |
 | 🟡 Media | Filtro por radio de distancia y precio |
