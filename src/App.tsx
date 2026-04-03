@@ -1,10 +1,14 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { NearbyPlacesProvider } from './context/NearbyPlacesContext'
+import { ChatProvider } from './context/ChatContext'
 import FeedPage from './pages/FeedPage'
 import AuthPage from './pages/AuthPage'
 import SearchPage from './pages/SearchPage'
 import SavedPage from './pages/SavedPage'
 import ProfilePage from './pages/ProfilePage'
+import ChatListPage from './pages/ChatListPage'
+import ChatRoomPage from './pages/ChatRoomPage'
 
 /**
  * ProtectedRoute — Redirige a /auth si el usuario no está autenticado.
@@ -67,6 +71,22 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/chat"
+        element={
+          <ProtectedRoute>
+            <ChatListPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/chat/:roomId"
+        element={
+          <ProtectedRoute>
+            <ChatRoomPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Fallback: cualquier ruta desconocida vuelve al feed */}
       <Route path="*" element={<Navigate to="/" replace />} />
@@ -87,7 +107,11 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <NearbyPlacesProvider>
+          <ChatProvider>
+            <AppRoutes />
+          </ChatProvider>
+        </NearbyPlacesProvider>
       </AuthProvider>
     </BrowserRouter>
   )
