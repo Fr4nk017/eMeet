@@ -1,3 +1,5 @@
+'use client'
+
 import {
   createContext,
   useCallback,
@@ -15,7 +17,7 @@ import { useNearbyPlaces } from '../hooks/useNearbyPlaces'
 const LIBRARIES: Libraries = ['places']
 const DEFAULT_PLACE_TYPES: PlaceType[] = ['restaurant', 'bar', 'night_club', 'cafe']
 
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY?.trim() ?? ''
+const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? ''
 const HAS_GOOGLE_MAPS_KEY = GOOGLE_MAPS_API_KEY.length > 0
 const LOOKS_LIKE_GOOGLE_MAPS_KEY = GOOGLE_MAPS_API_KEY.startsWith('AIza')
 

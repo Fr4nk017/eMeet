@@ -1,3 +1,5 @@
+'use client'
+
 import { useState, useRef } from 'react'
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
 import type { PanInfo } from 'framer-motion'
