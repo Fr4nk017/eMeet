@@ -1,3 +1,5 @@
+'use client'
+
 import { useCallback, useRef, useEffect, useMemo } from 'react'
 import { GoogleMap, OverlayView } from '@react-google-maps/api'
 import { PLACE_TYPE_CONFIG } from '../services/placesService'
