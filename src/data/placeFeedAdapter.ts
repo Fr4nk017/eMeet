@@ -62,6 +62,13 @@ function resolvePlaceImage(place: ScrapedPlace) {
   return PLACE_FALLBACK_IMAGES[place.type]
 }
 
+function normalizeExternalUrl(url?: string | null) {
+  const value = url?.trim()
+  if (!value) return null
+  if (/^https?:\/\//i.test(value)) return value
+  return `https://${value}`
+}
+
 export function placeToEvent(place: ScrapedPlace, distanceKm: number): Event {
   return {
     id: place.placeId,
@@ -74,6 +81,7 @@ export function placeToEvent(place: ScrapedPlace, distanceKm: number): Event {
     distance: Number(distanceKm.toFixed(1)),
     price: formatPriceEstimate(place.priceLevel),
     imageUrl: resolvePlaceImage(place),
+    websiteUrl: normalizeExternalUrl(place.website),
     organizerName: place.category,
     organizerAvatar: `https://api.dicebear.com/9.x/shapes/svg?seed=${place.placeId}`,
     attendees: Math.max(0, place.totalRatings),

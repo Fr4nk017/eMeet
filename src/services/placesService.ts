@@ -25,6 +25,62 @@ const PLACE_INCLUDED_TYPES: Record<PlaceType, string> = {
   food:         'food',
 }
 
+const PLACE_TYPE_PRIORITY: PlaceType[] = [
+  'night_club',
+  'bar',
+  'restaurant',
+  'cafe',
+  'liquor_store',
+  'food',
+]
+
+const EXCLUDED_GOOGLE_TYPES = new Set([
+  'gas_station',
+  'electric_vehicle_charging_station',
+  'parking',
+  'car_wash',
+  'car_repair',
+  'car_rental',
+  'car_dealer',
+  'supermarket',
+  'grocery_store',
+  'convenience_store',
+  'atm',
+  'bank',
+  'pharmacy',
+  'hospital',
+  'lodging',
+  'school',
+])
+
+const EXCLUDED_NAME_KEYWORDS = [
+  'copec',
+  'shell',
+  'petrobras',
+  'servicentro',
+  'gas station',
+  'bencina',
+]
+
+function resolveRelevantPlaceType(
+  googleTypes: string[] | undefined,
+  requestedType: PlaceType,
+  placeName: string | undefined,
+): PlaceType | null {
+  const safeTypes = googleTypes ?? []
+  const safeName = placeName?.toLowerCase() ?? ''
+
+  if (safeTypes.some((type) => EXCLUDED_GOOGLE_TYPES.has(type))) {
+    return null
+  }
+
+  if (EXCLUDED_NAME_KEYWORDS.some((keyword) => safeName.includes(keyword))) {
+    return null
+  }
+
+  return PLACE_TYPE_PRIORITY.find((type) => safeTypes.includes(type)) ?? requestedType
+}
+
 // ─── Helpers de conversión ───────────────────────────────────────────────────
 
 /** Convierte un LatLngBounds a CircleLiteral (centro + radio) para Place.searchNearby.
@@ -88,29 +144,41 @@ export async function searchNearbyPlaces(
   const settled = await Promise.all(searches)
 
   const all: ScrapedPlace[] = settled.flatMap(({ type, places }) =>
-    places
-      .filter((p) => p.location)
-      .map<ScrapedPlace>((p) => ({
+    places.reduce<ScrapedPlace[]>((acc, p) => {
+      if (!p.location) return acc
+
+      const resolvedType = resolveRelevantPlaceType(
+        p.types,
+        type,
+        p.displayName ?? undefined,
+      )
+
+      if (!resolvedType) return acc
+
+      acc.push({
         placeId:      p.id,
         name:         p.displayName ?? 'Sin nombre',
         address:      p.formattedAddress ?? '',
-        type,
-        category:     PLACE_TYPE_CONFIG[type].category,
+        type:         resolvedType,
+        category:     PLACE_TYPE_CONFIG[resolvedType].category,
         rating:       p.rating ?? 0,
         totalRatings: p.userRatingCount ?? 0,
         priceLevel:   priceLevelToNumber(p.priceLevel),
         isOpen:       null, // Place.isOpen() es async; se enriquece en fetchPlaceDetails
         position: {
-          lat: p.location!.lat(),
-          lng: p.location!.lng(),
+          lat: p.location.lat(),
+          lng: p.location.lng(),
         },
         photoUrl: p.photos?.length
           ? p.photos[0].getURI({ maxWidth: 800 })
           : undefined,
-        website:      null,
-        phone:        null,
-        openingHours: null,
-      }))
+        website:      undefined,
+        phone:        undefined,
+        openingHours: undefined,
+      })
+
+      return acc
+    }, [])
   )
 
   // Deduplicar por nombre (insensible a mayúsculas)
@@ -157,6 +225,11 @@ export async function fetchPlaceDetails(
       rating:       place.rating ?? undefined,
     }
   } catch {
-    return { photoUrl: null }
+    return {
+      photoUrl: null,
+      website: null,
+      phone: null,
+      openingHours: null,
+    }
   }
 }

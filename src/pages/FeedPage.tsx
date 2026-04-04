@@ -104,8 +104,14 @@ export default function FeedPage() {
         title: likedEvent.title,
         address: likedEvent.address,
       })
+
       // Unirse automáticamente al chat de comunidad
       joinRoom(likedEvent.id, likedEvent.title, likedEvent.imageUrl, likedEvent.address)
+
+      // Si el lugar tiene web, abrirla al dar like
+      if (likedEvent.websiteUrl) {
+        window.open(likedEvent.websiteUrl, '_blank', 'noopener,noreferrer')
+      }
     }
   }, [events, joinRoom])
 
