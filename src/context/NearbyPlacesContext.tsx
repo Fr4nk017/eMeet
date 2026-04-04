@@ -146,8 +146,13 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
   }, [isLoaded, refreshPlaces, selectedPlaceTypes, userLocation])
 
   useEffect(() => {
-    places.slice(0, 5).forEach((place) => {
-      if (place.photoUrl === undefined) {
+    places.slice(0, 6).forEach((place) => {
+      if (
+        place.photoUrl === undefined ||
+        place.website === undefined ||
+        place.phone === undefined ||
+        place.openingHours === undefined
+      ) {
         void enrichPlace(place.placeId)
       }
     })

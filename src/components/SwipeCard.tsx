@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
 import type { PanInfo } from 'framer-motion'
-import { HiMapPin, HiClock, HiUsers } from 'react-icons/hi2'
+import { HiMapPin, HiClock, HiUsers, HiGlobeAlt } from 'react-icons/hi2'
 import { HiHeart, HiX, HiBookmark } from 'react-icons/hi'
 import type { Event } from '../types'
 import { formatEventDate, formatPrice, CATEGORY_COLORS, CATEGORY_EMOJI } from '../data/mockEvents'
@@ -207,6 +207,21 @@ export default function SwipeCard({
               {formatPrice(event.price)}
             </span>
           </div>
+
+          {event.websiteUrl && (
+            <div className="mt-3">
+              <a
+                href={event.websiteUrl}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 backdrop-blur-sm transition-colors hover:bg-cyan-500/20"
+              >
+                <HiGlobeAlt className="h-4 w-4" />
+                Ver sitio web
+              </a>
+            </div>
+          )}
 
           {/* Botones de acción (solo en carta activa) */}
           {isActive && (

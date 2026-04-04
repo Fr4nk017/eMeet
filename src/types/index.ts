@@ -28,6 +28,7 @@ export interface Event {
   distance: number       // distancia en km desde el usuario
   price: number | null   // null = gratis
   imageUrl: string
+  websiteUrl?: string | null
   organizerName: string
   organizerAvatar: string
   attendees: number
