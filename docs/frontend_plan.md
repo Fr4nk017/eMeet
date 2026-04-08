@@ -1,364 +1,230 @@
-# eMeet - Frontend Plan
+# eMeet - Frontend Plan Actual
 
-## 1. Stack de frontend
+> **Nota:** este documento fue ajustado para reflejar el **frontend objetivo y coherente con la arquitectura final**. La integración directa con `Google Places API` se está usando solo como apoyo de desarrollo y **no debe considerarse una dependencia definitiva del frontend**, ya que la consulta de lugares se moverá a la capa backend / BFF.
 
-| Tecnología | Rol |
+---
+
+## 1. Stack actual de frontend
+
+| Tecnología | Uso actual en el proyecto |
 |---|---|
-| **Next.js 14+ App Router** | Framework base, rutas, layouts, SSR/SSG |
-| **TypeScript** | Tipado estático en todo el proyecto |
-| **Tailwind CSS** | Estilos utilitarios, diseño responsive |
-| **shadcn/ui** | Componentes base accesibles y personalizables |
-| **Framer Motion** | Animaciones de swipe, transiciones de feed |
-| **Zustand** | Estado global ligero (sesión, preferencias UI) |
-| **TanStack Query** | Caché y sincronización de datos del servidor |
-| **React Hook Form + Zod** | Formularios y validaciones tipadas |
-| **Supabase JS SDK** | Auth en cliente, realtime para matches |
-| **Prisma Client** | Acceso a base de datos solo desde server |
+| **Next.js 14 (App Router)** | Framework principal, rutas y layout de la aplicación |
+| **React 18** | Construcción de la interfaz interactiva |
+| **TypeScript** | Tipado del código y modelos de datos |
+| **Tailwind CSS** | Estilos utilitarios y diseño responsive |
+| **Framer Motion** | Animaciones de entrada, transiciones y gestos de swipe |
+| **React Icons** | Iconografía de la interfaz |
+| **Context API** | Manejo del estado compartido de auth, lugares cercanos y chat |
+| **Hooks personalizados** | Encapsulan lógica de filtros, ubicación y comportamiento de UI |
+| **PostCSS + Autoprefixer** | Procesamiento de estilos junto a Tailwind |
 
 ---
 
-## 2. Principios de desarrollo
+## 2. Principios de desarrollo actuales
 
-- Todo componente de UI que no necesite estado de cliente debe ser **Server Component** por defecto.
-- Los Client Components se marcan con `"use client"` solo cuando se necesita interactividad o hooks.
-- Nunca llamar a Prisma desde el cliente. Solo desde Server Components, Server Actions o Route Handlers.
-- Toda validación de formulario se hace en cliente con Zod y se repite en servidor antes de persistir.
-- El feed de swipe y las animaciones son lo único que requiere Framer Motion. No usarlo en otros componentes.
+- La aplicación usa **Next.js App Router** con páginas en la carpeta `app/`.
+- Se prioriza una **UI móvil e interactiva**, enfocada en descubrimiento de panoramas cercanos.
+- El estado global actual se maneja con **React Context**, evitando librerías adicionales mientras el MVP se consolida.
+- La autenticación y el chat todavía funcionan en modo **mock/local**, mientras se prepara la integración real con backend.
+- La consulta de lugares debe consumirse idealmente desde una **capa backend / BFF**, no como responsabilidad definitiva del cliente.
+- La interfaz se construye con **componentes reutilizables** y utilidades de Tailwind para mantener consistencia visual.
 
 ---
 
-## 3. Estructura de carpetas
+## 3. Estructura real de carpetas
 
 ```text
-src/
+eMeet_frontend/
   app/
-    (public)/                  # rutas sin autenticación requerida
-      page.tsx                 # landing page
-      events/
-        page.tsx               # explorador de eventos
-        [id]/
-          page.tsx             # detalle de evento
-      feed/
-        page.tsx               # feed tipo TikTok (video swipe)
-      auth/
-        login/
-          page.tsx
-        register/
-          page.tsx
-    (protected)/               # rutas que requieren sesión activa
-      matches/
-        page.tsx               # lista de matches del usuario
-      profile/
-        page.tsx               # perfil y preferencias
-        edit/
-          page.tsx
-      community/
-        page.tsx               # comunidad por evento
-    organizer/                 # rutas exclusivas de organizadores
-      dashboard/
-        page.tsx
-      events/
-        new/
-          page.tsx
-        [id]/
-          edit/
-            page.tsx
-    api/                        # Route Handlers
-      auth/
-      events/
-      feed/
-      swipes/
-      matches/
-      me/
-
-  components/
-    ui/                         # shadcn/ui generados
-    layout/
-      Navbar.tsx
-      Sidebar.tsx
-      Footer.tsx
-    feed/
-      VideoCard.tsx             # tarjeta de evento con video
-      SwipeFeed.tsx             # contenedor del feed vertical
-      SwipeControls.tsx         # botones de like/dislike
-    events/
-      EventCard.tsx
-      EventDetail.tsx
-      CategoryFilter.tsx
-      EventMap.tsx
+    layout.tsx                 # layout global de la app
+    page.tsx                   # feed principal
     auth/
-      LoginForm.tsx
-      RegisterForm.tsx
-    match/
-      MatchCard.tsx
-      MatchList.tsx
+      page.tsx                 # login / registro
+    search/
+      page.tsx                 # exploración de panoramas
+    saved/
+      page.tsx                 # elementos guardados
     profile/
-      ProfileForm.tsx
-      PreferencesForm.tsx
-    organizer/
-      EventForm.tsx
-      VideoUpload.tsx
+      page.tsx                 # perfil y preferencias
+    chat/
+      page.tsx                 # listado de salas/comunidades
+      [roomId]/
+        page.tsx               # sala de chat individual
 
-  hooks/
-    useLocation.ts             # geolocalización del usuario
-    useSwipe.ts                # lógica de swipe (like/dislike)
-    useSession.ts              # sesión de Supabase Auth
-    useNearbyEvents.ts         # fetch de eventos cercanos
-    useMatches.ts              # matches del usuario
+  src/
+    components/
+      BellavistaMap.tsx
+      BottomNavBar.tsx
+      DistanceFilter.tsx
+      Layout.tsx
+      PlaceTypeFilters.tsx
+      SwipeCard.tsx
 
-  lib/
-    supabase/
-      client.ts                # cliente para componentes de cliente
-      server.ts                # cliente para servidor (cookies)
-    prisma/
-      client.ts                # instancia singleton de Prisma
-    validations/
-      event.schema.ts
-      profile.schema.ts
-      auth.schema.ts
+    context/
+      AuthContext.tsx          # auth mock y usuario actual
+      NearbyPlacesContext.tsx  # ubicación, filtros y feed cercano
+      ChatContext.tsx          # salas y mensajes mock
+
     services/
-      event.service.ts
-      feed.service.ts
-      match.service.ts
-      user.service.ts
+      placesService.ts         # integración temporal usada en desarrollo; migrable al backend / BFF
 
-  types/
-    event.ts
-    user.ts
-    match.ts
-    category.ts
+    data/
+      mockEvents.ts            # datos de apoyo para prototipado
 
-  styles/
-    globals.css
+    types/
+      index.ts                 # tipos compartidos del dominio
+
+    providers/
+      AppProviders.tsx         # composición de providers globales
 ```
 
 ---
 
-## 4. Páginas y responsabilidades
+## 4. Páginas y responsabilidades actuales
 
-### 4.1 Landing page `/`
-- Presentación de eMeet.
-- CTA para explorar eventos o registrarse.
-- No requiere autenticación.
-- Server Component estático.
+### 4.1 Feed principal `/`
+- Muestra el contenido principal de descubrimiento.
+- Usa ubicación, distancia y tipo de lugar para personalizar resultados.
+- Integra acciones como `like`, `save` y acceso a comunidad.
+- Debe consumir lugares cercanos desde endpoints internos del backend / BFF.
 
-### 4.2 Feed de eventos `/feed`
-- Lista vertical de tarjetas con video corto por evento.
-- Autoplay del video al aparecer en viewport.
-- Swipe derecha = like, swipe izquierda = discard.
-- Pide permiso de ubicación al entrar.
-- Muestra solo eventos cercanos al usuario.
-- Accesible sin registro pero para guardar interacción requiere sesión.
-- Client Component con Framer Motion para gestos.
+### 4.2 Autenticación `/auth`
+- Permite alternar entre **inicio de sesión** y **registro**.
+- Actualmente funciona con lógica mock en `AuthContext`.
+- Sirve para validar el flujo de acceso del usuario dentro del MVP.
 
-### 4.3 Explorador de eventos `/events`
-- Lista visual de eventos publicados.
-- Filtros por categoría, fecha y distancia.
-- Server Component con filtros en URL params.
-- No requiere autenticación.
+### 4.3 Exploración `/search`
+- Lista panoramas o eventos filtrables por texto y categoría.
+- Usa datos mock para explorar la UX de navegación y descubrimiento.
+- Permite abrir un detalle visual mediante `SwipeCard`.
 
-### 4.4 Detalle de evento `/events/[id]`
-- Información completa del evento.
-- Video principal y galería de imágenes.
-- Botón de interés en asistir.
-- Sección de comunidad si el usuario está registrado.
-- Server Component con hidratación parcial para zona interactiva.
+### 4.4 Guardados `/saved`
+- Muestra elementos guardados por el usuario.
+- Actualmente opera con datos locales/mock.
+- Sirve como base para futura persistencia real.
 
-### 4.5 Login `/auth/login`
-- Formulario email y contraseña.
-- Auth con Supabase via Server Action.
-- Redirección post-login a donde vino el usuario.
+### 4.5 Perfil `/profile`
+- Permite ver y ajustar intereses y preferencias del usuario.
+- Trabaja sobre el estado gestionado desde `AuthContext` y `NearbyPlacesContext`.
+- Es la base del sistema de personalización del feed.
 
-### 4.6 Registro `/auth/register`
-- Formulario con nombre, email, contraseña.
-- Validación Zod en cliente y servidor.
-- Server Action que crea cuenta en Supabase Auth.
+### 4.6 Comunidad `/chat`
+- Presenta las salas disponibles asociadas a lugares o interacciones.
+- Muestra actividad simulada y navegación a conversación individual.
 
-### 4.7 Matches `/matches`
-- Lista de matches del usuario con otros usuarios por evento.
-- Solo accesible con sesión activa.
-- Realtime via Supabase para notificaciones de nuevos matches.
-
-### 4.8 Perfil y preferencias `/profile`
-- Datos del usuario.
-- Categorías favoritas.
-- Radio máximo de búsqueda.
-- Flag de buscar compañia.
-
-### 4.9 Dashboard organizador `/organizer/dashboard`
-- Vista de eventos publicados del organizador.
-- Estadísticas básicas por evento.
-- Acciones de publicar, editar, pausar.
-
-### 4.10 Crear / editar evento `/organizer/events/new`
-- Formulario completo para publicar evento.
-- Subida de video corto (máx 45 seg) y cover image.
-- Selección de categoría y ubicación en mapa.
-- Validación completa antes de guardar.
+### 4.7 Sala de conversación `/chat/[roomId]`
+- Permite enviar y visualizar mensajes dentro de una sala.
+- Funciona con estado local desde `ChatContext`.
+- Simula la futura integración realtime del backend.
 
 ---
 
-## 5. Flujos críticos de UI
+## 5. Flujos críticos actualmente implementados
 
-### 5.1 Flujo de geolocalización
-```
-Usuario entra a /feed
-  → useLocation() solicita permiso de ubicación
-  → si acepta: guarda lat/lng en Zustand
-  → useNearbyEvents fetcha eventos filtrados por radio
-  → si rechaza: muestra feed sin filtro de ubicación con aviso
-```
-
-### 5.2 Flujo de swipe con video
-```
-SwipeFeed renderiza lista de VideoCard en columna vertical
-  → cada VideoCard muestra un <video> con autoplay muted
-  → useSwipe detecta gestos con Framer Motion drag
-  → swipe derecha (x > threshold): POST /api/swipes action=right
-  → swipe izquierda (x < -threshold): POST /api/swipes action=left
-  → si no hay sesión: muestra modal de login al intentar swipe right
-  → la tarjeta se elimina del feed con animación de salida
-```
-
-### 5.3 Flujo de match
-```
-Usuario hace swipe right en evento
-  → se guarda event_swipe con action=right y wants_company=true
-  → servidor comprueba si hay otro usuario con mismo evento y wants_company=true
-  → si hay match: se crea user_match con status=pending
-  → Supabase Realtime notifica al usuario en /matches
-  → el otro usuario recibe notificación y puede aceptar o rechazar
-```
-
-### 5.4 Flujo de autenticación
-```
-Server Action de login/register
-  → valida datos con Zod
-  → llama a supabase.auth.signInWithPassword o signUp
-  → setea cookie de sesión httpOnly
-  → middleware de Next.js protege rutas de /protected y /organizer
-  → useSession en cliente lee la sesión desde Supabase
-```
-
----
-
-## 6. Componente VideoCard (diseño esperado)
-
-El componente central del producto. Debe:
-- Ocupar el 100% del viewport en mobile.
-- Mostrar video de fondo en loop con muted y autoplay.
-- Overlay con: nombre del evento, organizador, categoría, distancia, precio.
-- Indicadores visuales de swipe (corazón verde / X roja) al arrastrar.
-- Soporte de teclado y botones de acción para accesibilidad.
-
-```
-┌─────────────────────────────┐
-│                             │
-│    [VIDEO autoplay loop]    │
-│                             │
-│                             │
-│  ● Gastronomía  📍 1.2 km  │
-│                             │
-│  Noche de tapas             │
-│  El Rincón de Pablo         │
-│  Sábado 22 Mar · $15        │
-│                             │
-│  [✕ Discard] [♥ Me interesa]│
-└─────────────────────────────┘
-```
-
----
-
-## 7. Gestión de estado
-
-| Estado | Herramienta | Razón |
-|---|---|---|
-| Sesión de usuario | Zustand + Supabase | Persistir entre navegaciones |
-| Ubicación del usuario | Zustand | Usar en varios componentes |
-| Feed de eventos | TanStack Query | Caché y paginación eficiente |
-| Preferencias de usuario | TanStack Query | Sincronizado con servidor |
-| Matches en tiempo real | Supabase Realtime | Notificaciones instantáneas |
-| Estado del formulario | React Hook Form | Aislado por formulario |
-
----
-
-## 8. Autenticación y protección de rutas
-
-El middleware de Next.js lee la cookie de sesión de Supabase y redirige:
-
+### 5.1 Flujo de geolocalización y lugares cercanos
 ```text
-/matches, /profile, /community  → requieren sesión activa
-/organizer/*                    → requieren rol = organizer
+Usuario entra al feed
+  → NearbyPlacesContext obtiene ubicación del navegador
+  → el frontend envía ubicación y filtros a un endpoint interno
+  → backend / BFF consulta el servicio externo de lugares
+  → backend normaliza y filtra la respuesta
+  → el frontend muestra tarjetas interactivas con resultados relevantes
 ```
 
-```typescript
-// middleware.ts en la raíz del proyecto
-export const config = {
-  matcher: [
-    '/(protected)/:path*',
-    '/organizer/:path*',
-  ],
-}
+### 5.2 Flujo de interacción con tarjetas
+```text
+Usuario visualiza una SwipeCard
+  → puede marcar like, descartar o guardar
+  → la interfaz responde con animaciones y feedback visual
+  → si el lugar tiene sitio web, se puede abrir desde la tarjeta
+  → si hay interés social, se enlaza a la comunidad/chat asociada
+```
+
+### 5.3 Flujo de autenticación mock
+```text
+Usuario entra a /auth
+  → selecciona login o registro
+  → AuthContext simula la validación
+  → se actualiza el estado isAuthenticated
+  → el usuario es redirigido a la experiencia principal
+```
+
+### 5.4 Flujo de comunidad / chat
+```text
+Usuario entra a /chat
+  → visualiza salas disponibles
+  → selecciona una sala concreta
+  → envía mensajes en la vista /chat/[roomId]
+  → ChatContext actualiza los mensajes y el estado de lectura localmente
 ```
 
 ---
 
-## 9. Consideraciones de rendimiento
+## 6. Componentes clave de la interfaz
 
-- Usar `next/image` para todas las imágenes. Nunca `<img>` directo.
-- Usar `next/dynamic` para importar `SwipeFeed` y evitar SSR en el feed de video.
-- Paginar el feed de eventos (máx 10 por request).
-- Suspense + loading.tsx en todas las rutas de datos dinámicos.
-- Videos se reproducen solo en el card activo (IntersectionObserver).
+| Componente | Rol actual |
+|---|---|
+| `Layout.tsx` | Estructura general de la interfaz y navegación base |
+| `BottomNavBar.tsx` | Navegación inferior orientada a mobile |
+| `SwipeCard.tsx` | Tarjeta principal para mostrar un panorama/lugar y sus acciones |
+| `DistanceFilter.tsx` | Ajuste del radio de búsqueda según preferencia del usuario |
+| `PlaceTypeFilters.tsx` | Filtros por categorías de lugares como café, bar o restaurante |
+| `BellavistaMap.tsx` | Representación visual del mapa y contexto geográfico |
 
 ---
 
-## 10. Variables de entorno necesarias en cliente
+## 7. Gestión de estado actual
+
+| Estado | Herramienta actual | Propósito |
+|---|---|---|
+| Usuario autenticado | `AuthContext` | Manejar sesión mock, perfil e intereses |
+| Lugares cercanos y filtros | `NearbyPlacesContext` | Ubicación, radio de búsqueda, tipos y resultados |
+| Chat y salas | `ChatContext` | Mensajes, comunidades y lectura local |
+| Estado visual local | `useState` / `useMemo` / `useCallback` | Interacciones de cada pantalla y componentes |
+
+---
+
+## 8. Integraciones y variables de entorno del frontend
+
+En la arquitectura objetivo, el frontend **no debería exponer claves sensibles de servicios externos**. La consulta de lugares cercanos debe realizarse a través del backend / BFF, y no directamente desde el navegador.
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
 NEXT_PUBLIC_APP_URL=
 ```
 
-Solo las variables `NEXT_PUBLIC_` son accesibles desde el navegador.
+> Las credenciales de `Google Places API` y otros servicios externos deben permanecer del lado servidor. El frontend solo debería consumir endpoints internos seguros.
 
 ---
 
-## 11. Orden de desarrollo recomendado
+## 9. Consideraciones de rendimiento actuales
 
-### Parte 1 — Base del proyecto
-- Inicializar proyecto Next.js con TypeScript y Tailwind.
-- Instalar y configurar shadcn/ui.
-- Conectar Supabase Auth (login y registro funcionando).
-- Middleware de protección de rutas.
-- Layout base con Navbar.
+- Mantener el feed centrado en los lugares realmente relevantes para evitar sobrecarga visual.
+- Filtrar tipos no útiles desde `placesService.ts` para mejorar calidad de resultados.
+- Reutilizar componentes y estilos con Tailwind para reducir complejidad de mantenimiento.
+- Evitar dependencias adicionales mientras el MVP siga en fase de consolidación.
+- Usar la arquitectura de `app/` de Next.js para mantener rutas y vistas organizadas.
 
-### Parte 2 — Explorador de eventos
-- Página `/events` con listado de eventos desde Supabase.
-- Filtros por categoría via URL params.
-- Página `/events/[id]` con detalle completo.
-- Componente `EventCard` y `CategoryFilter`.
+---
 
-### Parte 3 — Feed de video swipe
-- Componente `VideoCard` con video y overlay de datos.
-- `SwipeFeed` con scroll vertical tipo TikTok.
-- Integración de `useLocation` para geolocalización.
-- Animaciones de swipe con Framer Motion.
-- Registro de swipes en base de datos.
+## 10. Próximos pasos recomendados para este frontend
 
-### Parte 4 — Match y comunidad
-- Lógica de match por evento en servidor.
-- Página `/matches` con lista de matches.
-- Realtime de Supabase para notificaciones.
-- Aceptar / rechazar match.
+### Etapa 1 — Consolidación del MVP actual
+- mantener el flujo de descubrimiento, guardado y perfil;
+- pulir responsive design y consistencia visual;
+- mejorar mensajes de error, estados vacíos y feedback al usuario.
 
-### Parte 5 — Panel de organizador
-- Dashboard con eventos propios.
-- Formulario de creación de evento con upload de video e imagen.
-- Gestión de estado de publicación.
+### Etapa 2 — Conexión con backend real
+- reemplazar `AuthContext` mock por autenticación real con `Supabase Auth`;
+- persistir likes, favoritos y preferencias;
+- conectar comunidades/chat con almacenamiento y realtime reales.
 
-### Parte 6 — Perfil y preferencias
-- Página de perfil editable.
-- Configuración de preferencias de categorías y radio.
-- Avatar upload con Supabase Storage.
+### Etapa 3 — Escalado funcional
+- agregar historial de interacciones;
+- habilitar promociones, cupones o QR;
+- mejorar personalización del feed con datos persistidos.
+
+---
+
+## 11. Resumen técnico
+
+El frontend actual de `eMeet` está construido como un **MVP funcional en Next.js**, con una experiencia visual moderna apoyada en **Tailwind CSS**, **Framer Motion** y **React Context**. La base está orientada a validar la experiencia de descubrimiento social de panoramas cercanos, dejando la integración de servicios externos sensibles y la persistencia real a cargo del backend propuesto.
