@@ -86,7 +86,7 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  const requestUserLocation = useCallback((recenter = true) => {
+  const requestUserLocation = useCallback((_recenter = true) => {
     if (!navigator.geolocation || locating) return
 
     setLocating(true)
@@ -100,16 +100,6 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
         }
         setUserLocation(nextLocation)
         setLocating(false)
-
-        if (recenter) {
-          window.setTimeout(() => {
-            if (selectedPlaceTypes.length === 0) return
-            fetchNearby(
-              createBoundsAround(nextLocation, selectedDistanceKm),
-              selectedPlaceTypes,
-            )
-          }, 150)
-        }
       },
       (geoError) => {
         let message = 'No se pudo obtener tu ubicación actual.'
@@ -126,12 +116,12 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
         setLocating(false)
       },
       {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 60000,
+        enableHighAccuracy: false,
+        timeout: 8000,
+        maximumAge: 300000,
       },
     )
-  }, [fetchNearby, locating, selectedDistanceKm, selectedPlaceTypes])
+  }, [locating])
 
   const setDistanceKm = useCallback((km: number) => {
     setSelectedDistanceKm(km)
@@ -148,7 +138,7 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
   }, [isLoaded, refreshPlaces, selectedPlaceTypes, userLocation])
 
   useEffect(() => {
-    places.slice(0, 6).forEach((place) => {
+    places.slice(0, 2).forEach((place) => {
       if (
         place.photoUrl === undefined ||
         place.website === undefined ||
