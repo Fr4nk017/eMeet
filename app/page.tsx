@@ -5,10 +5,69 @@ import { motion, AnimatePresence } from 'framer-motion'
 import SwipeCard from '../src/components/SwipeCard'
 import Layout from '../src/components/Layout'
 import { placeToEvent } from '../src/data/placeFeedAdapter'
-import { useNearbyPlacesContext } from '../src/context/NearbyPlacesContext'
+import { NearbyPlacesProvider, useNearbyPlacesContext } from '../src/context/NearbyPlacesContext'
 import { useChatContext } from '../src/context/ChatContext'
 
-export default function HomePage() {
+function FeedSkeleton() {
+  return (
+    <div className="card-stack mx-auto h-full w-full max-w-[420px]">
+      {[2, 1, 0].map((i) => (
+        <div
+          key={i}
+          className="swipe-card"
+          style={{
+            transform: `scale(${1 - i * 0.04}) translateY(${i * 10}px)`,
+            zIndex: 10 - i,
+            opacity: 1 - i * 0.15,
+          }}
+        >
+          <div className="flex h-full w-full flex-col overflow-hidden rounded-[30px] bg-card shadow-2xl lg:rounded-[36px]">
+            {/* Zona imagen */}
+            <div className="relative shrink-0 basis-[62%]">
+              <div className="shimmer absolute inset-0" />
+              <div className="absolute left-4 top-4">
+                <div className="h-6 w-24 rounded-full shimmer" style={{ background: 'rgba(255,255,255,0.12)' }} />
+              </div>
+            </div>
+
+            {/* Zona contenido */}
+            <div className="flex flex-1 flex-col justify-between p-5">
+              <div className="space-y-2">
+                <div className="shimmer h-6 w-3/4 rounded-xl" />
+                <div className="shimmer h-3.5 w-full rounded-md" />
+                <div className="shimmer h-3.5 w-2/3 rounded-md" />
+                <div className="mt-1 flex items-center gap-2">
+                  <div className="shimmer h-4 w-4 flex-shrink-0 rounded-full" />
+                  <div className="shimmer h-3.5 w-28 rounded-md" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="shimmer h-4 w-4 flex-shrink-0 rounded-full" />
+                  <div className="shimmer h-3.5 w-36 rounded-md" />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="shimmer h-6 w-6 rounded-full" />
+                    <div className="shimmer h-3.5 w-24 rounded-md" />
+                  </div>
+                  <div className="shimmer h-7 w-20 rounded-full" />
+                </div>
+                <div className="flex items-center justify-center gap-6">
+                  <div className="shimmer h-14 w-14 rounded-full" />
+                  <div className="shimmer h-14 w-14 rounded-full" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function HomePageContent() {
   const {
     places,
     userLocation,
@@ -117,7 +176,7 @@ export default function HomePage() {
   const visibleEvents = events.slice(0, 3)
 
   return (
-    <Layout>
+    <Layout showDesktopMap>
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
         <AnimatePresence>
           {toast && (
@@ -197,13 +256,7 @@ export default function HomePage() {
               </p>
             </div>
           ) : loading || locating || !userLocation ? (
-            <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center">
-              <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              <h2 className="text-xl font-bold text-white">Buscando lugares cerca de ti</h2>
-              <p className="text-sm text-muted">
-                Estamos obteniendo tu ubicación y cargando restaurantes, bares y discotecas cercanas.
-              </p>
-            </div>
+            <FeedSkeleton />
           ) : visibleEvents.length > 0 ? (
             <div className="card-stack mx-auto h-full w-full max-w-[420px]">
               {[...visibleEvents].reverse().map((event, reverseIndex) => {
@@ -262,5 +315,13 @@ export default function HomePage() {
         )}
       </div>
     </Layout>
+  )
+}
+
+export default function HomePage() {
+  return (
+    <NearbyPlacesProvider>
+      <HomePageContent />
+    </NearbyPlacesProvider>
   )
 }

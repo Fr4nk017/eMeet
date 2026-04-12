@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import Layout from '../../src/components/Layout'
 import { useAuth } from '../../src/context/AuthContext'
-import { useNearbyPlacesContext } from '../../src/context/NearbyPlacesContext'
+import { NearbyPlacesProvider, useNearbyPlacesContext } from '../../src/context/NearbyPlacesContext'
 import PlaceTypeFilters from '../../src/components/PlaceTypeFilters'
 import DistanceFilter from '../../src/components/DistanceFilter'
 import { CATEGORY_EMOJI } from '../../src/data/mockEvents'
@@ -42,7 +42,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   )
 }
 
-export default function ProfileRoutePage() {
+function ProfilePageContent() {
   const { user, logout, updateUser } = useAuth()
   const {
     selectedPlaceTypes,
@@ -202,5 +202,13 @@ export default function ProfileRoutePage() {
         </div>
       </motion.div>
     </Layout>
+  )
+}
+
+export default function ProfileRoutePage() {
+  return (
+    <NearbyPlacesProvider>
+      <ProfilePageContent />
+    </NearbyPlacesProvider>
   )
 }

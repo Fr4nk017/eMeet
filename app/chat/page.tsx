@@ -1,11 +1,25 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import Layout from '../../src/components/Layout'
 import { useChatContext } from '../../src/context/ChatContext'
 import type { ChatRoom } from '../../src/types'
 import { HiChatBubbleLeftRight } from 'react-icons/hi2'
+
+function RoomSkeleton() {
+  return (
+    <div className="flex items-center gap-3 px-4 py-3">
+      <div className="shimmer h-14 w-14 flex-shrink-0 rounded-2xl" />
+      <div className="flex-1 space-y-2">
+        <div className="shimmer h-4 w-2/3 rounded-md" />
+        <div className="shimmer h-3 w-full rounded-md" />
+        <div className="shimmer h-2.5 w-1/3 rounded-md" />
+      </div>
+    </div>
+  )
+}
 
 function formatTime(iso: string) {
   const date = new Date(iso)
@@ -21,43 +35,57 @@ function formatTime(iso: string) {
 }
 
 function RoomCard({ room, onClick }: { room: ChatRoom; onClick: () => void }) {
+  const hasUnread = room.unreadCount > 0
   return (
     <motion.button
       initial={{ opacity: 0, x: -12 }}
       animate={{ opacity: 1, x: 0 }}
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className="flex w-full items-center gap-3 px-4 py-3 transition-colors hover:bg-white/5"
+      className={`flex w-full items-center gap-3 px-4 py-3 transition-colors hover:bg-white/5 ${
+        hasUnread ? 'bg-primary/[0.06]' : ''
+      }`}
     >
+      {/* Imagen con indicador de actividad */}
       <div className="relative shrink-0">
         <img
           src={room.eventImageUrl}
           alt={room.eventTitle}
           className="h-14 w-14 rounded-2xl border border-white/10 object-cover"
         />
-        <span className="absolute -bottom-1 -right-1 rounded-full border border-white/10 bg-surface px-1.5 py-0.5 text-xs leading-none text-muted">
-          👥 {room.memberCount}
-        </span>
+        {/* Punto verde de actividad */}
+        <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-surface bg-green-400" />
       </div>
 
       <div className="min-w-0 flex-1 text-left">
         <div className="flex items-center justify-between gap-2">
-          <p className="truncate text-sm font-semibold text-white">{room.eventTitle}</p>
+          <p className={`truncate text-sm font-semibold ${hasUnread ? 'text-white' : 'text-slate-300'}`}>
+            {room.eventTitle}
+          </p>
           {room.lastMessage && (
-            <span className="shrink-0 text-[11px] text-muted">{formatTime(room.lastMessage.timestamp)}</span>
+            <span className={`shrink-0 text-[11px] ${hasUnread ? 'font-semibold text-primary-light' : 'text-muted'}`}>
+              {formatTime(room.lastMessage.timestamp)}
+            </span>
           )}
         </div>
-        <p className="mt-0.5 truncate text-xs text-muted">
+        <p className={`mt-0.5 truncate text-xs ${hasUnread ? 'font-medium text-slate-300' : 'text-muted'}`}>
           {room.lastMessage
             ? `${room.lastMessage.senderName.split(' ')[0]}: ${room.lastMessage.text}`
             : room.eventAddress}
         </p>
+        {/* Contador de miembros inline */}
+        <p className="mt-0.5 text-[10px] text-muted">👥 {room.memberCount} miembros</p>
       </div>
 
-      {room.unreadCount > 0 && (
-        <span className="flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-white">
+      {hasUnread && (
+        <motion.span
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+          className="flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-white shadow-md shadow-primary/40"
+        >
           {room.unreadCount}
-        </span>
+        </motion.span>
       )}
     </motion.button>
   )
@@ -66,11 +94,21 @@ function RoomCard({ room, onClick }: { room: ChatRoom; onClick: () => void }) {
 export default function ChatRoutePage() {
   const { rooms } = useChatContext()
   const router = useRouter()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 400)
+    return () => clearTimeout(t)
+  }, [])
 
   return (
     <Layout headerTitle="Comunidad">
       <div className="flex h-full flex-col">
-        {rooms.length === 0 ? (
+        {!mounted ? (
+          <div className="divide-y divide-white/5">
+            {[1, 2, 3].map((i) => <RoomSkeleton key={i} />)}
+          </div>
+        ) : rooms.length === 0 ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
