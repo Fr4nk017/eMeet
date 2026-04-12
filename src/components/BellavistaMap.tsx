@@ -89,6 +89,9 @@ export default function BellavistaMap() {
     requestUserLocation,
   } = useNearbyPlacesContext()
   const mapRef = useRef<google.maps.Map | null>(null)
+  // Ref para userLocation: onMapLoad es estable y no se recrea en cada cambio de ubicación
+  const userLocationRef = useRef(userLocation)
+  useEffect(() => { userLocationRef.current = userLocation }, [userLocation])
 
   const goToMyLocation = () => {
     requestUserLocation(true)
@@ -103,16 +106,11 @@ export default function BellavistaMap() {
       },
     })
 
-    if (userLocation) {
-      map.panTo(userLocation)
+    if (userLocationRef.current) {
+      map.panTo(userLocationRef.current)
       map.setZoom(15)
     }
-  }, [userLocation])
-
-  useEffect(() => {
-    if (!mapsReady || userLocation || locating) return
-    requestUserLocation(true)
-  }, [locating, mapsReady, requestUserLocation, userLocation])
+  }, []) // Referencia estable — userLocationRef evita incluir userLocation como dep
 
   useEffect(() => {
     if (!userLocation || !mapRef.current) return
@@ -120,11 +118,13 @@ export default function BellavistaMap() {
     mapRef.current.setZoom(15)
   }, [userLocation])
 
-  const visiblePlaces = places.filter(
+  // Memoizado: sin esto, se crea un nuevo array en cada render
+  // y nearestPlaceIds (que depende de visiblePlaces) recalcula constantemente
+  const visiblePlaces = useMemo(() => places.filter(
     (p) =>
       selectedPlaceTypes.includes(p.type) &&
       (!userLocation || getDistanceKm(userLocation, p.position) <= selectedDistanceKm),
-  )
+  ), [places, selectedPlaceTypes, userLocation, selectedDistanceKm])
 
   const nearestPlaceIds = useMemo(() => {
     if (!userLocation) return new Set<string>()

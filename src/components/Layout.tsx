@@ -1,6 +1,15 @@
+import dynamic from 'next/dynamic'
 import type { ReactNode } from 'react'
 import BottomNavBar from './BottomNavBar'
-import BellavistaMap from './BellavistaMap'
+
+const BellavistaMap = dynamic(() => import('./BellavistaMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full min-h-[320px] items-center justify-center bg-card text-sm text-muted">
+      Cargando mapa...
+    </div>
+  ),
+})
 
 interface LayoutProps {
   children: ReactNode
@@ -8,6 +17,8 @@ interface LayoutProps {
   showHeader?: boolean
   /** Título opcional en el header */
   headerTitle?: string
+  /** Si se muestra el mapa decorativo en escritorio */
+  showDesktopMap?: boolean
 }
 
 /**
@@ -30,6 +41,7 @@ export default function Layout({
   children,
   showHeader = true,
   headerTitle,
+  showDesktopMap = false,
 }: LayoutProps) {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(124,58,237,0.2),_transparent_28%),linear-gradient(180deg,_#101426_0%,_#1A1A2E_45%,_#15172B_100%)]">
@@ -70,10 +82,30 @@ export default function Layout({
             </h2>
           </div>
 
-          {/* Mapa Google Maps — Barrio Bellavista */}
-          <div className="min-h-0 flex-1 overflow-hidden rounded-[28px] border border-white/10 shadow-[0_24px_60px_rgba(0,0,0,0.45)]">
-            <BellavistaMap />
-          </div>
+          {showDesktopMap ? (
+            <div className="min-h-0 flex-1 overflow-hidden rounded-[28px] border border-white/10 shadow-[0_24px_60px_rgba(0,0,0,0.45)]">
+              <BellavistaMap />
+            </div>
+          ) : (
+            <div className="flex min-h-[320px] flex-1 flex-col justify-between rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.32)]">
+              <div>
+                <p className="text-sm font-semibold text-white">Navegación más rápida</p>
+                <p className="mt-2 max-w-xl text-sm leading-6 text-slate-300">
+                  El mapa en vivo ahora se carga solo donde aporta valor para hacer las transiciones entre páginas más fluidas.
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-white/10 bg-surface/70 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-primary-light">Feed</p>
+                  <p className="mt-2 text-sm text-slate-300">Descubre lugares cercanos con menor tiempo de espera.</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-surface/70 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-primary-light">Perfil</p>
+                  <p className="mt-2 text-sm text-slate-300">Ajusta preferencias sin cargar componentes pesados en cada ruta.</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Cards de features */}
           <div className="flex-shrink-0 grid max-w-3xl grid-cols-3 gap-4">

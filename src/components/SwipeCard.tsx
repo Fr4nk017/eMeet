@@ -20,6 +20,18 @@ interface SwipeCardProps {
 // ─── Umbral de px para considerar un swipe válido ────────────────────────────
 const SWIPE_THRESHOLD = 120
 
+function StarRating({ rating }: { rating: number }) {
+  const filled = Math.round(rating)
+  return (
+    <div className="flex items-center gap-0.5">
+      {Array.from({ length: 5 }, (_, i) => (
+        <span key={i} className={`text-sm leading-none ${i < filled ? 'text-amber-400' : 'text-white/20'}`}>★</span>
+      ))}
+      <span className="ml-1 text-[11px] font-semibold text-white/70">{rating.toFixed(1)}</span>
+    </div>
+  )
+}
+
 /**
  * SwipeCard — Tarjeta de evento con interacción de swipe.
  *
@@ -113,16 +125,28 @@ export default function SwipeCard({
           draggable={false}
         />
 
-        {/* Gradiente oscuro inferior */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+        {/* Gradiente oscuro inferior — más pronunciado para mejor legibilidad */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/55 to-black/5" />
 
-        {/* Badge de categoría */}
-        <div className="absolute left-4 top-4 lg:left-5 lg:top-5">
+        {/* Badges top-left: categoría + estado abierto/cerrado */}
+        <div className="absolute left-4 top-4 z-10 flex flex-col gap-1.5 lg:left-5 lg:top-5">
           <span
             className={`${CATEGORY_COLORS[event.category] ?? 'bg-purple-600'} rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white lg:px-4 lg:py-1.5`}
           >
             {CATEGORY_EMOJI[event.category]} {event.category}
           </span>
+          {event.isOpen !== null && event.isOpen !== undefined && (
+            <span
+              className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm ${
+                event.isOpen
+                  ? 'border-green-500/30 bg-green-500/20 text-green-300'
+                  : 'border-red-500/30 bg-red-500/20 text-red-300'
+              }`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${event.isOpen ? 'bg-green-400' : 'bg-red-400'}`} />
+              {event.isOpen ? 'Abierto' : 'Cerrado'}
+            </span>
+          )}
         </div>
 
         {/* Botón guardar (bookmark) */}
@@ -159,6 +183,12 @@ export default function SwipeCard({
 
         {/* ── Info del evento (parte inferior) ────────────────────────────── */}
         <div className={`absolute bottom-0 left-0 right-0 p-5 transition-all duration-200 lg:p-6 ${isDragging ? 'opacity-80' : 'opacity-100'}`}>
+
+          {event.rating && event.rating > 0 && (
+            <div className="mb-2">
+              <StarRating rating={event.rating} />
+            </div>
+          )}
 
           <h2 className="mb-1 line-clamp-2 text-xl font-bold leading-tight text-white lg:text-[1.7rem]">
             {event.title}
@@ -230,7 +260,7 @@ export default function SwipeCard({
             <div className="mt-4 flex items-center justify-center gap-6 lg:mt-5">
               <button
                 onClick={() => onSwipeLeft(event.id)}
-                className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-white/10 text-red-400 backdrop-blur-sm transition-all duration-200 hover:border-red-400 hover:bg-red-500/20 active:scale-90 lg:h-16 lg:w-16"
+                className="flex h-14 w-14 items-center justify-center rounded-full border border-red-400/40 bg-red-500/15 text-red-400 shadow-lg shadow-red-900/20 backdrop-blur-sm transition-all duration-200 hover:border-red-400/70 hover:bg-red-500/25 active:scale-90 lg:h-16 lg:w-16"
                 aria-label="No me interesa"
               >
                 <HiX className="h-7 w-7 lg:h-8 lg:w-8" />
@@ -238,7 +268,7 @@ export default function SwipeCard({
 
               <button
                 onClick={() => onSwipeRight(event.id)}
-                className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-white/10 text-green-400 backdrop-blur-sm transition-all duration-200 hover:border-green-400 hover:bg-green-500/20 active:scale-90 lg:h-16 lg:w-16"
+                className="flex h-14 w-14 items-center justify-center rounded-full border border-green-400/40 bg-green-500/15 text-green-400 shadow-lg shadow-green-900/20 backdrop-blur-sm transition-all duration-200 hover:border-green-400/70 hover:bg-green-500/25 active:scale-90 lg:h-16 lg:w-16"
                 aria-label="Me interesa"
               >
                 <HiHeart className="h-7 w-7 lg:h-8 lg:w-8" />

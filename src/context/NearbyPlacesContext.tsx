@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import { useJsApiLoader } from '@react-google-maps/api'
@@ -62,6 +63,12 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState<string | null>(null)
 
+  // Refs para evitar re-renders en cascada y loops de efectos
+  const locatingRef = useRef(false)
+  const hasRequestedLocation = useRef(false)
+  const enrichRequestedRef = useRef<Set<string>>(new Set())
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const invalidApiKey = !HAS_GOOGLE_MAPS_KEY || !LOOKS_LIKE_GOOGLE_MAPS_KEY
 
   const { isLoaded, loadError } = useJsApiLoader({
@@ -72,10 +79,13 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
 
   const refreshPlaces = useCallback(() => {
     if (!isLoaded || !userLocation || selectedPlaceTypes.length === 0) return
-    fetchNearby(
-      createBoundsAround(userLocation, selectedDistanceKm),
-      selectedPlaceTypes,
-    )
+    if (refreshTimer.current) clearTimeout(refreshTimer.current)
+    refreshTimer.current = setTimeout(() => {
+      fetchNearby(
+        createBoundsAround(userLocation, selectedDistanceKm),
+        selectedPlaceTypes,
+      )
+    }, 300)
   }, [fetchNearby, isLoaded, selectedDistanceKm, selectedPlaceTypes, userLocation])
 
   const togglePlaceType = useCallback((type: PlaceType) => {
@@ -87,8 +97,9 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const requestUserLocation = useCallback((_recenter = true) => {
-    if (!navigator.geolocation || locating) return
+    if (!navigator.geolocation || locatingRef.current) return
 
+    locatingRef.current = true
     setLocating(true)
     setLocationError(null)
 
@@ -99,6 +110,7 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
           lng: pos.coords.longitude,
         }
         setUserLocation(nextLocation)
+        locatingRef.current = false
         setLocating(false)
       },
       (geoError) => {
@@ -113,6 +125,7 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
         }
 
         setLocationError(message)
+        locatingRef.current = false
         setLocating(false)
       },
       {
@@ -121,30 +134,38 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
         maximumAge: 300000,
       },
     )
-  }, [locating])
+  }, []) // Referencia estable — locatingRef evita llamadas duplicadas sin dep en state
 
   const setDistanceKm = useCallback((km: number) => {
     setSelectedDistanceKm(km)
   }, [])
 
+  // Solicita ubicación una sola vez cuando Maps carga.
+  // locating se lee del ref para evitar que el effect se re-ejecute en cada cambio de estado.
   useEffect(() => {
-    if (!isLoaded || userLocation || locating || invalidApiKey) return
+    if (!isLoaded || invalidApiKey || hasRequestedLocation.current) return
+    hasRequestedLocation.current = true
     requestUserLocation(true)
-  }, [invalidApiKey, isLoaded, locating, requestUserLocation, userLocation])
+  }, [invalidApiKey, isLoaded, requestUserLocation])
 
   useEffect(() => {
     if (!userLocation || !isLoaded) return
     refreshPlaces()
   }, [isLoaded, refreshPlaces, selectedPlaceTypes, userLocation])
 
+  // Enriquece solo los 2 primeros lugares y registra cuáles ya fueron solicitados.
+  // Sin el ref, cada vez que enrichPlace actualiza `places` el effect volvería a correr
+  // y llamaría enrich de nuevo (aunque el cache interno lo evita, genera re-renders extra).
   useEffect(() => {
     places.slice(0, 2).forEach((place) => {
+      if (enrichRequestedRef.current.has(place.placeId)) return
       if (
         place.photoUrl === undefined ||
         place.website === undefined ||
         place.phone === undefined ||
         place.openingHours === undefined
       ) {
+        enrichRequestedRef.current.add(place.placeId)
         void enrichPlace(place.placeId)
       }
     })

@@ -36,6 +36,8 @@ export interface Event {
   tags: string[]
   isLiked?: boolean
   isSaved?: boolean
+  rating?: number          // 0-5, de Google Maps (opcional — no aplica a eventos mock)
+  isOpen?: boolean | null  // null = sin info
 }
 
 /**
