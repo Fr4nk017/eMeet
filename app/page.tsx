@@ -10,6 +10,7 @@ import { placeToEvent } from '../src/data/placeFeedAdapter'
 import { NearbyPlacesProvider, useNearbyPlacesContext } from '../src/context/NearbyPlacesContext'
 import { useChatContext } from '../src/context/ChatContext'
 import { useAuth } from '../src/context/AuthContext'
+import { useLocatarioEvents } from '../src/context/LocatarioEventsContext'
 import { getSupabaseBrowserClient, hasSupabaseEnv } from '../src/lib/supabase'
 import type { PlaceType } from '../src/types'
 
@@ -110,6 +111,7 @@ function HomePageContent() {
   } = useNearbyPlacesContext()
   const { joinRoom } = useChatContext()
   const { user, updateUser } = useAuth()
+  const { locatarioEvents } = useLocatarioEvents()
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
@@ -133,14 +135,24 @@ function HomePageContent() {
   }, [user])
 
   const events = useMemo(() => {
-    if (!userLocation) return []
+    const placeEvents = userLocation
+      ? places
+          .filter((place) => selectedPlaceTypes.includes(place.type))
+          .map((place) => {
+            const distance = getDistanceKm(place.position.lat, place.position.lng, userLocation.lat, userLocation.lng)
+            return placeToEvent(place, distance)
+          })
+      : []
 
-    return places
-      .filter((place) => selectedPlaceTypes.includes(place.type))
-      .map((place) => {
-        const distance = getDistanceKm(place.position.lat, place.position.lng, userLocation.lat, userLocation.lng)
-        return placeToEvent(place, distance)
-      })
+    return placeEvents
+      .concat(
+        locatarioEvents.map((e) => {
+          if (e.lat != null && e.lng != null && userLocation) {
+            return { ...e, distance: getDistanceKm(e.lat, e.lng, userLocation.lat, userLocation.lng) }
+          }
+          return e
+        }),
+      )
       .filter((event) => event.distance <= selectedDistanceKm)
       .sort((a, b) => a.distance - b.distance)
       .filter((event) => !dismissedIds.has(event.id))
@@ -149,7 +161,7 @@ function HomePageContent() {
         isLiked: likedIds.has(event.id),
         isSaved: savedIds.has(event.id),
       }))
-  }, [dismissedIds, likedIds, places, savedIds, selectedDistanceKm, selectedPlaceTypes, userLocation])
+  }, [dismissedIds, likedIds, locatarioEvents, places, savedIds, selectedDistanceKm, selectedPlaceTypes, userLocation])
 
   function showToast(message: string, type: 'like' | 'nope' | 'save') {
     setToast({ message, type })

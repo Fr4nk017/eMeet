@@ -5,9 +5,6 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import Layout from '../../src/components/Layout'
 import { useAuth } from '../../src/context/AuthContext'
-import { NearbyPlacesProvider, useNearbyPlacesContext } from '../../src/context/NearbyPlacesContext'
-import PlaceTypeFilters from '../../src/components/PlaceTypeFilters'
-import DistanceFilter from '../../src/components/DistanceFilter'
 import { CATEGORY_EMOJI } from '../../src/data/mockEvents'
 import type { EventCategory } from '../../src/types'
 import { HiMapPin, HiPencil, HiArrowRightOnRectangle, HiEnvelope, HiCalendarDays, HiHeart, HiBookmark, HiSparkles } from 'react-icons/hi2'
@@ -44,12 +41,6 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 function ProfilePageContent() {
   const { user, logout, updateUser, isAuthReady } = useAuth()
-  const {
-    selectedPlaceTypes,
-    selectedDistanceKm,
-    togglePlaceType,
-    setDistanceKm,
-  } = useNearbyPlacesContext()
   const router = useRouter()
   const [avatarError, setAvatarError] = useState(false)
 
@@ -237,31 +228,6 @@ function ProfilePageContent() {
             </div>
           </motion.div>
 
-          <motion.div variants={itemVariants} className="mb-8 rounded-2xl border border-white/5 bg-card p-4">
-            <SectionTitle>Preferencias de descubrimiento</SectionTitle>
-            <p className="mt-1 text-xs text-muted">
-              Configura qué lugares quieres ver en el mapa y en el feed.
-            </p>
-
-            <div className="mt-4">
-              <p className="mb-2 text-xs font-semibold text-slate-300">Tipos de lugar</p>
-              <PlaceTypeFilters
-                selectedTypes={selectedPlaceTypes}
-                onToggleType={togglePlaceType}
-                className="flex flex-wrap gap-2"
-              />
-            </div>
-
-            <div className="mt-4">
-              <p className="mb-2 text-xs font-semibold text-slate-300">Distancia máxima</p>
-              <DistanceFilter
-                selectedKm={selectedDistanceKm}
-                onChange={setDistanceKm}
-                className="flex flex-wrap gap-2"
-              />
-            </div>
-          </motion.div>
-
           <motion.div variants={itemVariants}>
             <SectionTitle>Cuenta</SectionTitle>
             <div className="mb-6 overflow-hidden rounded-2xl border border-white/5 bg-card">
@@ -296,9 +262,5 @@ function ProfilePageContent() {
 }
 
 export default function ProfileRoutePage() {
-  return (
-    <NearbyPlacesProvider>
-      <ProfilePageContent />
-    </NearbyPlacesProvider>
-  )
+  return <ProfilePageContent />
 }

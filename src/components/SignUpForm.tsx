@@ -1,12 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
 import { FiUser, FiUserPlus, FiMail, FiLock, FiEye, FiEyeOff, FiBriefcase } from 'react-icons/fi'
 
 export default function SignUpForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { register } = useAuth()
 
   const [role, setRole] = useState<'user' | 'locatario'>('user')
@@ -54,8 +55,19 @@ export default function SignUpForm() {
 
     try {
       const name = role === 'locatario' ? formData.businessName : formData.name
-      await register(name, formData.email, formData.password)
-      router.push('/')
+      await register(name, formData.email, formData.password, {
+        role,
+        businessName: role === 'locatario' ? formData.businessName : undefined,
+        businessLocation: role === 'locatario' ? formData.location : undefined,
+      })
+
+      const next = searchParams.get('next')
+      if (next && next.startsWith('/')) {
+        router.push(next)
+        return
+      }
+
+      router.push(role === 'locatario' ? '/locatario' : '/')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al registrarte')
     } finally {

@@ -38,6 +38,8 @@ export interface Event {
   isSaved?: boolean
   rating?: number          // 0-5, de Google Maps (opcional — no aplica a eventos mock)
   isOpen?: boolean | null  // null = sin info
+  lat?: number             // coordenada real del evento (si fue geolocado)
+  lng?: number
 }
 
 /** Roles disponibles en la plataforma */

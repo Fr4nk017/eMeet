@@ -14,30 +14,11 @@ const BellavistaMap = dynamic(() => import('./BellavistaMap'), {
 
 interface LayoutProps {
   children: ReactNode
-  /** Si se muestra el header con el logo */
   showHeader?: boolean
-  /** Título opcional en el header */
   headerTitle?: string
-  /** Si se muestra el mapa decorativo en escritorio */
   showDesktopMap?: boolean
 }
 
-/**
- * Layout principal de la app.
- *
- * Estructura:
- *  ┌─────────────────┐
- *  │   Header (opt)  │  ← Logo eMeet + acciones
- *  ├─────────────────┤
- *  │                 │
- *  │    Contenido    │  ← Slot children (cada pantalla)
- *  │                 │
- *  ├─────────────────┤
- *  │  Bottom NavBar  │  ← Navegación fija inferior
- *  └─────────────────┘
- *
- * El padding-bottom en el contenido compensa la altura de la NavBar (64px).
- */
 export default function Layout({
   children,
   showHeader = true,
@@ -45,22 +26,40 @@ export default function Layout({
   showDesktopMap = false,
 }: LayoutProps) {
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(124,58,237,0.2),_transparent_28%),linear-gradient(180deg,_#101426_0%,_#1A1A2E_45%,_#15172B_100%)]">
+    /* Fondo metálico: gradiente oscuro con tinte púrpura profundo */
+    <div className="min-h-screen bg-[linear-gradient(160deg,_#12082C_0%,_#07040F_45%,_#0E0520_100%)]">
       <div className="mx-auto flex min-h-screen w-full max-w-[1600px] items-stretch gap-0 px-0 sm:px-3 lg:px-5 lg:py-4">
+
         <SidebarNav />
 
-        <section className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-surface sm:rounded-l-[28px] sm:border sm:border-white/5 sm:shadow-[0_24px_80px_rgba(5,10,30,0.45)] lg:h-[calc(100vh-2rem)]">
+        {/* Sección principal — superficie metálica elevada */}
+        <section className="metal-top-border relative flex min-w-0 flex-1 flex-col overflow-hidden
+          bg-[linear-gradient(145deg,_#1E1240_0%,_#110926_55%,_#0C0618_100%)]
+          sm:rounded-l-[28px]
+          sm:border sm:border-violet-500/15
+          sm:shadow-2xl
+          lg:h-[calc(100vh-2rem)]">
+
           {showHeader && (
-            <header className="flex items-center justify-between px-4 py-3 bg-surface/95 backdrop-blur-sm border-b border-white/5 z-40 flex-shrink-0 lg:px-5 lg:py-4">
+            <header className="metal-top-border z-40 flex flex-shrink-0 items-center justify-between
+              border-b border-violet-500/15
+              bg-[linear-gradient(90deg,_#1A0F35/95_0%,_#130A28/95_50%,_#1A0F35/95_100%)]
+              px-4 py-3 backdrop-blur-sm lg:px-5 lg:py-4">
+
               <div className="flex items-center gap-2">
                 <span className="text-2xl font-extrabold tracking-tight lg:text-[1.75rem]">
                   <span className="text-white">e</span>
-                  <span className="text-primary">Meet</span>
+                  {/* Logo con gradiente metálico morado-plata */}
+                  <span className="bg-gradient-to-r from-primary-light via-white to-primary-light bg-clip-text text-transparent">
+                    Meet
+                  </span>
                 </span>
               </div>
 
               {headerTitle && (
-                <h1 className="text-base font-semibold text-white lg:text-lg">{headerTitle}</h1>
+                <h1 className="bg-gradient-to-r from-silver via-white to-silver bg-clip-text text-base font-semibold text-transparent lg:text-lg">
+                  {headerTitle}
+                </h1>
               )}
 
               <div className="w-8" />
@@ -75,12 +74,16 @@ export default function Layout({
         </section>
 
         {showDesktopMap && (
-          <aside className="hidden w-[360px] shrink-0 border-l border-white/10 bg-card/50 backdrop-blur-md lg:block">
-            <div className="h-full overflow-hidden sm:rounded-r-[28px] sm:border sm:border-white/5">
+          <aside className="hidden w-[360px] shrink-0
+            border-l border-violet-500/15
+            bg-[linear-gradient(180deg,_#160D30_0%,_#0A0518_100%)]
+            lg:block">
+            <div className="h-full overflow-hidden sm:rounded-r-[28px] sm:border sm:border-violet-500/15">
               <BellavistaMap />
             </div>
           </aside>
         )}
+
       </div>
     </div>
   )
