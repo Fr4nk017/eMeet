@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import type { AuthState, User } from '../types'
+import { hasSupabaseEnv } from '../lib/supabase'
 
 // ─── Interfaz del contexto ───────────────────────────────────────────────────
 interface AuthContextValue extends AuthState {
@@ -37,6 +38,45 @@ type UserEventPayload = {
   event_id: string
 }
 
+const LOCAL_AUTH_STORAGE_KEY = 'emeet-local-auth-user'
+
+function createLocalUser(name: string, email: string, previousUser?: User | null): User {
+  return {
+    id: previousUser?.id ?? `local-${email.toLowerCase()}`,
+    name: name.trim() || previousUser?.name || email.split('@')[0],
+    email,
+    avatarUrl: previousUser?.avatarUrl ?? 'https://i.pravatar.cc/150?img=32',
+    bio: previousUser?.bio ?? 'Explorando panoramas cerca de mi.',
+    interests: previousUser?.interests ?? ['gastronomia', 'musica'],
+    likedEvents: previousUser?.likedEvents ?? [],
+    savedEvents: previousUser?.savedEvents ?? [],
+    location: previousUser?.location ?? 'Santiago, Chile',
+  }
+}
+
+function loadLocalUser(): User | null {
+  if (typeof window === 'undefined') return null
+
+  try {
+    const raw = window.localStorage.getItem(LOCAL_AUTH_STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw) as User
+  } catch {
+    return null
+  }
+}
+
+function saveLocalUser(user: User | null) {
+  if (typeof window === 'undefined') return
+
+  if (!user) {
+    window.localStorage.removeItem(LOCAL_AUTH_STORAGE_KEY)
+    return
+  }
+
+  window.localStorage.setItem(LOCAL_AUTH_STORAGE_KEY, JSON.stringify(user))
+}
+
 async function fetchApi<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     credentials: 'include',
@@ -64,6 +104,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthReady, setIsAuthReady] = useState(false)
 
   const syncFromApi = useCallback(async () => {
+    if (!hasSupabaseEnv) {
+      const localUser = loadLocalUser()
+      setAuthState({ user: localUser, isAuthenticated: Boolean(localUser) })
+      return
+    }
+
     const sessionPayload = await fetchApi<SessionPayload>('/api/auth/session', {
       method: 'GET',
     })
@@ -117,6 +163,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [syncFromApi])
 
   const login = useCallback(async (email: string, password: string) => {
+    if (!hasSupabaseEnv) {
+      const previous = loadLocalUser()
+      const localUser = createLocalUser(previous?.name ?? email.split('@')[0], email, previous)
+      saveLocalUser(localUser)
+      setAuthState({ user: localUser, isAuthenticated: true })
+      return
+    }
+
     await fetchApi('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
@@ -126,6 +180,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [syncFromApi])
 
   const register = useCallback(async (name: string, email: string, password: string) => {
+    if (!hasSupabaseEnv) {
+      const localUser = createLocalUser(name, email, loadLocalUser())
+      saveLocalUser(localUser)
+      setAuthState({ user: localUser, isAuthenticated: true })
+      return
+    }
+
     await fetchApi('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({ name, email, password }),
@@ -135,6 +196,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [syncFromApi])
 
   const logout = useCallback(async () => {
+    if (!hasSupabaseEnv) {
+      saveLocalUser(null)
+      setAuthState({ user: null, isAuthenticated: false })
+      return
+    }
+
     await fetchApi('/api/auth/logout', {
       method: 'POST',
     })
@@ -161,7 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof data.location === 'string') profilePayload.location = data.location
     if (Array.isArray(data.interests)) profilePayload.interests = data.interests
 
-    if (Object.keys(profilePayload).length > 0) {
+    if (hasSupabaseEnv && Object.keys(profilePayload).length > 0) {
       await fetchApi('/api/profile', {
         method: 'PATCH',
         body: JSON.stringify(profilePayload),
@@ -170,7 +237,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setAuthState((prev) => {
       if (!prev.user) return prev
-      return { ...prev, user: { ...prev.user, ...data } }
+      const nextUser = { ...prev.user, ...data }
+      if (!hasSupabaseEnv) saveLocalUser(nextUser)
+      return { ...prev, user: nextUser }
     })
   }, [authState.user])
 

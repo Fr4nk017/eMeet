@@ -10,11 +10,30 @@ import { placeToEvent } from '../src/data/placeFeedAdapter'
 import { NearbyPlacesProvider, useNearbyPlacesContext } from '../src/context/NearbyPlacesContext'
 import { useChatContext } from '../src/context/ChatContext'
 import { useAuth } from '../src/context/AuthContext'
-import { getSupabaseBrowserClient } from '../src/lib/supabase'
+import { getSupabaseBrowserClient, hasSupabaseEnv } from '../src/lib/supabase'
 import type { PlaceType } from '../src/types'
 
 const DEFAULT_FEED_TYPES: PlaceType[] = ['restaurant', 'bar', 'night_club', 'cafe']
-const supabase = getSupabaseBrowserClient()
+const supabase = hasSupabaseEnv ? getSupabaseBrowserClient() : null
+
+function toRad(value: number) {
+  return (value * Math.PI) / 180
+}
+
+function getDistanceKm(
+  lat: number,
+  lng: number,
+  refLat: number,
+  refLng: number,
+): number {
+  const earthRadiusKm = 6371
+  const dLat = toRad(lat - refLat)
+  const dLng = toRad(lng - refLng)
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(refLat)) * Math.cos(toRad(lat)) * Math.sin(dLng / 2) ** 2
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
 
 function FeedSkeleton() {
   return (
@@ -116,23 +135,10 @@ function HomePageContent() {
   const events = useMemo(() => {
     if (!userLocation) return []
 
-    const toRad = (value: number) => (value * Math.PI) / 180
-    const getDistanceKm = (lat: number, lng: number) => {
-      const earthRadiusKm = 6371
-      const dLat = toRad(lat - userLocation.lat)
-      const dLng = toRad(lng - userLocation.lng)
-      const lat1 = toRad(userLocation.lat)
-      const lat2 = toRad(lat)
-      const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2
-      return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-    }
-
     return places
       .filter((place) => selectedPlaceTypes.includes(place.type))
       .map((place) => {
-        const distance = getDistanceKm(place.position.lat, place.position.lng)
+        const distance = getDistanceKm(place.position.lat, place.position.lng, userLocation.lat, userLocation.lng)
         return placeToEvent(place, distance)
       })
       .filter((event) => event.distance <= selectedDistanceKm)
@@ -167,20 +173,22 @@ function HomePageContent() {
       return
     }
 
-    const { error } = await supabase.from('user_events').upsert(
-      {
-        event_id: likedEvent.id,
-        event_title: likedEvent.title,
-        event_image_url: likedEvent.imageUrl,
-        event_address: likedEvent.address,
-        action: 'like',
-      },
-      { onConflict: 'user_id,event_id,action' },
-    )
+    if (hasSupabaseEnv && supabase) {
+      const { error } = await supabase.from('user_events').upsert(
+        {
+          event_id: likedEvent.id,
+          event_title: likedEvent.title,
+          event_image_url: likedEvent.imageUrl,
+          event_address: likedEvent.address,
+          action: 'like',
+        },
+        { onConflict: 'user_id,event_id,action' },
+      )
 
-    if (error) {
-      showToast('No se pudo registrar tu like.', 'nope')
-      return
+      if (error) {
+        showToast('No se pudo registrar tu like.', 'nope')
+        return
+      }
     }
 
     setLikedIds((prev) => new Set(prev).add(id))
@@ -228,32 +236,34 @@ function HomePageContent() {
 
     const isCurrentlySaved = savedIds.has(id)
 
-    if (isCurrentlySaved) {
-      const { error } = await supabase
-        .from('user_events')
-        .delete()
-        .eq('event_id', id)
-        .eq('action', 'save')
+    if (hasSupabaseEnv && supabase) {
+      if (isCurrentlySaved) {
+        const { error } = await supabase
+          .from('user_events')
+          .delete()
+          .eq('event_id', id)
+          .eq('action', 'save')
 
-      if (error) {
-        showToast('No se pudo quitar de guardados.', 'nope')
-        return
-      }
-    } else {
-      const { error } = await supabase.from('user_events').upsert(
-        {
-          event_id: eventToSave.id,
-          event_title: eventToSave.title,
-          event_image_url: eventToSave.imageUrl,
-          event_address: eventToSave.address,
-          action: 'save',
-        },
-        { onConflict: 'user_id,event_id,action' },
-      )
+        if (error) {
+          showToast('No se pudo quitar de guardados.', 'nope')
+          return
+        }
+      } else {
+        const { error } = await supabase.from('user_events').upsert(
+          {
+            event_id: eventToSave.id,
+            event_title: eventToSave.title,
+            event_image_url: eventToSave.imageUrl,
+            event_address: eventToSave.address,
+            action: 'save',
+          },
+          { onConflict: 'user_id,event_id,action' },
+        )
 
-      if (error) {
-        showToast('No se pudo guardar el evento.', 'nope')
-        return
+        if (error) {
+          showToast('No se pudo guardar el evento.', 'nope')
+          return
+        }
       }
     }
 
