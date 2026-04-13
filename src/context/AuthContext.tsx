@@ -4,32 +4,56 @@ import { createContext, useContext, useState, useCallback, useEffect } from 'rea
 import type { ReactNode } from 'react'
 import type { AuthState, User } from '../types'
 
-// ─── Mock del usuario autenticado para desarrollo ────────────────────────────
-const MOCK_USER: User = {
-  id: 'user-1',
-  name: 'Francisco López',
-  email: 'francisco@emeet.cl',
-  avatarUrl: 'https://i.pravatar.cc/150?img=11',
-  bio: 'Amante de la música en vivo, el buen café y los eventos culturales.',
-  interests: ['musica', 'gastronomia', 'networking', 'arte'],
-  likedEvents: [],
-  savedEvents: [],
-  location: 'Providencia, Santiago',
-}
-
 // ─── Interfaz del contexto ───────────────────────────────────────────────────
 interface AuthContextValue extends AuthState {
   isAuthReady: boolean
   login: (email: string, password: string) => Promise<void>
   register: (name: string, email: string, password: string) => Promise<void>
-  logout: () => void
-  updateUser: (data: Partial<User>) => void
+  logout: () => Promise<void>
+  updateUser: (data: Partial<User>) => Promise<void>
 }
-
-const AUTH_STORAGE_KEY = 'emeet-auth'
 
 // ─── Creación del contexto ───────────────────────────────────────────────────
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
+
+type SessionPayload = {
+  session: {
+    user: {
+      email?: string | null
+    }
+  } | null
+}
+
+type ProfilePayload = {
+  id: string
+  name: string
+  bio: string
+  avatar_url: string | null
+  location: string
+  interests: User['interests']
+}
+
+type UserEventPayload = {
+  event_id: string
+}
+
+async function fetchApi<T>(input: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(input, {
+    credentials: 'include',
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init?.headers ?? {}),
+    },
+  })
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { error?: string } | null
+    throw new Error(body?.error ?? 'Error de comunicación con el servidor.')
+  }
+
+  return response.json() as Promise<T>
+}
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -39,74 +63,116 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   })
   const [isAuthReady, setIsAuthReady] = useState(false)
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(AUTH_STORAGE_KEY)
-      if (!raw) {
-        setIsAuthReady(true)
-        return
-      }
+  const syncFromApi = useCallback(async () => {
+    const sessionPayload = await fetchApi<SessionPayload>('/api/auth/session', {
+      method: 'GET',
+    })
 
-      const parsed = JSON.parse(raw) as { user?: User | null }
-      if (parsed.user) {
-        setAuthState({ user: parsed.user, isAuthenticated: true })
-      }
-    } catch {
-      localStorage.removeItem(AUTH_STORAGE_KEY)
-    } finally {
-      setIsAuthReady(true)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!isAuthReady) return
-    if (!authState.user || !authState.isAuthenticated) {
-      localStorage.removeItem(AUTH_STORAGE_KEY)
+    if (!sessionPayload.session) {
+      setAuthState({ user: null, isAuthenticated: false })
       return
     }
 
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ user: authState.user }))
-  }, [authState, isAuthReady])
+    const [profile, likedEvents, savedEvents] = await Promise.all([
+      fetchApi<ProfilePayload>('/api/profile', { method: 'GET' }),
+      fetchApi<UserEventPayload[]>('/api/events/liked', { method: 'GET' }),
+      fetchApi<UserEventPayload[]>('/api/events/saved', { method: 'GET' }),
+    ])
 
-  /**
-   * Simula un login contra la API.
-   * En producción, aquí se haría el POST /auth/login.
-   */
-  const login = useCallback(async (_email: string, _password: string) => {
-    // Simulamos delay de red
-    await new Promise((r) => setTimeout(r, 800))
-    setAuthState({ user: MOCK_USER, isAuthenticated: true })
+    const nextUser: User = {
+      id: profile.id,
+      name: profile.name,
+      email: sessionPayload.session.user.email ?? '',
+      avatarUrl: profile.avatar_url ?? '',
+      bio: profile.bio ?? '',
+      interests: profile.interests ?? [],
+      likedEvents: likedEvents.map((row) => row.event_id),
+      savedEvents: savedEvents.map((row) => row.event_id),
+      location: profile.location ?? '',
+    }
+
+    setAuthState({ user: nextUser, isAuthenticated: true })
   }, [])
 
-  /**
-   * Simula el registro de un nuevo usuario.
-   * En producción, aquí se haría el POST /auth/register.
-   */
-  const register = useCallback(
-    async (name: string, email: string, _password: string) => {
-      await new Promise((r) => setTimeout(r, 800))
-      const newUser: User = {
-        ...MOCK_USER,
-        id: `user-${Date.now()}`,
-        name,
-        email,
-        likedEvents: [],
-        savedEvents: [],
-      }
-      setAuthState({ user: newUser, isAuthenticated: true })
-    },
-    [],
-  )
+  useEffect(() => {
+    let mounted = true
 
-  const logout = useCallback(() => {
+    const loadAuth = async () => {
+      try {
+        if (!mounted) return
+        await syncFromApi()
+      } catch {
+        if (!mounted) return
+        setAuthState({ user: null, isAuthenticated: false })
+      } finally {
+        if (mounted) setIsAuthReady(true)
+      }
+    }
+
+    loadAuth()
+
+    return () => {
+      mounted = false
+    }
+  }, [syncFromApi])
+
+  const login = useCallback(async (email: string, password: string) => {
+    await fetchApi('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    })
+
+    await syncFromApi()
+  }, [syncFromApi])
+
+  const register = useCallback(async (name: string, email: string, password: string) => {
+    await fetchApi('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ name, email, password }),
+    })
+
+    await syncFromApi()
+  }, [syncFromApi])
+
+  const logout = useCallback(async () => {
+    await fetchApi('/api/auth/logout', {
+      method: 'POST',
+    })
+
     setAuthState({ user: null, isAuthenticated: false })
   }, [])
 
-  const updateUser = useCallback((data: Partial<User>) => {
-    setAuthState((prev) =>
-      prev.user ? { ...prev, user: { ...prev.user, ...data } } : prev,
-    )
-  }, [])
+  const updateUser = useCallback(async (data: Partial<User>) => {
+    if (!authState.user) {
+      throw new Error('No hay usuario autenticado.')
+    }
+
+    const profilePayload: {
+      name?: string
+      bio?: string
+      avatar_url?: string
+      location?: string
+      interests?: User['interests']
+    } = {}
+
+    if (typeof data.name === 'string') profilePayload.name = data.name
+    if (typeof data.bio === 'string') profilePayload.bio = data.bio
+    if (typeof data.avatarUrl === 'string') profilePayload.avatar_url = data.avatarUrl
+    if (typeof data.location === 'string') profilePayload.location = data.location
+    if (Array.isArray(data.interests)) profilePayload.interests = data.interests
+
+    if (Object.keys(profilePayload).length > 0) {
+      await fetchApi('/api/profile', {
+        method: 'PATCH',
+        body: JSON.stringify(profilePayload),
+      })
+    }
+
+    setAuthState((prev) => {
+      if (!prev.user) return prev
+      return { ...prev, user: { ...prev.user, ...data } }
+    })
+  }, [authState.user])
 
   return (
     <AuthContext.Provider value={{ ...authState, isAuthReady, login, register, logout, updateUser }}>

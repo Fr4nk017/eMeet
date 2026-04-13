@@ -28,20 +28,30 @@ export function useNearbyPlaces(): UseNearbyPlacesReturn {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const detailsCache = useRef<Map<string, Partial<ScrapedPlace>>>(new Map())
+  // Contador de requests: permite descartar respuestas de llamadas anteriores
+  const fetchIdRef = useRef(0)
 
   const fetchNearby = useCallback(
     (
       bounds: google.maps.LatLngBounds,
       types: PlaceType[],
     ) => {
+      const id = ++fetchIdRef.current
       setLoading(true)
       setError(null)
       searchNearbyPlaces(bounds, types)
         .then((results) => {
+          if (id !== fetchIdRef.current) return // respuesta obsoleta — ignorar
           setPlaces(results.sort((a, b) => b.rating - a.rating))
         })
-        .catch(() => setError('Error al buscar lugares cercanos'))
-        .finally(() => setLoading(false))
+        .catch(() => {
+          if (id !== fetchIdRef.current) return
+          setError('Error al buscar lugares cercanos')
+        })
+        .finally(() => {
+          if (id !== fetchIdRef.current) return
+          setLoading(false)
+        })
     },
     [],
   )

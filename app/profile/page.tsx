@@ -110,9 +110,13 @@ function ProfilePageContent() {
     },
   ]
 
-  function handleLogout() {
-    logout()
-    router.push('/auth')
+  async function handleLogout() {
+    try {
+      await logout()
+      router.push('/auth')
+    } catch {
+      // Se mantiene en pantalla si falla el cierre de sesión.
+    }
   }
 
   function toggleInterest(key: EventCategory) {
@@ -120,7 +124,9 @@ function ProfilePageContent() {
     const updated = current.includes(key)
       ? current.filter((i) => i !== key)
       : [...current, key]
-    updateUser({ interests: updated })
+    updateUser({ interests: updated }).catch(() => {
+      // Evita bloquear la UI si falla la actualización remota.
+    })
   }
 
   return (

@@ -171,20 +171,22 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
   }, [isLoaded, refreshPlaces, selectedPlaceTypes, userLocation])
 
   // Enriquece solo los 2 primeros lugares y registra cuáles ya fueron solicitados.
-  // Sin el ref, cada vez que enrichPlace actualiza `places` el effect volvería a correr
-  // y llamaría enrich de nuevo (aunque el cache interno lo evita, genera re-renders extra).
+  // La salida temprana evita iteraciones extra cuando enrichPlace actualiza `places`
+  // y vuelve a disparar el efecto: si no hay nada nuevo que enriquecer, se corta de inmediato.
   useEffect(() => {
-    places.slice(0, 2).forEach((place) => {
-      if (enrichRequestedRef.current.has(place.placeId)) return
-      if (
-        place.photoUrl === undefined ||
-        place.website === undefined ||
-        place.phone === undefined ||
-        place.openingHours === undefined
-      ) {
-        enrichRequestedRef.current.add(place.placeId)
-        void enrichPlace(place.placeId)
-      }
+    const toEnrich = places.slice(0, 2).filter(
+      (place) =>
+        !enrichRequestedRef.current.has(place.placeId) &&
+        (place.photoUrl === undefined ||
+          place.website === undefined ||
+          place.phone === undefined ||
+          place.openingHours === undefined),
+    )
+    if (toEnrich.length === 0) return
+
+    toEnrich.forEach((place) => {
+      enrichRequestedRef.current.add(place.placeId)
+      void enrichPlace(place.placeId)
     })
   }, [enrichPlace, places])
 
