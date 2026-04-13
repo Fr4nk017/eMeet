@@ -53,8 +53,12 @@ export default function AuthRoutePage() {
         await register(name, email, password)
       }
       router.push('/')
-    } catch {
-      setError('Ocurrió un error. Intenta de nuevo.')
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message)
+      } else {
+        setError('Ocurrió un error. Intenta de nuevo.')
+      }
     } finally {
       setLoading(false)
     }

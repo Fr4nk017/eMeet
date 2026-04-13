@@ -7,8 +7,6 @@ import { useChatContext } from '../../../src/context/ChatContext'
 import { useAuth } from '../../../src/context/AuthContext'
 import { HiArrowLeft, HiPaperAirplane, HiMapPin } from 'react-icons/hi2'
 
-const CURRENT_USER_ID = 'user-1'
-
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('es-CL', {
     hour: '2-digit',
@@ -40,7 +38,11 @@ export default function ChatRoomRoutePage() {
   const roomMessages = messages[roomId ?? ''] ?? []
 
   useEffect(() => {
-    if (roomId) markRoomRead(roomId)
+    if (roomId) {
+      markRoomRead(roomId).catch(() => {
+        // Evita romper la vista si falla el marcado de leído.
+      })
+    }
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [roomId, markRoomRead])
 
@@ -51,12 +53,12 @@ export default function ChatRoomRoutePage() {
   const otherParticipants = useMemo(() => {
     const bySender = new Map<string, { name: string; avatar: string }>()
     for (const msg of roomMessages) {
-      if (msg.senderId !== CURRENT_USER_ID && !bySender.has(msg.senderId)) {
+      if (msg.senderId !== user?.id && !bySender.has(msg.senderId)) {
         bySender.set(msg.senderId, { name: msg.senderName, avatar: msg.senderAvatar })
       }
     }
     return Array.from(bySender.values())
-  }, [roomMessages])
+  }, [roomMessages, user?.id])
 
   useEffect(() => {
     if (!roomId || otherParticipants.length === 0) return
@@ -85,7 +87,9 @@ export default function ChatRoomRoutePage() {
 
   function handleSend() {
     if (!input.trim() || !user || !roomId) return
-    sendMessage(roomId, input.trim(), CURRENT_USER_ID, user.name, user.avatarUrl)
+    sendMessage(roomId, input.trim()).catch(() => {
+      // El error se informa desde el contexto con mensajes en español.
+    })
     setInput('')
     inputRef.current?.focus()
   }
@@ -166,7 +170,7 @@ export default function ChatRoomRoutePage() {
 
             <AnimatePresence initial={false}>
               {msgs.map((msg) => {
-                const isOwn = msg.senderId === CURRENT_USER_ID
+                const isOwn = msg.senderId === user?.id
                 return (
                   <motion.div
                     key={msg.id}

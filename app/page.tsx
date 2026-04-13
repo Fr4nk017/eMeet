@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import SwipeCard from '../src/components/SwipeCard'
 import Layout from '../src/components/Layout'
@@ -9,9 +9,12 @@ import PlaceTypeFilters from '../src/components/PlaceTypeFilters'
 import { placeToEvent } from '../src/data/placeFeedAdapter'
 import { NearbyPlacesProvider, useNearbyPlacesContext } from '../src/context/NearbyPlacesContext'
 import { useChatContext } from '../src/context/ChatContext'
+import { useAuth } from '../src/context/AuthContext'
+import { getSupabaseBrowserClient } from '../src/lib/supabase'
 import type { PlaceType } from '../src/types'
 
 const DEFAULT_FEED_TYPES: PlaceType[] = ['restaurant', 'bar', 'night_club', 'cafe']
+const supabase = getSupabaseBrowserClient()
 
 function FeedSkeleton() {
   return (
@@ -87,6 +90,7 @@ function HomePageContent() {
     refreshPlaces,
   } = useNearbyPlacesContext()
   const { joinRoom } = useChatContext()
+  const { user, updateUser } = useAuth()
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
@@ -97,6 +101,17 @@ function HomePageContent() {
     address: string
     mapUrl: string
   } | null>(null)
+
+  useEffect(() => {
+    if (!user) {
+      setLikedIds(new Set())
+      setSavedIds(new Set())
+      return
+    }
+
+    setLikedIds(new Set(user.likedEvents))
+    setSavedIds(new Set(user.savedEvents))
+  }, [user])
 
   const events = useMemo(() => {
     if (!userLocation) return []
@@ -144,28 +159,57 @@ function HomePageContent() {
     setTimeout(() => setCarretee(null), 2600)
   }
 
-  const handleSwipeRight = useCallback((id: string) => {
+  const handleSwipeRight = useCallback(async (id: string) => {
     const likedEvent = events.find((event) => event.id === id)
+
+    if (!user || !likedEvent) {
+      showToast('Inicia sesión para guardar tus likes.', 'nope')
+      return
+    }
+
+    const { error } = await supabase.from('user_events').upsert(
+      {
+        event_id: likedEvent.id,
+        event_title: likedEvent.title,
+        event_image_url: likedEvent.imageUrl,
+        event_address: likedEvent.address,
+        action: 'like',
+      },
+      { onConflict: 'user_id,event_id,action' },
+    )
+
+    if (error) {
+      showToast('No se pudo registrar tu like.', 'nope')
+      return
+    }
 
     setLikedIds((prev) => new Set(prev).add(id))
     setDismissedIds((prev) => new Set(prev).add(id))
     excludePlace(id)
     showToast('¡Te interesa! 💚', 'like')
 
-    if (likedEvent) {
-      showCarretee({
-        id: likedEvent.id,
-        title: likedEvent.title,
-        address: likedEvent.address,
-      })
-
-      joinRoom(likedEvent.id, likedEvent.title, likedEvent.imageUrl, likedEvent.address)
-
-      if (likedEvent.websiteUrl) {
-        window.open(likedEvent.websiteUrl, '_blank', 'noopener,noreferrer')
-      }
+    try {
+      await updateUser({ likedEvents: Array.from(new Set([...(user.likedEvents ?? []), likedEvent.id])) })
+    } catch {
+      // El like ya fue persistido, solo falló la sincronización local del perfil.
     }
-  }, [events, excludePlace, joinRoom])
+
+    showCarretee({
+      id: likedEvent.id,
+      title: likedEvent.title,
+      address: likedEvent.address,
+    })
+
+    try {
+      await joinRoom(likedEvent.id, likedEvent.title, likedEvent.imageUrl, likedEvent.address)
+    } catch {
+      showToast('No se pudo unir al chat del lugar.', 'nope')
+    }
+
+    if (likedEvent.websiteUrl) {
+      window.open(likedEvent.websiteUrl, '_blank', 'noopener,noreferrer')
+    }
+  }, [events, excludePlace, joinRoom, updateUser, user])
 
   const handleSwipeLeft = useCallback((id: string) => {
     setDismissedIds((prev) => new Set(prev).add(id))
@@ -173,15 +217,60 @@ function HomePageContent() {
     showToast('No es para ti', 'nope')
   }, [excludePlace])
 
-  const handleSave = useCallback((id: string) => {
-    setSavedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+  const handleSave = useCallback(async (id: string) => {
+    if (!user) {
+      showToast('Inicia sesión para guardar eventos.', 'nope')
+      return
+    }
+
+    const eventToSave = events.find((event) => event.id === id)
+    if (!eventToSave) return
+
+    const isCurrentlySaved = savedIds.has(id)
+
+    if (isCurrentlySaved) {
+      const { error } = await supabase
+        .from('user_events')
+        .delete()
+        .eq('event_id', id)
+        .eq('action', 'save')
+
+      if (error) {
+        showToast('No se pudo quitar de guardados.', 'nope')
+        return
+      }
+    } else {
+      const { error } = await supabase.from('user_events').upsert(
+        {
+          event_id: eventToSave.id,
+          event_title: eventToSave.title,
+          event_image_url: eventToSave.imageUrl,
+          event_address: eventToSave.address,
+          action: 'save',
+        },
+        { onConflict: 'user_id,event_id,action' },
+      )
+
+      if (error) {
+        showToast('No se pudo guardar el evento.', 'nope')
+        return
+      }
+    }
+
+    const nextSaved = new Set(savedIds)
+    if (nextSaved.has(id)) nextSaved.delete(id)
+    else nextSaved.add(id)
+
+    setSavedIds(nextSaved)
+
+    try {
+      await updateUser({ savedEvents: Array.from(nextSaved) })
+    } catch {
+      // El guardado ya fue persistido, solo falló la sincronización local del perfil.
+    }
+
     showToast('Evento guardado 🔖', 'save')
-  }, [])
+  }, [events, savedIds, updateUser, user])
 
   const visibleEvents = events.slice(0, 3)
 
