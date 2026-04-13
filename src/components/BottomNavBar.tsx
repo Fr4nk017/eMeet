@@ -25,7 +25,7 @@ export default function BottomNavBar() {
   }
 
   return (
-    <nav className="absolute inset-x-0 bottom-0 z-50 border-t border-white/10 bg-card/95 px-2 backdrop-blur-md">
+    <nav className="absolute inset-x-0 bottom-0 z-50 border-t border-white/10 bg-card/95 px-2 backdrop-blur-md lg:hidden">
       <div className="mx-auto flex h-16 w-full items-center justify-around lg:h-[72px]">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const isActive = isRouteActive(href)

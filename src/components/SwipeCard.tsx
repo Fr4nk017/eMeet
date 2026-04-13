@@ -23,11 +23,11 @@ const SWIPE_THRESHOLD = 120
 function StarRating({ rating }: { rating: number }) {
   const filled = Math.round(rating)
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="inline-flex items-center gap-1 rounded-full border border-amber-300/35 bg-black/35 px-2.5 py-1 backdrop-blur-sm">
       {Array.from({ length: 5 }, (_, i) => (
-        <span key={i} className={`text-sm leading-none ${i < filled ? 'text-amber-400' : 'text-white/20'}`}>★</span>
+        <span key={i} className={`text-sm leading-none ${i < filled ? 'text-amber-300' : 'text-white/25'}`}>★</span>
       ))}
-      <span className="ml-1 text-[11px] font-semibold text-white/70">{rating.toFixed(1)}</span>
+      <span className="ml-1 text-[11px] font-bold text-amber-100">{rating.toFixed(1)}</span>
     </div>
   )
 }
@@ -125,8 +125,9 @@ export default function SwipeCard({
           draggable={false}
         />
 
-        {/* Gradiente oscuro inferior — más pronunciado para mejor legibilidad */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/55 to-black/5" />
+        {/* Doble gradiente para elevar contraste en textos y badges */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-black/20" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-transparent" />
 
         {/* Badges top-left: categoría + estado abierto/cerrado */}
         <div className="absolute left-4 top-4 z-10 flex flex-col gap-1.5 lg:left-5 lg:top-5">
@@ -137,13 +138,13 @@ export default function SwipeCard({
           </span>
           {event.isOpen !== null && event.isOpen !== undefined && (
             <span
-              className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm ${
+              className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold shadow-lg backdrop-blur-md ${
                 event.isOpen
-                  ? 'border-green-500/30 bg-green-500/20 text-green-300'
-                  : 'border-red-500/30 bg-red-500/20 text-red-300'
+                  ? 'border-green-300/50 bg-green-500/30 text-green-100 shadow-green-900/40'
+                  : 'border-red-300/50 bg-red-500/30 text-red-100 shadow-red-900/40'
               }`}
             >
-              <span className={`h-1.5 w-1.5 rounded-full ${event.isOpen ? 'bg-green-400' : 'bg-red-400'}`} />
+              <span className={`h-2 w-2 rounded-full ${event.isOpen ? 'bg-green-200' : 'bg-red-200'}`} />
               {event.isOpen ? 'Abierto' : 'Cerrado'}
             </span>
           )}
@@ -182,35 +183,35 @@ export default function SwipeCard({
         )}
 
         {/* ── Info del evento (parte inferior) ────────────────────────────── */}
-        <div className={`absolute bottom-0 left-0 right-0 p-5 transition-all duration-200 lg:p-6 ${isDragging ? 'opacity-80' : 'opacity-100'}`}>
+        <div className={`absolute bottom-0 left-0 right-0 p-4 pb-20 transition-all duration-200 lg:p-5 lg:pb-24 ${isDragging ? 'opacity-80' : 'opacity-100'}`}>
 
           {event.rating && event.rating > 0 && (
-            <div className="mb-2">
+            <div className="mb-1.5">
               <StarRating rating={event.rating} />
             </div>
           )}
 
-          <h2 className="mb-1 line-clamp-2 text-xl font-bold leading-tight text-white lg:text-[1.7rem]">
+          <h2 className="mb-1 line-clamp-2 text-lg font-bold leading-tight text-white lg:text-[1.55rem]">
             {event.title}
           </h2>
 
-          <p className="mb-3 line-clamp-2 text-sm text-white/70 lg:text-[0.95rem] lg:leading-6">
+          <p className="mb-2 line-clamp-2 text-[13px] text-white/70 lg:text-sm lg:leading-5">
             {event.description}
           </p>
 
           {/* Meta información */}
-          <div className="flex flex-col gap-1.5 mb-4">
-            <div className="flex items-center gap-2 text-sm text-white/80 lg:text-[0.95rem]">
+          <div className="mb-3 flex flex-col gap-1">
+            <div className="flex items-center gap-2 text-[13px] text-white/80 lg:text-sm">
               <HiClock className="w-4 h-4 flex-shrink-0 text-primary-light" />
               <span>{formatEventDate(event.date)}</span>
             </div>
-            <div className="flex items-center gap-2 text-sm text-white/80 lg:text-[0.95rem]">
+            <div className="flex items-center gap-2 text-[13px] text-white/80 lg:text-sm">
               <HiMapPin className="w-4 h-4 flex-shrink-0 text-primary-light" />
               <span className="truncate">{event.location}</span>
               <span className="text-white/50 text-xs flex-shrink-0">· {event.distance} km</span>
             </div>
             {event.capacity && (
-              <div className="flex items-center gap-2 text-sm text-white/80 lg:text-[0.95rem]">
+              <div className="flex items-center gap-2 text-[13px] text-white/80 lg:text-sm">
                 <HiUsers className="w-4 h-4 flex-shrink-0 text-primary-light" />
                 <span>{event.attendees}/{event.capacity} asistentes</span>
               </div>
@@ -225,12 +226,12 @@ export default function SwipeCard({
                 alt={event.organizerName}
                 className="w-6 h-6 rounded-full border border-white/20"
               />
-              <span className="max-w-[160px] truncate text-xs text-white/60 lg:max-w-[200px]">
+              <span className="max-w-[150px] truncate text-[11px] text-white/60 lg:max-w-[190px]">
                 {event.organizerName}
               </span>
             </div>
             <span
-              className={`text-sm font-bold px-3 py-1 rounded-full ${
+              className={`rounded-full px-2.5 py-1 text-xs font-bold ${
                 event.price === null
                   ? 'bg-green-500/20 text-green-400'
                   : 'bg-primary/20 text-primary-light'
@@ -241,13 +242,13 @@ export default function SwipeCard({
           </div>
 
           {event.websiteUrl && (
-            <div className="mt-3">
+            <div className="mt-2.5">
               <a
                 href={event.websiteUrl}
                 target="_blank"
                 rel="noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 backdrop-blur-sm transition-colors hover:bg-cyan-500/20"
+                className="inline-flex items-center gap-1.5 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold text-cyan-200 backdrop-blur-sm transition-colors hover:bg-cyan-500/20"
               >
                 <HiGlobeAlt className="h-4 w-4" />
                 Ver sitio web
@@ -255,27 +256,28 @@ export default function SwipeCard({
             </div>
           )}
 
-          {/* Botones de acción (solo en carta activa) */}
-          {isActive && (
-            <div className="mt-4 flex items-center justify-center gap-6 lg:mt-5">
-              <button
-                onClick={() => onSwipeLeft(event.id)}
-                className="flex h-14 w-14 items-center justify-center rounded-full border border-red-400/40 bg-red-500/15 text-red-400 shadow-lg shadow-red-900/20 backdrop-blur-sm transition-all duration-200 hover:border-red-400/70 hover:bg-red-500/25 active:scale-90 lg:h-16 lg:w-16"
-                aria-label="No me interesa"
-              >
-                <HiX className="h-7 w-7 lg:h-8 lg:w-8" />
-              </button>
-
-              <button
-                onClick={() => onSwipeRight(event.id)}
-                className="flex h-14 w-14 items-center justify-center rounded-full border border-green-400/40 bg-green-500/15 text-green-400 shadow-lg shadow-green-900/20 backdrop-blur-sm transition-all duration-200 hover:border-green-400/70 hover:bg-green-500/25 active:scale-90 lg:h-16 lg:w-16"
-                aria-label="Me interesa"
-              >
-                <HiHeart className="h-7 w-7 lg:h-8 lg:w-8" />
-              </button>
-            </div>
-          )}
         </div>
+
+        {/* Botones de acción (solo en carta activa) */}
+        {isActive && (
+          <div className="absolute inset-x-0 bottom-4 z-20 flex items-center justify-center gap-4 px-4 lg:bottom-5">
+            <button
+              onClick={() => onSwipeLeft(event.id)}
+              className="flex h-14 w-14 items-center justify-center rounded-full border border-red-300/55 bg-red-500/30 text-red-100 shadow-lg shadow-red-900/35 backdrop-blur-md transition-all duration-200 hover:border-red-300/80 hover:bg-red-500/40 active:scale-90"
+              aria-label="No me interesa"
+            >
+              <HiX className="h-7 w-7" />
+            </button>
+
+            <button
+              onClick={() => onSwipeRight(event.id)}
+              className="flex h-14 w-14 items-center justify-center rounded-full border border-green-300/55 bg-green-500/30 text-green-100 shadow-lg shadow-green-900/35 backdrop-blur-md transition-all duration-200 hover:border-green-300/80 hover:bg-green-500/40 active:scale-90"
+              aria-label="Me interesa"
+            >
+              <HiHeart className="h-7 w-7" />
+            </button>
+          </div>
+        )}
       </div>
     </motion.div>
   )

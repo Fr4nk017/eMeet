@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useChatContext } from '../../../src/context/ChatContext'
@@ -32,6 +32,7 @@ export default function ChatRoomRoutePage() {
   const { rooms, messages, sendMessage, markRoomRead } = useChatContext()
   const { user } = useAuth()
   const [input, setInput] = useState('')
+  const [typingUser, setTypingUser] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -46,6 +47,30 @@ export default function ChatRoomRoutePage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [roomMessages.length])
+
+  const otherParticipants = useMemo(() => {
+    const bySender = new Map<string, { name: string; avatar: string }>()
+    for (const msg of roomMessages) {
+      if (msg.senderId !== CURRENT_USER_ID && !bySender.has(msg.senderId)) {
+        bySender.set(msg.senderId, { name: msg.senderName, avatar: msg.senderAvatar })
+      }
+    }
+    return Array.from(bySender.values())
+  }, [roomMessages])
+
+  useEffect(() => {
+    if (!roomId || otherParticipants.length === 0) return
+
+    const interval = setInterval(() => {
+      const chance = Math.random()
+      if (chance > 0.45) return
+      const randomUser = otherParticipants[Math.floor(Math.random() * otherParticipants.length)]
+      setTypingUser(randomUser.name)
+      setTimeout(() => setTypingUser((curr) => (curr === randomUser.name ? null : curr)), 2000)
+    }, 6500)
+
+    return () => clearInterval(interval)
+  }, [otherParticipants, roomId])
 
   if (!room) {
     return (
@@ -150,13 +175,11 @@ export default function ChatRoomRoutePage() {
                     transition={{ duration: 0.2 }}
                     className={`mb-2 flex gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}
                   >
-                    {!isOwn && (
-                      <img
-                        src={msg.senderAvatar}
-                        alt={msg.senderName}
-                        className="h-8 w-8 shrink-0 self-end rounded-full border border-white/10 object-cover"
-                      />
-                    )}
+                    <img
+                      src={msg.senderAvatar}
+                      alt={msg.senderName}
+                      className="h-8 w-8 shrink-0 self-end rounded-full border border-white/10 object-cover"
+                    />
 
                     <div className={`flex max-w-[75%] flex-col gap-0.5 ${isOwn ? 'items-end' : 'items-start'}`}>
                       {!isOwn && (
@@ -188,6 +211,22 @@ export default function ChatRoomRoutePage() {
         ))}
 
         <div ref={bottomRef} />
+
+        <AnimatePresence>
+          {typingUser && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 6 }}
+              className="mt-1 flex items-center gap-2 px-1"
+            >
+              <span className="h-2 w-2 animate-pulse rounded-full bg-green-400" />
+              <span className="text-xs text-muted">
+                {typingUser} está escribiendo...
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <div className="shrink-0 border-t border-white/10 bg-gradient-to-r from-card/95 to-surface/95 px-3 py-3 backdrop-blur-md">

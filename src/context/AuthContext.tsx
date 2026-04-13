@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import type { AuthState, User } from '../types'
 
@@ -19,11 +19,14 @@ const MOCK_USER: User = {
 
 // ─── Interfaz del contexto ───────────────────────────────────────────────────
 interface AuthContextValue extends AuthState {
+  isAuthReady: boolean
   login: (email: string, password: string) => Promise<void>
   register: (name: string, email: string, password: string) => Promise<void>
   logout: () => void
   updateUser: (data: Partial<User>) => void
 }
+
+const AUTH_STORAGE_KEY = 'emeet-auth'
 
 // ─── Creación del contexto ───────────────────────────────────────────────────
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -34,6 +37,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: null,
     isAuthenticated: false,
   })
+  const [isAuthReady, setIsAuthReady] = useState(false)
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(AUTH_STORAGE_KEY)
+      if (!raw) {
+        setIsAuthReady(true)
+        return
+      }
+
+      const parsed = JSON.parse(raw) as { user?: User | null }
+      if (parsed.user) {
+        setAuthState({ user: parsed.user, isAuthenticated: true })
+      }
+    } catch {
+      localStorage.removeItem(AUTH_STORAGE_KEY)
+    } finally {
+      setIsAuthReady(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isAuthReady) return
+    if (!authState.user || !authState.isAuthenticated) {
+      localStorage.removeItem(AUTH_STORAGE_KEY)
+      return
+    }
+
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ user: authState.user }))
+  }, [authState, isAuthReady])
 
   /**
    * Simula un login contra la API.
@@ -76,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ ...authState, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ ...authState, isAuthReady, login, register, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   )
