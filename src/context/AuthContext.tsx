@@ -45,12 +45,15 @@ function createLocalUser(name: string, email: string, previousUser?: User | null
     id: previousUser?.id ?? `local-${email.toLowerCase()}`,
     name: name.trim() || previousUser?.name || email.split('@')[0],
     email,
+    role: previousUser?.role ?? 'user',
     avatarUrl: previousUser?.avatarUrl ?? 'https://i.pravatar.cc/150?img=32',
     bio: previousUser?.bio ?? 'Explorando panoramas cerca de mi.',
     interests: previousUser?.interests ?? ['gastronomia', 'musica'],
     likedEvents: previousUser?.likedEvents ?? [],
     savedEvents: previousUser?.savedEvents ?? [],
     location: previousUser?.location ?? 'Santiago, Chile',
+    createdAt: previousUser?.createdAt ?? new Date().toISOString(),
+    isVerified: previousUser?.isVerified ?? true,
   }
 }
 
@@ -129,12 +132,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       id: profile.id,
       name: profile.name,
       email: sessionPayload.session.user.email ?? '',
+      role: 'user',
       avatarUrl: profile.avatar_url ?? '',
       bio: profile.bio ?? '',
       interests: profile.interests ?? [],
       likedEvents: likedEvents.map((row) => row.event_id),
       savedEvents: savedEvents.map((row) => row.event_id),
       location: profile.location ?? '',
+      isVerified: true,
     }
 
     setAuthState({ user: nextUser, isAuthenticated: true })

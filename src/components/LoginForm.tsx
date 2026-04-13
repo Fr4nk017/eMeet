@@ -21,11 +21,8 @@ export default function LoginForm() {
     setIsLoading(true)
 
     try {
-      // La validación y búsqueda de usuario ahora se delega al AuthContext
-      const user = await login({ email, password })
-      
-      // Redirección basada en el rol del usuario devuelto por el contexto
-      router.push(user.role === 'admin' ? '/admin' : user.role === 'locatario' ? '/locatario' : '/chat')
+      await login(email, password)
+      router.push('/')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido al iniciar sesión')
     } finally {
