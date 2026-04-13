@@ -4,13 +4,18 @@ import { useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import SwipeCard from '../src/components/SwipeCard'
 import Layout from '../src/components/Layout'
+import DistanceFilter from '../src/components/DistanceFilter'
+import PlaceTypeFilters from '../src/components/PlaceTypeFilters'
 import { placeToEvent } from '../src/data/placeFeedAdapter'
 import { NearbyPlacesProvider, useNearbyPlacesContext } from '../src/context/NearbyPlacesContext'
 import { useChatContext } from '../src/context/ChatContext'
+import type { PlaceType } from '../src/types'
+
+const DEFAULT_FEED_TYPES: PlaceType[] = ['restaurant', 'bar', 'night_club', 'cafe']
 
 function FeedSkeleton() {
   return (
-    <div className="card-stack mx-auto h-full w-full max-w-[420px]">
+    <div className="card-stack mx-auto h-full min-h-[500px] w-full max-w-[380px] lg:min-h-[560px] xl:min-h-[620px]">
       {[2, 1, 0].map((i) => (
         <div
           key={i}
@@ -22,7 +27,6 @@ function FeedSkeleton() {
           }}
         >
           <div className="flex h-full w-full flex-col overflow-hidden rounded-[30px] bg-card shadow-2xl lg:rounded-[36px]">
-            {/* Zona imagen */}
             <div className="relative shrink-0 basis-[62%]">
               <div className="shimmer absolute inset-0" />
               <div className="absolute left-4 top-4">
@@ -30,7 +34,6 @@ function FeedSkeleton() {
               </div>
             </div>
 
-            {/* Zona contenido */}
             <div className="flex flex-1 flex-col justify-between p-5">
               <div className="space-y-2">
                 <div className="shimmer h-6 w-3/4 rounded-xl" />
@@ -70,6 +73,7 @@ function FeedSkeleton() {
 function HomePageContent() {
   const {
     places,
+    excludePlace,
     userLocation,
     loading,
     locating,
@@ -77,12 +81,16 @@ function HomePageContent() {
     selectedPlaceTypes,
     selectedDistanceKm,
     requestUserLocation,
+    resetExcludedPlaces,
+    setDistanceKm,
+    togglePlaceType,
     refreshPlaces,
   } = useNearbyPlacesContext()
   const { joinRoom } = useChatContext()
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'like' | 'nope' | 'save' } | null>(null)
   const [carretee, setCarretee] = useState<{
     title: string
@@ -141,6 +149,7 @@ function HomePageContent() {
 
     setLikedIds((prev) => new Set(prev).add(id))
     setDismissedIds((prev) => new Set(prev).add(id))
+    excludePlace(id)
     showToast('¡Te interesa! 💚', 'like')
 
     if (likedEvent) {
@@ -156,12 +165,13 @@ function HomePageContent() {
         window.open(likedEvent.websiteUrl, '_blank', 'noopener,noreferrer')
       }
     }
-  }, [events, joinRoom])
+  }, [events, excludePlace, joinRoom])
 
   const handleSwipeLeft = useCallback((id: string) => {
     setDismissedIds((prev) => new Set(prev).add(id))
+    excludePlace(id)
     showToast('No es para ti', 'nope')
-  }, [])
+  }, [excludePlace])
 
   const handleSave = useCallback((id: string) => {
     setSavedIds((prev) => {
@@ -174,6 +184,25 @@ function HomePageContent() {
   }, [])
 
   const visibleEvents = events.slice(0, 3)
+
+  const activeFilterCount =
+    (selectedDistanceKm !== 3 ? 1 : 0) +
+    (selectedPlaceTypes.length !== DEFAULT_FEED_TYPES.length ? 1 : 0)
+
+  function restoreDefaultFilters() {
+    setDistanceKm(3)
+
+    const selectedSet = new Set(selectedPlaceTypes)
+    const defaultSet = new Set(DEFAULT_FEED_TYPES)
+
+    selectedPlaceTypes.forEach((type) => {
+      if (!defaultSet.has(type)) togglePlaceType(type)
+    })
+
+    DEFAULT_FEED_TYPES.forEach((type) => {
+      if (!selectedSet.has(type)) togglePlaceType(type)
+    })
+  }
 
   return (
     <Layout showDesktopMap>
@@ -246,7 +275,72 @@ function HomePageContent() {
           )}
         </AnimatePresence>
 
-        <div className="relative flex min-h-0 flex-1 px-4 pb-4 pt-3 lg:px-5 lg:pb-5 lg:pt-4">
+        <div className="relative flex min-h-0 flex-1 px-4 pb-4 pt-3 lg:px-5 lg:pb-5 lg:pt-2">
+          <div className="absolute right-4 top-2 z-30 hidden lg:block lg:right-5">
+            <button
+              type="button"
+              onClick={() => setIsFiltersOpen((v) => !v)}
+              className={`rounded-full border px-3 py-2 text-xs font-semibold shadow-lg backdrop-blur-md transition-colors ${
+                isFiltersOpen || activeFilterCount > 0
+                  ? 'border-primary/70 bg-primary/20 text-primary-light'
+                  : 'border-white/20 bg-surface/70 text-slate-200 hover:border-white/40'
+              }`}
+            >
+              Filtros {activeFilterCount > 0 ? `(${activeFilterCount})` : ''}
+            </button>
+
+            <AnimatePresence>
+              {isFiltersOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                  transition={{ duration: 0.16 }}
+                  className="mt-3 w-[320px] rounded-2xl border border-white/10 bg-card/95 p-3 shadow-2xl backdrop-blur-lg"
+                >
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-300">Opciones de filtro</p>
+
+                  <div className="space-y-3">
+                    <div>
+                      <p className="mb-1 text-[11px] font-semibold text-muted">Distancia</p>
+                      <DistanceFilter
+                        selectedKm={selectedDistanceKm}
+                        onChange={setDistanceKm}
+                        className="flex flex-wrap gap-2"
+                      />
+                    </div>
+
+                    <div>
+                      <p className="mb-1 text-[11px] font-semibold text-muted">Tipos de lugar</p>
+                      <PlaceTypeFilters
+                        selectedTypes={selectedPlaceTypes}
+                        onToggleType={togglePlaceType}
+                        className="flex flex-wrap gap-2"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={restoreDefaultFilters}
+                      className="rounded-full border border-white/20 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-white/40"
+                    >
+                      Limpiar filtros
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsFiltersOpen(false)}
+                      className="rounded-full border border-primary/60 bg-primary/15 px-3 py-1.5 text-xs font-semibold text-primary-light"
+                    >
+                      Aplicar
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
           {invalidApiKey ? (
             <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center">
               <span className="text-5xl">🔑</span>
@@ -258,7 +352,7 @@ function HomePageContent() {
           ) : loading || locating || !userLocation ? (
             <FeedSkeleton />
           ) : visibleEvents.length > 0 ? (
-            <div className="card-stack mx-auto h-full w-full max-w-[420px]">
+            <div className="card-stack mx-auto h-full min-h-[500px] w-full max-w-[380px] lg:min-h-[560px] xl:min-h-[620px]">
               {[...visibleEvents].reverse().map((event, reverseIndex) => {
                 const stackIndex = visibleEvents.length - 1 - reverseIndex
                 return (
@@ -288,6 +382,7 @@ function HomePageContent() {
                 <button
                   onClick={() => {
                     setDismissedIds(new Set())
+                    resetExcludedPlaces()
                     refreshPlaces()
                   }}
                   className="rounded-full bg-primary px-6 py-3 font-semibold text-white transition-colors active:scale-95 hover:bg-primary-dark"

@@ -76,6 +76,7 @@ function getDistanceKm(
 export default function BellavistaMap() {
   const {
     places,
+    excludedPlaceIds,
     loading,
     error,
     userLocation,
@@ -122,9 +123,10 @@ export default function BellavistaMap() {
   // y nearestPlaceIds (que depende de visiblePlaces) recalcula constantemente
   const visiblePlaces = useMemo(() => places.filter(
     (p) =>
+      !excludedPlaceIds.has(p.placeId) &&
       selectedPlaceTypes.includes(p.type) &&
       (!userLocation || getDistanceKm(userLocation, p.position) <= selectedDistanceKm),
-  ), [places, selectedPlaceTypes, userLocation, selectedDistanceKm])
+  ), [excludedPlaceIds, places, selectedPlaceTypes, userLocation, selectedDistanceKm])
 
   const nearestPlaceIds = useMemo(() => {
     if (!userLocation) return new Set<string>()

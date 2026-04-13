@@ -24,6 +24,7 @@ const LOOKS_LIKE_GOOGLE_MAPS_KEY = GOOGLE_MAPS_API_KEY.startsWith('AIza')
 
 interface NearbyPlacesContextValue {
   places: ScrapedPlace[]
+  excludedPlaceIds: Set<string>
   selectedPlaceTypes: PlaceType[]
   selectedDistanceKm: number
   userLocation: google.maps.LatLngLiteral | null
@@ -39,6 +40,8 @@ interface NearbyPlacesContextValue {
   setDistanceKm: (km: number) => void
   refreshPlaces: () => void
   enrichPlace: (placeId: string) => Promise<Partial<ScrapedPlace>>
+  excludePlace: (placeId: string) => void
+  resetExcludedPlaces: () => void
 }
 
 const NearbyPlacesContext = createContext<NearbyPlacesContextValue | undefined>(undefined)
@@ -59,6 +62,7 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
   const { places, loading, error, fetchNearby, enrichPlace } = useNearbyPlaces()
   const [selectedPlaceTypes, setSelectedPlaceTypes] = useState<PlaceType[]>(DEFAULT_PLACE_TYPES)
   const [selectedDistanceKm, setSelectedDistanceKm] = useState(3)
+  const [excludedPlaceIds, setExcludedPlaceIds] = useState<Set<string>>(new Set())
   const [userLocation, setUserLocation] = useState<google.maps.LatLngLiteral | null>(null)
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState<string | null>(null)
@@ -140,6 +144,19 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
     setSelectedDistanceKm(km)
   }, [])
 
+  const excludePlace = useCallback((placeId: string) => {
+    setExcludedPlaceIds((prev) => {
+      if (prev.has(placeId)) return prev
+      const next = new Set(prev)
+      next.add(placeId)
+      return next
+    })
+  }, [])
+
+  const resetExcludedPlaces = useCallback(() => {
+    setExcludedPlaceIds(new Set())
+  }, [])
+
   // Solicita ubicación una sola vez cuando Maps carga.
   // locating se lee del ref para evitar que el effect se re-ejecute en cada cambio de estado.
   useEffect(() => {
@@ -174,6 +191,7 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       places,
+      excludedPlaceIds,
       selectedPlaceTypes,
       selectedDistanceKm,
       userLocation,
@@ -189,10 +207,14 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
       setDistanceKm,
       refreshPlaces,
       enrichPlace,
+      excludePlace,
+      resetExcludedPlaces,
     }),
     [
+      excludePlace,
       enrichPlace,
       error,
+      excludedPlaceIds,
       invalidApiKey,
       isLoaded,
       loadError,
@@ -204,6 +226,7 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
       selectedPlaceTypes,
       refreshPlaces,
       requestUserLocation,
+      resetExcludedPlaces,
       setDistanceKm,
       togglePlaceType,
       userLocation,

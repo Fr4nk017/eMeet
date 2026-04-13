@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { useAuth } from '../../src/context/AuthContext'
@@ -8,7 +8,7 @@ import { useAuth } from '../../src/context/AuthContext'
 type Mode = 'login' | 'register'
 
 export default function AuthRoutePage() {
-  const { login, register } = useAuth()
+  const { login, register, user, isAuthReady } = useAuth()
   const router = useRouter()
 
   const [mode, setMode] = useState<Mode>('login')
@@ -17,6 +17,12 @@ export default function AuthRoutePage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (isAuthReady && user) {
+      router.replace('/')
+    }
+  }, [isAuthReady, router, user])
 
   function validate(): boolean {
     setError('')
