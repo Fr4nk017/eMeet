@@ -192,6 +192,59 @@ export interface Database {
           },
         ]
       }
+      locatario_events: {
+        Row: {
+          id: string
+          creator_id: string
+          title: string
+          description: string
+          category: EventCategory
+          event_date: string
+          address: string
+          price: number | null
+          image_url: string | null
+          organizer_name: string
+          organizer_avatar: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          creator_id?: string
+          title: string
+          description?: string
+          category: EventCategory
+          event_date: string
+          address?: string
+          price?: number | null
+          image_url?: string | null
+          organizer_name?: string
+          organizer_avatar?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          creator_id?: string
+          title?: string
+          description?: string
+          category?: EventCategory
+          event_date?: string
+          address?: string
+          price?: number | null
+          image_url?: string | null
+          organizer_name?: string
+          organizer_avatar?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'locatario_events_creator_id_fkey'
+            columns: ['creator_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>

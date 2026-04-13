@@ -2,14 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Variables globales */
+/* ── Variables globales ─────────────────────────────────────────────────────── */
 :root {
-  --color-primary: #7C3AED;
-  --color-surface: #1A1A2E;
-  --color-card: #16213E;
+  --color-primary:      #7C3AED;
+  --color-primary-light:#C4B5FD;
+  --color-silver:       #D4C8F0;
+  --color-surface:      #07040F;
+  --color-card:         #100A1F;
+
+  /* Efecto metálico — gradiente para brillo de metal iluminado */
+  --metal-sheen: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(196, 181, 253, 0.35) 50%,
+    transparent 100%
+  );
 }
 
-/* Reset y base */
+/* ── Reset y base ───────────────────────────────────────────────────────────── */
 * {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
@@ -18,7 +28,7 @@
 html, body {
   height: 100%;
   overflow-x: hidden;
-  background-color: #1A1A2E;
+  background-color: var(--color-surface);
   color: white;
   font-family: 'Inter', system-ui, sans-serif;
 }
@@ -29,19 +39,19 @@ html, body {
   flex-direction: column;
 }
 
-/* Scrollbar personalizado */
+/* ── Scrollbar metálico ─────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 4px;
+  width: 3px;
 }
 ::-webkit-scrollbar-track {
-  background: #1A1A2E;
+  background: var(--color-surface);
 }
 ::-webkit-scrollbar-thumb {
-  background: #7C3AED;
+  background: linear-gradient(180deg, #C4B5FD, #7C3AED);
   border-radius: 2px;
 }
 
-/* Animaciones de swipe */
+/* ── Swipe cards ────────────────────────────────────────────────────────────── */
 .card-stack {
   position: relative;
   width: 100%;
@@ -62,31 +72,40 @@ html, body {
   cursor: grabbing;
 }
 
-/* Skeleton shimmer */
+/* ── Shimmer skeleton ───────────────────────────────────────────────────────── */
 @keyframes shimmer {
   0%   { background-position: 200% center; }
   100% { background-position: -200% center; }
 }
 
 @keyframes routeLoading {
-  0% {
-    transform: translateX(-120%);
-  }
-  50% {
-    transform: translateX(90%);
-  }
-  100% {
-    transform: translateX(260%);
-  }
+  0%   { transform: translateX(-120%); }
+  50%  { transform: translateX(90%); }
+  100% { transform: translateX(260%); }
 }
 
 .shimmer {
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.04) 0%,
-    rgba(255, 255, 255, 0.11) 50%,
-    rgba(255, 255, 255, 0.04) 100%
+    rgba(196, 181, 253, 0.04) 0%,
+    rgba(196, 181, 253, 0.12) 50%,
+    rgba(196, 181, 253, 0.04) 100%
   );
   background-size: 200% 100%;
   animation: shimmer 1.6s infinite ease-in-out;
+}
+
+/* ── Efecto borde metálico superior ────────────────────────────────────────── */
+/* Simula la luz incidiendo sobre el borde superior de una superficie metálica */
+.metal-top-border {
+  position: relative;
+}
+.metal-top-border::before {
+  content: '';
+  position: absolute;
+  inset-x: 0;
+  top: 0;
+  height: 1px;
+  background: var(--metal-sheen);
+  pointer-events: none;
 }

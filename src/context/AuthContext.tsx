@@ -6,10 +6,16 @@ import type { AuthState, User } from '../types'
 import { hasSupabaseEnv } from '../lib/supabase'
 
 // ─── Interfaz del contexto ───────────────────────────────────────────────────
+type RegisterOptions = {
+  role?: User['role']
+  businessName?: string
+  businessLocation?: string
+}
+
 interface AuthContextValue extends AuthState {
   isAuthReady: boolean
   login: (email: string, password: string) => Promise<void>
-  register: (name: string, email: string, password: string) => Promise<void>
+  register: (name: string, email: string, password: string, options?: RegisterOptions) => Promise<void>
   logout: () => Promise<void>
   updateUser: (data: Partial<User>) => Promise<void>
 }
@@ -40,20 +46,38 @@ type UserEventPayload = {
 
 const LOCAL_AUTH_STORAGE_KEY = 'emeet-local-auth-user'
 
-function createLocalUser(name: string, email: string, previousUser?: User | null): User {
+function inferLocalRoleByEmail(email: string): User['role'] {
+  const normalized = email.toLowerCase()
+  if (normalized.includes('admin')) return 'admin'
+  if (normalized.includes('locatario')) return 'locatario'
+  return 'user'
+}
+
+function createLocalUser(
+  name: string,
+  email: string,
+  previousUser?: User | null,
+  options?: RegisterOptions,
+): User {
+  const role = options?.role ?? previousUser?.role ?? inferLocalRoleByEmail(email)
+
   return {
     id: previousUser?.id ?? `local-${email.toLowerCase()}`,
     name: name.trim() || previousUser?.name || email.split('@')[0],
     email,
-    role: previousUser?.role ?? 'user',
+    role,
     avatarUrl: previousUser?.avatarUrl ?? 'https://i.pravatar.cc/150?img=32',
     bio: previousUser?.bio ?? 'Explorando panoramas cerca de mi.',
     interests: previousUser?.interests ?? ['gastronomia', 'musica'],
     likedEvents: previousUser?.likedEvents ?? [],
     savedEvents: previousUser?.savedEvents ?? [],
-    location: previousUser?.location ?? 'Santiago, Chile',
+    location: options?.businessLocation ?? previousUser?.location ?? 'Santiago, Chile',
     createdAt: previousUser?.createdAt ?? new Date().toISOString(),
     isVerified: previousUser?.isVerified ?? true,
+    businessName: role === 'locatario' ? options?.businessName ?? previousUser?.businessName ?? name : undefined,
+    businessLocation: role === 'locatario'
+      ? options?.businessLocation ?? previousUser?.businessLocation ?? previousUser?.location ?? 'Santiago, Chile'
+      : undefined,
   }
 }
 
@@ -106,6 +130,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   })
   const [isAuthReady, setIsAuthReady] = useState(false)
 
+  // Carga perfil + eventos del usuario dado un email conocido.
+  // Usada post-login/register para evitar el round-trip extra a /api/auth/session.
+  const syncUserData = useCallback(async (email: string) => {
+    const [profile, likedEvents, savedEvents] = await Promise.all([
+      fetchApi<ProfilePayload>('/api/profile', { method: 'GET' }),
+      fetchApi<UserEventPayload[]>('/api/events/liked', { method: 'GET' }),
+      fetchApi<UserEventPayload[]>('/api/events/saved', { method: 'GET' }),
+    ])
+
+    const nextUser: User = {
+      id: profile.id,
+      name: profile.name,
+      email,
+      role: 'user',
+      avatarUrl: profile.avatar_url ?? '',
+      bio: profile.bio ?? '',
+      interests: profile.interests ?? [],
+      likedEvents: likedEvents.map((row) => row.event_id),
+      savedEvents: savedEvents.map((row) => row.event_id),
+      location: profile.location ?? '',
+      isVerified: true,
+    }
+
+    setAuthState({ user: nextUser, isAuthenticated: true })
+  }, [])
+
+  // Usada al montar la app: primero verifica si hay sesión activa, luego carga datos.
   const syncFromApi = useCallback(async () => {
     if (!hasSupabaseEnv) {
       const localUser = loadLocalUser()
@@ -122,28 +173,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    const [profile, likedEvents, savedEvents] = await Promise.all([
-      fetchApi<ProfilePayload>('/api/profile', { method: 'GET' }),
-      fetchApi<UserEventPayload[]>('/api/events/liked', { method: 'GET' }),
-      fetchApi<UserEventPayload[]>('/api/events/saved', { method: 'GET' }),
-    ])
-
-    const nextUser: User = {
-      id: profile.id,
-      name: profile.name,
-      email: sessionPayload.session.user.email ?? '',
-      role: 'user',
-      avatarUrl: profile.avatar_url ?? '',
-      bio: profile.bio ?? '',
-      interests: profile.interests ?? [],
-      likedEvents: likedEvents.map((row) => row.event_id),
-      savedEvents: savedEvents.map((row) => row.event_id),
-      location: profile.location ?? '',
-      isVerified: true,
-    }
-
-    setAuthState({ user: nextUser, isAuthenticated: true })
-  }, [])
+    await syncUserData(sessionPayload.session.user.email ?? '')
+  }, [syncUserData])
 
   useEffect(() => {
     let mounted = true
@@ -181,12 +212,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify({ email, password }),
     })
 
-    await syncFromApi()
-  }, [syncFromApi])
+    // Usamos syncUserData en lugar de syncFromApi: la sesión ya existe,
+    // no hace falta un round-trip extra a /api/auth/session.
+    await syncUserData(email)
+  }, [syncUserData])
 
-  const register = useCallback(async (name: string, email: string, password: string) => {
+  const register = useCallback(async (name: string, email: string, password: string, options?: RegisterOptions) => {
     if (!hasSupabaseEnv) {
-      const localUser = createLocalUser(name, email, loadLocalUser())
+      const localUser = createLocalUser(name, email, loadLocalUser(), options)
       saveLocalUser(localUser)
       setAuthState({ user: localUser, isAuthenticated: true })
       return
@@ -197,8 +230,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify({ name, email, password }),
     })
 
-    await syncFromApi()
-  }, [syncFromApi])
+    await syncUserData(email)
+  }, [syncUserData])
 
   const logout = useCallback(async () => {
     if (!hasSupabaseEnv) {
