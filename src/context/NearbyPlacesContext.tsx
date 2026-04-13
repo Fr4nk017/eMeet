@@ -76,7 +76,7 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
   const invalidApiKey = !HAS_GOOGLE_MAPS_KEY || !LOOKS_LIKE_GOOGLE_MAPS_KEY
 
   const { isLoaded, loadError } = useJsApiLoader({
-    googleMapsApiKey: invalidApiKey ? undefined : GOOGLE_MAPS_API_KEY,
+    googleMapsApiKey: invalidApiKey ? '' : GOOGLE_MAPS_API_KEY,
     libraries: LIBRARIES,
     version: 'weekly',
   })

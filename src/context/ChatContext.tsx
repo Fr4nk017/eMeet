@@ -238,7 +238,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         roomId,
         senderId: user.id,
         senderName: user.name,
-        senderAvatar: user.avatarUrl,
+        senderAvatar: user.avatarUrl ?? 'https://i.pravatar.cc/150?img=32',
         text: cleanText,
         timestamp: new Date().toISOString(),
       }

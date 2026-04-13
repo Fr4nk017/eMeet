@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
-import { FiMapPin, FiUser, FiUserPlus, FiMail, FiLock, FiEye, FiEyeOff, FiBriefcase } from 'react-icons/fi'
+import { FiUser, FiUserPlus, FiMail, FiLock, FiEye, FiEyeOff, FiBriefcase } from 'react-icons/fi'
 
 export default function SignUpForm() {
   const router = useRouter()
@@ -53,21 +53,9 @@ export default function SignUpForm() {
     }
 
     try {
-      // Prepara los datos para el registro y los envía al contexto.
-      const userData = {
-        email: formData.email,
-        name: role === 'locatario' ? formData.businessName : formData.name,
-        role,
-        password: formData.password, // La contraseña se manejará en el backend real
-        ...(role === 'locatario' && {
-          businessName: formData.businessName,
-          location: formData.location,
-          bio: formData.bio,
-        }),
-      }
-
-      const newUser = await register(userData)
-      router.push(newUser.role === 'locatario' ? '/locatario' : '/chat')
+      const name = role === 'locatario' ? formData.businessName : formData.name
+      await register(name, formData.email, formData.password)
+      router.push('/')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al registrarte')
     } finally {
