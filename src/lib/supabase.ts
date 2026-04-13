@@ -200,11 +200,23 @@ export interface Database {
   }
 }
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://placeholder.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'placeholder-anon-key'
+function isValidSupabaseEnvValue(value: string | undefined) {
+  if (!value) return false
+  const trimmed = value.trim()
+  if (!trimmed) return false
+  const normalized = trimmed.toLowerCase()
+  return !normalized.includes('placeholder') && !normalized.includes('your_')
+}
+
+const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const rawSupabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
 export const hasSupabaseEnv =
-  Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL) &&
-  Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+  isValidSupabaseEnvValue(rawSupabaseUrl) &&
+  isValidSupabaseEnvValue(rawSupabaseAnonKey)
+
+const supabaseUrl = hasSupabaseEnv ? rawSupabaseUrl!.trim() : 'https://placeholder.supabase.co'
+const supabaseAnonKey = hasSupabaseEnv ? rawSupabaseAnonKey!.trim() : 'placeholder-anon-key'
 
 let browserClient: SupabaseClient<Database> | null = null
 

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { createSupabaseServerClient } from './src/lib/supabase'
+import { createSupabaseServerClient, hasSupabaseEnv } from './src/lib/supabase'
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -7,6 +7,10 @@ export async function middleware(request: NextRequest) {
       headers: request.headers,
     },
   })
+
+  if (!hasSupabaseEnv) {
+    return response
+  }
 
   const supabase = createSupabaseServerClient({
     getAll: () => request.cookies.getAll().map((c) => ({ name: c.name, value: c.value })),
