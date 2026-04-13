@@ -40,6 +40,9 @@ export interface Event {
   isOpen?: boolean | null  // null = sin info
 }
 
+/** Roles disponibles en la plataforma */
+export type UserRole = 'user' | 'admin' | 'locatario'
+
 /**
  * Perfil del usuario autenticado.
  */
@@ -47,12 +50,18 @@ export interface User {
   id: string
   name: string
   email: string
-  avatarUrl: string
-  bio: string
+  role: UserRole
+  avatarUrl?: string
+  bio?: string
   interests: EventCategory[]
   likedEvents: string[]   // IDs de eventos con like
   savedEvents: string[]   // IDs de eventos guardados
-  location: string
+  location?: string
+  createdAt?: string // ISO 8601
+  isVerified?: boolean
+  phone?: string
+  businessName?: string
+  businessLocation?: string
 }
 
 /**
