@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createSupabaseServerClient, hasSupabaseEnv } from './src/lib/supabase'
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL?.trim()
+
 // Rutas que requieren sesión activa. El usuario sin sesión es redirigido a /auth.
 const PROTECTED_ROUTES = ['/profile', '/chat', '/saved', '/search']
 
@@ -12,6 +14,13 @@ export async function middleware(request: NextRequest) {
   })
 
   if (!hasSupabaseEnv) {
+    return response
+  }
+
+  // En arquitectura frontend/backend separada, la sesión se gestiona en cliente
+  // con Supabase JS y se envía por Bearer token al backend Express.
+  // Evitamos forzar redirects server-side desde Next middleware.
+  if (BACKEND_URL) {
     return response
   }
 

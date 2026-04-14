@@ -1,5 +1,7 @@
 import type { ScrapedPlace, PlaceType } from '../types'
 
+const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL ?? '').trim().replace(/\/$/, '')
+
 // ─── Configuración visual por tipo de lugar ──────────────────────────────────
 
 export const PLACE_TYPE_CONFIG: Record<
@@ -14,9 +16,9 @@ export const PLACE_TYPE_CONFIG: Record<
   food:         { category: 'Comida',      emoji: '🍴',  color: '#10B981' },
 }
 
-// ─── Mapeo de PlaceType a includedTypes de la nueva Place API ───────────────
+// ─── Mapeo de PlaceType a Google Places type ────────────────────────────────
 
-const PLACE_INCLUDED_TYPES: Record<PlaceType, string> = {
+const PLACE_TYPE_MAPPING: Record<PlaceType, string> = {
   restaurant:   'restaurant',
   bar:          'bar',
   night_club:   'night_club',
@@ -25,67 +27,11 @@ const PLACE_INCLUDED_TYPES: Record<PlaceType, string> = {
   food:         'food',
 }
 
-const PLACE_TYPE_PRIORITY: PlaceType[] = [
-  'night_club',
-  'bar',
-  'restaurant',
-  'cafe',
-  'liquor_store',
-  'food',
-]
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const EXCLUDED_GOOGLE_TYPES = new Set([
-  'gas_station',
-  'electric_vehicle_charging_station',
-  'parking',
-  'car_wash',
-  'car_repair',
-  'car_rental',
-  'car_dealer',
-  'supermarket',
-  'grocery_store',
-  'convenience_store',
-  'atm',
-  'bank',
-  'pharmacy',
-  'hospital',
-  'lodging',
-  'school',
-])
-
-const EXCLUDED_NAME_KEYWORDS = [
-  'copec',
-  'shell',
-  'petrobras',
-  'servicentro',
-  'gas station',
-  'bencina',
-]
-
-function resolveRelevantPlaceType(
-  googleTypes: string[] | undefined,
-  requestedType: PlaceType,
-  placeName: string | undefined,
-): PlaceType | null {
-  const safeTypes = googleTypes ?? []
-  const safeName = placeName?.toLowerCase() ?? ''
-
-  if (safeTypes.some((type) => EXCLUDED_GOOGLE_TYPES.has(type))) {
-    return null
-  }
-
-  if (EXCLUDED_NAME_KEYWORDS.some((keyword) => safeName.includes(keyword))) {
-    return null
-  }
-
-  return PLACE_TYPE_PRIORITY.find((type) => safeTypes.includes(type)) ?? requestedType
-}
-
-// ─── Helpers de conversión ───────────────────────────────────────────────────
-
-/** Convierte un LatLngBounds a CircleLiteral (centro + radio) para Place.searchNearby.
- *  Calcula el radio como la distancia haversine desde el centro hasta la esquina NE. */
-function boundsToCircle(bounds: google.maps.LatLngBounds): google.maps.CircleLiteral {
+function boundsToCircle(
+  bounds: google.maps.LatLngBounds,
+): { center: { lat: number; lng: number }; radius: number } {
   const center = bounds.getCenter()
   const ne = bounds.getNorthEast()
   const R = 6371000 // Radio de la Tierra en metros
@@ -97,139 +43,122 @@ function boundsToCircle(bounds: google.maps.LatLngBounds): google.maps.CircleLit
     Math.sin(dLat / 2) ** 2 +
     Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2
   const radius = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+
   return {
     center: { lat: center.lat(), lng: center.lng() },
     radius: Math.max(500, radius),
   }
 }
 
-/** Convierte el enum PriceLevel de la nueva API a número (0-4). */
-function priceLevelToNumber(
-  level: google.maps.places.PriceLevel | null | undefined,
-): number | null {
-  if (level == null) return null
-  const map: Record<string, number> = {
-    FREE: 0, INEXPENSIVE: 1, MODERATE: 2, EXPENSIVE: 3, VERY_EXPENSIVE: 4,
-  }
-  return map[level as string] ?? null
-}
-
-// ─── API pública ─────────────────────────────────────────────────────────────
+// ─── API pública (ahora llamando al backend) ─────────────────────────────────
 
 /**
- * Busca lugares cercanos usando la nueva Place.searchNearby API.
- * Lanza una búsqueda por cada tipo en paralelo, deduplica resultados por nombre.
- *
- * REEMPLAZA: PlacesService.nearbySearch (legacy, deprecated mar-2025)
+ * Busca lugares cercanos usando el backend como intermediario
+ * El backend llama a Google Places API y retorna los resultados
  */
 export async function searchNearbyPlaces(
   bounds: google.maps.LatLngBounds,
   types: PlaceType[],
   maxPerType = 8,
 ): Promise<ScrapedPlace[]> {
-  const searches = types.map((type) =>
-    google.maps.places.Place.searchNearby({
-      fields: [
-        'id', 'displayName', 'location', 'rating', 'userRatingCount',
-        'regularOpeningHours', 'priceLevel', 'formattedAddress', 'types', 'photos',
-      ],
-      locationRestriction: boundsToCircle(bounds),
-      includedTypes: [PLACE_INCLUDED_TYPES[type]],
-      maxResultCount: maxPerType,
-    })
-      .then(({ places }) => ({ type, places }))
-      .catch(() => ({ type, places: [] as google.maps.places.Place[] }))
-  )
+  if (!BACKEND_URL) {
+    throw new Error('NEXT_PUBLIC_BACKEND_URL no está configurada')
+  }
 
-  const settled = await Promise.all(searches)
+  try {
+    const { center, radius } = boundsToCircle(bounds)
+    const allPlaces: ScrapedPlace[] = []
+    const seen = new Set<string>()
 
-  const all: ScrapedPlace[] = settled.flatMap(({ type, places }) =>
-    places.reduce<ScrapedPlace[]>((acc, p) => {
-      if (!p.location) return acc
-
-      const resolvedType = resolveRelevantPlaceType(
-        p.types,
-        type,
-        p.displayName ?? undefined,
-      )
-
-      if (!resolvedType) return acc
-
-      acc.push({
-        placeId:      p.id,
-        name:         p.displayName ?? 'Sin nombre',
-        address:      p.formattedAddress ?? '',
-        type:         resolvedType,
-        category:     PLACE_TYPE_CONFIG[resolvedType].category,
-        rating:       p.rating ?? 0,
-        totalRatings: p.userRatingCount ?? 0,
-        priceLevel:   priceLevelToNumber(p.priceLevel),
-        isOpen:       null, // Place.isOpen() es async; se enriquece en fetchPlaceDetails
-        position: {
-          lat: p.location.lat(),
-          lng: p.location.lng(),
-        },
-        photoUrl: p.photos?.length
-          ? p.photos[0].getURI({ maxWidth: 800 })
-          : undefined,
-        website:      undefined,
-        phone:        undefined,
-        openingHours: undefined,
+    // Buscar cada tipo en paralelo
+    const searches = types.map((type) =>
+      fetch(`${BACKEND_URL}/places/search-nearby`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: center,
+          radius,
+          type: PLACE_TYPE_MAPPING[type],
+        }),
       })
+        .then((res) => res.json())
+        .catch((err) => {
+          console.error(`Error searching ${type}:`, err)
+          return { places: [] }
+        }),
+    )
 
-      return acc
-    }, [])
-  )
+    const results = await Promise.all(searches)
 
-  // Deduplicar por nombre (insensible a mayúsculas)
-  const seen = new Set<string>()
-  return all.filter(({ name }) => {
-    const key = name.toLowerCase()
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+    // Procesar y deduplicar resultados
+    results.forEach(({ places = [] }) => {
+      places.forEach((place: any) => {
+        const name = place.name || 'Sin nombre'
+        const nameKey = name.toLowerCase()
+
+        if (seen.has(nameKey)) return
+        seen.add(nameKey)
+
+        const lat = place.geometry?.location?.lat
+        const lng = place.geometry?.location?.lng
+
+        if (typeof lat !== 'number' || typeof lng !== 'number') return
+
+        allPlaces.push({
+          placeId: place.place_id || '',
+          name,
+          address: place.formatted_address || '',
+          type: types[0], // simplificado para esta versión
+          category: PLACE_TYPE_CONFIG[types[0]].category,
+          rating: place.rating || 0,
+          totalRatings: place.user_ratings_total || 0,
+          priceLevel: null,
+          isOpen: null,
+          position: { lat, lng },
+          photoUrl: place.photos?.[0]?.photo_reference
+            ? `${BACKEND_URL}/places/photo?photoReference=${place.photos[0].photo_reference}&maxWidth=800`
+            : undefined,
+          website: undefined,
+          phone: undefined,
+          openingHours: undefined,
+        })
+      })
+    })
+
+    return allPlaces.slice(0, types.length * maxPerType)
+  } catch (error) {
+    console.error('Error in searchNearbyPlaces:', error)
+    return []
+  }
 }
 
 /**
- * Obtiene detalles enriquecidos de un lugar: foto, horario, web, teléfono.
- * Retorna un Partial<ScrapedPlace> para hacer merge con el objeto existente.
- *
- * Si la petición falla, retorna { photoUrl: null } como señal de que
- * el lugar ya fue consultado y no tiene datos de foto disponibles.
- *
- * REEMPLAZA: PlacesService.getDetails (legacy, deprecated mar-2025)
+ * Obtiene detalles enriquecidos de un lugar desde el backend
  */
-export async function fetchPlaceDetails(
-  placeId: string,
-): Promise<Partial<ScrapedPlace>> {
+export async function fetchPlaceDetails(placeId: string): Promise<Partial<ScrapedPlace>> {
+  if (!BACKEND_URL) {
+    throw new Error('NEXT_PUBLIC_BACKEND_URL no está configurada')
+  }
+
   try {
-    const place = new google.maps.places.Place({ id: placeId })
-    await place.fetchFields({
-      fields: ['photos', 'regularOpeningHours', 'rating', 'websiteURI', 'nationalPhoneNumber'],
-    })
+    const response = await fetch(`${BACKEND_URL}/places/${placeId}/details`)
+    const { details } = await response.json()
 
-    const photoUrl = place.photos?.length
-      ? place.photos[0].getURI({ maxWidth: 400 })
-      : null
-
-    // isOpen() es beta-channel pero puede no fallar en weekly → envolvemos en catch
-    const isOpen = await place.isOpen().catch(() => null) ?? null
+    if (!details) {
+      return { photoUrl: null, website: null, phone: null, openingHours: null }
+    }
 
     return {
-      photoUrl,
-      isOpen,
-      website:      place.websiteURI ?? null,
-      phone:        place.nationalPhoneNumber ?? null,
-      openingHours: place.regularOpeningHours?.weekdayDescriptions ?? null,
-      rating:       place.rating ?? undefined,
+      photoUrl: details.photos?.[0]?.photo_reference
+        ? `${BACKEND_URL}/places/photo?photoReference=${details.photos[0].photo_reference}&maxWidth=400`
+        : null,
+      website: details.website || null,
+      phone: details.formatted_phone_number || details.international_phone_number || null,
+      openingHours: details.opening_hours?.weekday_text || null,
+      rating: details.rating || undefined,
     }
-  } catch {
-    return {
-      photoUrl: null,
-      website: null,
-      phone: null,
-      openingHours: null,
-    }
+  } catch (error) {
+    console.error('Error in fetchPlaceDetails:', error)
+    return { photoUrl: null, website: null, phone: null, openingHours: null }
   }
 }

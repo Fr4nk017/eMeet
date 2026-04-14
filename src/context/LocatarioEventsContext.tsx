@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Event, EventCategory } from '../types'
-import { hasSupabaseEnv } from '../lib/supabase'
+import { getSupabaseBrowserClient, hasSupabaseEnv } from '../lib/supabase'
 
 interface CreateLocatarioEventInput {
   title: string
@@ -30,6 +30,14 @@ const LocatarioEventsContext = createContext<LocatarioEventsContextValue | undef
 
 const STORAGE_KEY = 'emeet-locatario-events'
 const FALLBACK_EVENT_IMAGE = 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=1200&q=80'
+const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL ?? '').trim().replace(/\/$/, '')
+
+function requireBackendUrl() {
+  if (!BACKEND_URL) {
+    throw new Error('Falta NEXT_PUBLIC_BACKEND_URL para usar eventos de locatario con backend separado.')
+  }
+  return BACKEND_URL
+}
 
 // ── localStorage helpers (modo local sin Supabase) ───────────────────────────
 
@@ -93,10 +101,21 @@ function dbRowToEvent(row: LocatarioEventRow): Event {
 // ── Fetch helper ─────────────────────────────────────────────────────────────
 
 async function apiFetch<T>(input: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(input, {
+  const endpoint = `${requireBackendUrl()}${input}`
+  const headers = new Headers({ 'Content-Type': 'application/json', ...(init?.headers ?? {}) })
+
+  if (hasSupabaseEnv) {
+    const { data } = await getSupabaseBrowserClient().auth.getSession()
+    const accessToken = data.session?.access_token
+    if (accessToken) {
+      headers.set('Authorization', `Bearer ${accessToken}`)
+    }
+  }
+
+  const res = await fetch(endpoint, {
     credentials: 'include',
     ...init,
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    headers,
   })
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: string } | null
@@ -122,19 +141,35 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
     let mounted = true
     setIsLoading(true)
 
-    apiFetch<LocatarioEventRow[]>('/api/events/locatario')
-      .then((rows) => {
+    requireBackendUrl()
+    ;(async () => {
+      const { data } = await getSupabaseBrowserClient().auth.getSession()
+
+      // Evita request 401 en frío cuando aún no hay sesión.
+      if (!data.session) {
         if (!mounted) return
-        setLocatarioEvents(rows.map(dbRowToEvent))
-      })
-      .catch(() => {
-        if (!mounted) return
-        // Si falla la API, intentar con localStorage como fallback
         setLocatarioEvents(loadEventsFromStorage())
-      })
-      .finally(() => {
-        if (mounted) setIsLoading(false)
-      })
+        return
+      }
+
+      apiFetch<LocatarioEventRow[]>('/events/locatario')
+        .then((rows) => {
+          if (!mounted) return
+          setLocatarioEvents(rows.map(dbRowToEvent))
+        })
+        .catch(() => {
+          if (!mounted) return
+          // Si falla la API, intentar con localStorage como fallback
+          setLocatarioEvents(loadEventsFromStorage())
+        })
+        .finally(() => {
+          if (mounted) setIsLoading(false)
+        })
+    })().catch(() => {
+      if (!mounted) return
+      setLocatarioEvents(loadEventsFromStorage())
+      setIsLoading(false)
+    })
 
     return () => { mounted = false }
   }, [])
@@ -174,8 +209,13 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
       return newEvent
     }
 
+    const { data: sessionData } = await getSupabaseBrowserClient().auth.getSession()
+    if (!sessionData.session) {
+      throw new Error('Debes iniciar sesión para crear eventos de locatario.')
+    }
+
     // Modo Supabase: persistir en la base de datos
-    const row = await apiFetch<LocatarioEventRow>('/api/events/locatario', {
+    const row = await apiFetch<LocatarioEventRow>('/events/locatario', {
       method: 'POST',
       body: JSON.stringify({
         title: input.title,
@@ -205,7 +245,12 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
 
     if (!hasSupabaseEnv) return
 
-    await apiFetch<void>(`/api/events/locatario/${eventId}`, { method: 'DELETE' })
+    const { data: sessionData } = await getSupabaseBrowserClient().auth.getSession()
+    if (!sessionData.session) {
+      throw new Error('Debes iniciar sesión para eliminar eventos de locatario.')
+    }
+
+    await apiFetch<void>(`/events/locatario/${eventId}`, { method: 'DELETE' })
   }, [])
 
   const value = useMemo(

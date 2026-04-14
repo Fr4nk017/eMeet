@@ -188,6 +188,7 @@ function HomePageContent() {
     if (hasSupabaseEnv && supabase) {
       const { error } = await supabase.from('user_events').upsert(
         {
+          user_id: user.id,
           event_id: likedEvent.id,
           event_title: likedEvent.title,
           event_image_url: likedEvent.imageUrl,
@@ -253,6 +254,7 @@ function HomePageContent() {
         const { error } = await supabase
           .from('user_events')
           .delete()
+          .eq('user_id', user.id)
           .eq('event_id', id)
           .eq('action', 'save')
 
@@ -263,6 +265,7 @@ function HomePageContent() {
       } else {
         const { error } = await supabase.from('user_events').upsert(
           {
+            user_id: user.id,
             event_id: eventToSave.id,
             event_title: eventToSave.title,
             event_image_url: eventToSave.imageUrl,

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import Layout from '../../src/components/Layout'
 import { useChatContext } from '../../src/context/ChatContext'
+import { useAuth } from '../../src/context/AuthContext'
 import type { ChatRoom } from '../../src/types'
 import { HiChatBubbleLeftRight } from 'react-icons/hi2'
 
@@ -93,6 +94,7 @@ function RoomCard({ room, onClick }: { room: ChatRoom; onClick: () => void }) {
 
 export default function ChatRoutePage() {
   const { rooms } = useChatContext()
+  const { user, isAuthReady } = useAuth()
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
 
@@ -100,6 +102,16 @@ export default function ChatRoutePage() {
     const t = setTimeout(() => setMounted(true), 400)
     return () => clearTimeout(t)
   }, [])
+
+  useEffect(() => {
+    if (isAuthReady && !user) {
+      router.replace('/auth?next=/chat')
+    }
+  }, [isAuthReady, router, user])
+
+  if (isAuthReady && !user) {
+    return null
+  }
 
   return (
     <Layout headerTitle="Comunidad">

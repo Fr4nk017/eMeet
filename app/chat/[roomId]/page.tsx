@@ -28,7 +28,7 @@ export default function ChatRoomRoutePage() {
   const roomId = typeof params?.roomId === 'string' ? params.roomId : undefined
   const router = useRouter()
   const { rooms, messages, sendMessage, markRoomRead } = useChatContext()
-  const { user } = useAuth()
+  const { user, isAuthReady } = useAuth()
   const [input, setInput] = useState('')
   const [typingUser, setTypingUser] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -47,8 +47,19 @@ export default function ChatRoomRoutePage() {
   }, [roomId, markRoomRead])
 
   useEffect(() => {
+    if (isAuthReady && !user) {
+      const next = roomId ? `/chat/${roomId}` : '/chat'
+      router.replace(`/auth?next=${encodeURIComponent(next)}`)
+    }
+  }, [isAuthReady, roomId, router, user])
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [roomMessages.length])
+
+  if (isAuthReady && !user) {
+    return null
+  }
 
   const otherParticipants = useMemo(() => {
     const bySender = new Map<string, { name: string; avatar: string }>()
