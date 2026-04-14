@@ -11,6 +11,14 @@ const nextConfig = {
       '',
   },
 
+  images: {
+    remotePatterns: [
+      { protocol: 'http',  hostname: 'localhost',          port: '4000' },
+      { protocol: 'https', hostname: 'images.unsplash.com'              },
+      { protocol: 'https', hostname: 'api.dicebear.com'                 },
+    ],
+  },
+
   experimental: {
     // Le dice al compilador qué paquetes optimizar con tree-shaking agresivo.
     // Evita importar el barrel completo de react-icons y framer-motion.

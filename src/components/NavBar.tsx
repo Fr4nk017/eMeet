@@ -10,8 +10,12 @@ export default function NavBar() {
   const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
 
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    try {
+      await logout()
+    } catch {
+      // Si el backend falla igualmente se limpia la sesión local
+    }
     router.push('/auth')
   }
 

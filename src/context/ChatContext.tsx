@@ -25,6 +25,14 @@ interface ChatContextValue {
 }
 
 const ChatContext = createContext<ChatContextValue | undefined>(undefined)
+const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL ?? '').trim().replace(/\/$/, '')
+
+function requireBackendUrl() {
+  if (!BACKEND_URL) {
+    throw new Error('Falta NEXT_PUBLIC_BACKEND_URL para usar chat con backend separado.')
+  }
+  return BACKEND_URL
+}
 
 type RoomPayload = {
   id: string
@@ -72,10 +80,19 @@ function saveLocalMessages(messages: Record<string, ChatMessage[]>) {
 // ── Fetch helper ──────────────────────────────────────────────────────────────
 
 async function fetchApi<T>(input: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, {
+  const endpoint = `${requireBackendUrl()}${input.replace(/^\/api/, '')}`
+  const headers = new Headers({ 'Content-Type': 'application/json', ...(init?.headers ?? {}) })
+
+  if (hasSupabaseEnv) {
+    const { data } = await getSupabaseBrowserClient().auth.getSession()
+    const token = data.session?.access_token
+    if (token) headers.set('Authorization', `Bearer ${token}`)
+  }
+
+  const response = await fetch(endpoint, {
     credentials: 'include',
     ...init,
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    headers,
   })
 
   if (!response.ok) {

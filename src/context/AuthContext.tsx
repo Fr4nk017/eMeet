@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import type { AuthState, User } from '../types'
-import { hasSupabaseEnv } from '../lib/supabase'
+import { getSupabaseBrowserClient, hasSupabaseEnv } from '../lib/supabase'
 
 // ─── Interfaz del contexto ───────────────────────────────────────────────────
 type RegisterOptions = {
@@ -44,7 +44,37 @@ type UserEventPayload = {
   event_id: string
 }
 
+type AuthResponsePayload = {
+  user: {
+    email?: string | null
+    user_metadata?: {
+      role?: User['role']
+      business_name?: string | null
+      business_location?: string | null
+    }
+  } | null
+  session: {
+    access_token: string
+    refresh_token: string
+  } | null
+}
+
+function resolveRole(email: string, roleHint?: User['role']): User['role'] {
+  if (roleHint === 'admin' || roleHint === 'locatario' || roleHint === 'user') {
+    return roleHint
+  }
+  return inferLocalRoleByEmail(email)
+}
+
 const LOCAL_AUTH_STORAGE_KEY = 'emeet-local-auth-user'
+const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL ?? '').trim().replace(/\/$/, '')
+
+function requireBackendUrl() {
+  if (!BACKEND_URL) {
+    throw new Error('Falta NEXT_PUBLIC_BACKEND_URL para usar autenticación con backend separado.')
+  }
+  return BACKEND_URL
+}
 
 function inferLocalRoleByEmail(email: string): User['role'] {
   const normalized = email.toLowerCase()
@@ -105,13 +135,22 @@ function saveLocalUser(user: User | null) {
 }
 
 async function fetchApi<T>(input: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, {
+  const endpoint = `${requireBackendUrl()}${input.replace(/^\/api/, '')}`
+  const headers = new Headers({
+    'Content-Type': 'application/json',
+    ...(init?.headers ?? {}),
+  })
+
+  if (hasSupabaseEnv) {
+    const { data } = await getSupabaseBrowserClient().auth.getSession()
+    const token = data.session?.access_token
+    if (token) headers.set('Authorization', `Bearer ${token}`)
+  }
+
+  const response = await fetch(endpoint, {
     credentials: 'include',
     ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
+    headers,
   })
 
   if (!response.ok) {
@@ -131,8 +170,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthReady, setIsAuthReady] = useState(false)
 
   // Carga perfil + eventos del usuario dado un email conocido.
-  // Usada post-login/register para evitar el round-trip extra a /api/auth/session.
-  const syncUserData = useCallback(async (email: string) => {
+  // Usada post-login/register para evitar round-trip extra de sesión.
+  const syncUserData = useCallback(async (
+    email: string,
+    roleHint?: User['role'],
+    businessMeta?: { businessName?: string | null; businessLocation?: string | null },
+  ) => {
     const [profile, likedEvents, savedEvents] = await Promise.all([
       fetchApi<ProfilePayload>('/api/profile', { method: 'GET' }),
       fetchApi<UserEventPayload[]>('/api/events/liked', { method: 'GET' }),
@@ -143,7 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       id: profile.id,
       name: profile.name,
       email,
-      role: 'user',
+      role: resolveRole(email, roleHint),
       avatarUrl: profile.avatar_url ?? '',
       bio: profile.bio ?? '',
       interests: profile.interests ?? [],
@@ -151,6 +194,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       savedEvents: savedEvents.map((row) => row.event_id),
       location: profile.location ?? '',
       isVerified: true,
+      businessName: businessMeta?.businessName ?? undefined,
+      businessLocation: businessMeta?.businessLocation ?? undefined,
     }
 
     setAuthState({ user: nextUser, isAuthenticated: true })
@@ -164,16 +209,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    const sessionPayload = await fetchApi<SessionPayload>('/api/auth/session', {
-      method: 'GET',
-    })
+    requireBackendUrl()
+    const { data } = await getSupabaseBrowserClient().auth.getSession()
+    const sessionPayload: SessionPayload = {
+      session: data.session
+        ? {
+            user: {
+              email: data.session.user?.email,
+            },
+          }
+        : null,
+    }
 
     if (!sessionPayload.session) {
       setAuthState({ user: null, isAuthenticated: false })
       return
     }
 
-    await syncUserData(sessionPayload.session.user.email ?? '')
+    const { data: userData } = await getSupabaseBrowserClient().auth.getUser()
+    const roleHint = userData.user?.user_metadata?.role as User['role'] | undefined
+    const businessName = userData.user?.user_metadata?.business_name as string | undefined
+    const businessLocation = userData.user?.user_metadata?.business_location as string | undefined
+    await syncUserData(sessionPayload.session.user.email ?? '', roleHint, {
+      businessName,
+      businessLocation,
+    })
   }, [syncUserData])
 
   useEffect(() => {
@@ -207,14 +267,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    await fetchApi('/api/auth/login', {
+    const payload = await fetchApi<AuthResponsePayload>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     })
 
+    if (payload.session?.access_token && payload.session?.refresh_token) {
+      await getSupabaseBrowserClient().auth.setSession({
+        access_token: payload.session.access_token,
+        refresh_token: payload.session.refresh_token,
+      })
+    }
+
     // Usamos syncUserData en lugar de syncFromApi: la sesión ya existe,
     // no hace falta un round-trip extra a /api/auth/session.
-    await syncUserData(email)
+    await syncUserData(email, payload.user?.user_metadata?.role, {
+      businessName: payload.user?.user_metadata?.business_name,
+      businessLocation: payload.user?.user_metadata?.business_location,
+    })
   }, [syncUserData])
 
   const register = useCallback(async (name: string, email: string, password: string, options?: RegisterOptions) => {
@@ -225,12 +295,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    await fetchApi('/api/auth/register', {
+    const payload = await fetchApi<AuthResponsePayload>('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({
+        name,
+        email,
+        password,
+        role: options?.role,
+        businessName: options?.businessName,
+        businessLocation: options?.businessLocation,
+      }),
     })
 
-    await syncUserData(email)
+    if (payload.session?.access_token && payload.session?.refresh_token) {
+      await getSupabaseBrowserClient().auth.setSession({
+        access_token: payload.session.access_token,
+        refresh_token: payload.session.refresh_token,
+      })
+      await syncUserData(email, options?.role ?? payload.user?.user_metadata?.role, {
+        businessName: options?.businessName ?? payload.user?.user_metadata?.business_name,
+        businessLocation: options?.businessLocation ?? payload.user?.user_metadata?.business_location,
+      })
+      return
+    }
+
+    // Cuando Supabase requiere confirmación por email, signUp puede devolver user pero sin session.
+    // Evitamos llamar endpoints protegidos sin token y devolvemos un mensaje claro al usuario.
+    throw new Error('Registro creado. Revisa tu correo para confirmar la cuenta antes de iniciar sesión.')
   }, [syncUserData])
 
   const logout = useCallback(async () => {
@@ -240,10 +331,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    await fetchApi('/api/auth/logout', {
-      method: 'POST',
-    })
+    try {
+      await fetchApi('/api/auth/logout', { method: 'POST' })
+    } catch {
+      // El backend puede fallar si el token ya expiró — continuar igual
+    }
 
+    await getSupabaseBrowserClient().auth.signOut()
     setAuthState({ user: null, isAuthenticated: false })
   }, [])
 
