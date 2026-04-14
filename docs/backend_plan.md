@@ -1,477 +1,313 @@
-# eMeet - Backend Plan
+# eMeet - Backend Plan Actual
 
-## 1. Objetivo del backend
-El backend de eMeet debe permitir:
-- autenticación de usuarios y organizadores,
-- publicación y gestión de eventos,
-- publicación y reproducción de videos cortos promocionales por evento,
-- descubrimiento de eventos cercanos,
-- filtros por categorías e intereses,
-- interacción social mediante comunidad y match,
-- seguridad de acceso basada en roles.
+> **Nota:** este plan fue actualizado para quedar alineado con el **frontend que existe hoy**. Actualmente el proyecto ya funciona como un MVP en `Next.js`, y la integración con `Google Places API` se está usando solo como apoyo de desarrollo. En la arquitectura propuesta, esa consulta se centraliza en el **backend / BFF**, junto con autenticación, persistencia y tiempo real.
 
-La prioridad del MVP es construir un backend simple, seguro y escalable sin crear una API separada innecesaria.
+---
 
-## 2. Stack elegido
-### Frontend + capa servidor
-- **Next.js** — Lenguaje de programación base del proyecto.
-	- App Router para páginas y layouts.
-	- Route Handlers para endpoints propios cuando se necesite lógica servidor.
-	- Server Components y Server Actions para operaciones seguras desde servidor.
+## 1. Estado actual del proyecto frente al frontend
 
-### Backend managed
-- **Supabase** — Storage, Functions, Database, Auth.
-	- PostgreSQL como base de datos principal.
-	- Supabase Auth para registro e inicio de sesión.
-	- Supabase Storage para imágenes y videos de eventos y perfiles.
-	- Row Level Security (RLS) para proteger datos por usuario y rol.
-	- RPC/SQL functions para consultas complejas como eventos cercanos.
+| Área funcional | Estado actual en frontend | Soporte backend requerido |
+|---|---|---|
+| **Autenticación** | Pantalla `/auth` operativa con login y registro simulados | Integrar `Supabase Auth`, sesiones reales y recuperación de cuenta |
+| **Feed principal** | Descubre bares, cafés, restaurantes y discotecas cercanas usando Google Places | Persistir historial, preferencias, likes y guardados |
+| **Búsqueda** | Filtros por categoría y exploración visual de panoramas | Guardar preferencias de uso y enriquecer recomendaciones |
+| **Guardados** | Existe interfaz `/saved`, pero hoy usa estado local/mock | Persistencia en PostgreSQL por usuario |
+| **Perfil** | Intereses y preferencias gestionadas localmente | Guardar y recuperar perfil desde base de datos |
+| **Chat / comunidad** | Salas y mensajes simulados con `ChatContext` | Realtime + almacenamiento persistente de salas y mensajes |
 
-### ORM
-- **Prisma JS** — ORM para modelar y consultar la base de datos de Supabase desde Next.js.
-	- Esquema tipado con generación automática de tipos TypeScript.
-	- Migraciones controladas del esquema de base de datos.
-	- Reemplaza el uso directo del cliente de Supabase para queries de negocio complejas.
+---
 
-### Hosting / CI-CD
-- **Vercel** — Plataforma de despliegue para Next.js.
-	- Deploy automático en cada push a rama principal.
-	- Variables de entorno gestionadas por proyecto.
-	- Edge Network para servir contenido estático optimizado.
+## 2. Objetivo del backend
 
-### Repositorio
-- **GitHub** — Control de versiones y colaboración.
-	- Repositorio: https://github.com/Fr4nk017/eMeet
-	- Integración con Vercel para CI-CD automático.
+El backend de `eMeet` debe construirse para **respaldar exactamente lo que el frontend actual ya muestra**, sin sobrediseñar la solución.
 
-## 3. Decisión de arquitectura
-No conviene crear un backend monolítico aparte en esta fase. El diseño recomendado es:
+Las prioridades reales son:
 
-- Next.js como capa de presentación y orquestación.
-- Supabase como backend principal de datos, auth y storage.
-- Route Handlers de Next.js solo para:
-	- webhooks,
-	- operaciones sensibles con service role,
-	- composición de respuestas que mezclen varias tablas,
-	- validaciones adicionales de negocio.
+- autenticación de usuarios con sesión segura;
+- persistencia de perfil, intereses y preferencias;
+- almacenamiento de acciones como `like`, `save` y descartes;
+- soporte para salas comunitarias asociadas a lugares;
+- base de datos para historial e interacciones del usuario;
+- seguridad de acceso con control por usuario y futuro rol administrativo.
 
-## 4. Arquitectura general
+La idea no es crear una API separada innecesaria, sino usar una arquitectura práctica y escalable para el MVP.
+
+---
+
+## 3. Stack backend propuesto
+
+| Capa | Tecnología | Rol propuesto |
+|---|---|---|
+| **BFF / server layer** | `Next.js Route Handlers` + `Server Actions` | Orquestar lógica segura entre frontend y servicios |
+| **Base de datos** | `Supabase PostgreSQL` | Persistir usuarios, preferencias, acciones y mensajes |
+| **Autenticación** | `Supabase Auth` | Registro, login, sesiones y control de acceso |
+| **ORM** | `Prisma ORM` | Modelado tipado, migraciones y consultas mantenibles |
+| **Tiempo real** | `Supabase Realtime` | Actualizar chat y actividad comunitaria |
+| **Archivos** | `Supabase Storage` | Guardar avatares y recursos futuros |
+| **Servicio externo de lugares** | `Google Places API` | Obtener y enriquecer panoramas cercanos desde el backend |
+| **Hosting** | `Vercel` | Despliegue del frontend + capa servidor de Next.js |
+| **Repositorio** | `GitHub` | Control de versiones y colaboración del equipo |
+
+---
+
+## 4. Decisión de arquitectura alineada con el frontend actual
+
+La decisión más coherente es mantener a **Next.js como capa de presentación y orquestación**, mientras `Supabase` resuelve identidad, persistencia y sincronización en tiempo real.
+
 ```text
-Cliente web (Next.js)
-		|
-		| autenticación / consultas / mutations
-		v
-Next.js server layer
-		|
-		| supabase client / admin client
-		v
-Supabase
-	- Auth
-	- Postgres
-	- Storage
-	- RLS
-	- SQL functions / RPC
+Usuario final
+   |
+   v
+Frontend web (Next.js App Router)
+   |
+   v
+BFF / Route Handlers de Next.js
+   |
+   +--> Google Places API
+   +--> Supabase Auth
+   +--> Prisma ORM -> PostgreSQL (Supabase)
+   +--> Supabase Realtime
+   +--> Supabase Storage
 ```
 
-## 5. Responsabilidades por capa
-### Next.js
-- Renderizar la interfaz.
-- Gestionar sesión del usuario en servidor y cliente.
-- Validar inputs antes de persistir.
-- Exponer endpoints propios cuando se necesite lógica compuesta.
-- Proteger rutas privadas de organizadores y usuarios registrados.
+### ¿Por qué esta arquitectura sí calza con el frontend actual?
+- el frontend ya está montado en `Next.js`;
+- la integración con lugares externos puede centralizarse en el backend para ocultar claves y controlar costos;
+- lo que falta no es otra interfaz, sino **persistencia y seguridad**;
+- `AuthContext`, `NearbyPlacesContext` y `ChatContext` pueden migrar de mock a backend real de forma progresiva.
 
-### Supabase
-- Persistencia de datos.
-- Gestión de identidad.
-- Seguridad de acceso con políticas RLS.
-- Consultas geográficas para eventos cercanos.
-- Almacenamiento de imágenes.
+---
 
-## 6. Módulos funcionales del backend
-### 6.1 Autenticación y perfiles
+## 5. Módulos prioritarios del backend según el frontend actual
+
+### 5.1 Autenticación y perfiles
 Responsabilidades:
-- registro con email y contraseña,
-- login/logout,
-- recuperación de contraseña,
-- creación automática del perfil de usuario,
-- distinción entre usuario normal, organizador y admin.
+- registro e inicio de sesión reales;
+- cierre de sesión;
+- creación automática del perfil del usuario;
+- persistencia de nombre, avatar, bio, ciudad e intereses.
 
-### 6.2 Gestión de eventos
+### 5.2 Preferencias y personalización
 Responsabilidades:
-- crear evento,
-- editar evento,
-- pausar o despublicar evento,
-- subir imágenes y videos cortos promocionales,
-- asociar categorías,
-- mostrar eventos activos.
+- guardar tipos de lugar preferidos;
+- guardar radio máximo de búsqueda;
+- permitir ajustar filtros persistentes desde `/profile`.
 
-### 6.3 Descubrimiento geolocalizado
+### 5.3 Acciones del usuario sobre lugares
 Responsabilidades:
-- recibir ubicación del usuario,
-- calcular distancia a cada evento,
-- ordenar por cercanía,
-- aplicar filtros por categoría, fecha y precio,
-- alimentar la experiencia tipo swipe basada en video corto.
+- registrar `like`, `save` y descarte;
+- guardar historial de interacciones;
+- poblar correctamente la vista `/saved`.
 
-### 6.4 Preferencias e intereses
+### 5.4 Comunidad y chat por lugar
 Responsabilidades:
-- guardar categorías favoritas,
-- guardar radio máximo de búsqueda,
-- personalizar resultados.
+- crear o recuperar una sala asociada a un lugar (`placeId`);
+- guardar miembros de la comunidad;
+- persistir mensajes;
+- entregar actualización en tiempo real en una fase posterior.
 
-### 6.5 Comunidad y match
+### 5.5 Integración y caché de lugares externos
 Responsabilidades:
-- registrar interés del usuario por asistir acompañado,
-- permitir interacción entre usuarios registrados,
-- generar match cuando dos usuarios muestran interés compatible,
-- habilitar conversaciones o grupos en una fase posterior.
+- consultar `Google Places API` desde el backend, no desde el cliente;
+- almacenar metadata relevante para evitar repetir consultas innecesarias;
+- guardar nombre, dirección, categoría, rating, web e imagen;
+- facilitar métricas y recomendaciones futuras.
 
-## 7. Modelo de datos recomendado
-## 7.1 Tabla profiles
-Extiende la identidad de Supabase Auth.
+---
 
-Campos sugeridos:
-- id UUID PK, igual a auth.users.id
-- role TEXT check in ('user', 'organizer', 'admin')
-- full_name TEXT
-- username TEXT unique nullable
-- avatar_url TEXT nullable
-- bio TEXT nullable
-- age INTEGER nullable
-- city TEXT nullable
-- created_at TIMESTAMPTZ
-- updated_at TIMESTAMPTZ
+## 6. Modelo de datos recomendado
 
-## 7.2 Tabla organizer_profiles
-Representa negocios u organizadores.
+### 6.1 Tabla `profiles`
+Extiende la identidad base de `Supabase Auth`.
 
 Campos sugeridos:
-- id UUID PK
-- user_id UUID FK -> profiles.id
-- business_name TEXT
-- business_type TEXT
-- description TEXT
-- phone TEXT nullable
-- website TEXT nullable
-- verified BOOLEAN default false
-- created_at TIMESTAMPTZ
+- `id UUID PK` = `auth.users.id`
+- `full_name TEXT`
+- `email TEXT`
+- `avatar_url TEXT NULL`
+- `bio TEXT NULL`
+- `city TEXT NULL`
+- `created_at TIMESTAMPTZ`
+- `updated_at TIMESTAMPTZ`
 
-## 7.3 Tabla categories
-Catálogo de categorías.
-
-Campos sugeridos:
-- id BIGINT PK
-- slug TEXT unique
-- name TEXT
-- icon TEXT nullable
-
-## 7.4 Tabla events
-Entidad principal del negocio.
+### 6.2 Tabla `user_preferences`
+Guarda personalización del usuario.
 
 Campos sugeridos:
-- id UUID PK
-- organizer_id UUID FK -> organizer_profiles.id
-- title TEXT
-- description TEXT
-- category_id BIGINT FK -> categories.id
-- start_at TIMESTAMPTZ
-- end_at TIMESTAMPTZ nullable
-- price NUMERIC(10,2) nullable
-- currency TEXT default 'USD'
-- venue_name TEXT
-- address TEXT
-- city TEXT
-- latitude DOUBLE PRECISION
-- longitude DOUBLE PRECISION
-- cover_image_url TEXT nullable
-- capacity INTEGER nullable
-- status TEXT check in ('draft', 'published', 'paused', 'finished')
-- is_featured BOOLEAN default false
-- created_at TIMESTAMPTZ
-- updated_at TIMESTAMPTZ
+- `user_id UUID PK FK -> profiles.id`
+- `max_distance_km INTEGER DEFAULT 3`
+- `preferred_place_types TEXT[]`
+- `interests TEXT[]`
+- `updated_at TIMESTAMPTZ`
 
-Nota técnica:
-Para consultas de cercanía, lo ideal es habilitar PostGIS en Supabase y almacenar un campo geográfico derivado de latitude y longitude.
-
-## 7.5 Tabla event_images
-- id UUID PK
-- event_id UUID FK -> events.id
-- image_url TEXT
-- sort_order INTEGER default 0
-
-## 7.6 Tabla event_videos
-Clips cortos promocionales mostrados en el feed vertical.
+### 6.3 Tabla `cached_places`
+Representa lugares obtenidos desde Google Places que vale la pena persistir o reutilizar.
 
 Campos sugeridos:
-- id UUID PK
-- event_id UUID FK -> events.id
-- video_url TEXT
-- thumbnail_url TEXT nullable
-- duration_seconds INTEGER
-- is_primary BOOLEAN default false
-- processing_status TEXT check in ('pending', 'ready', 'failed')
-- created_at TIMESTAMPTZ
+- `place_id TEXT PK`
+- `name TEXT`
+- `address TEXT`
+- `type TEXT`
+- `category TEXT`
+- `latitude DOUBLE PRECISION`
+- `longitude DOUBLE PRECISION`
+- `rating NUMERIC NULL`
+- `total_ratings INTEGER NULL`
+- `price_level INTEGER NULL`
+- `photo_url TEXT NULL`
+- `website TEXT NULL`
+- `phone TEXT NULL`
+- `updated_at TIMESTAMPTZ`
 
-## 7.7 Tabla user_preferences
-- user_id UUID PK FK -> profiles.id
-- max_distance_km INTEGER default 20
-- preferred_price_level TEXT nullable
-- looking_for_company BOOLEAN default false
-- updated_at TIMESTAMPTZ
-
-## 7.8 Tabla user_category_preferences
-- id UUID PK
-- user_id UUID FK -> profiles.id
-- category_id BIGINT FK -> categories.id
-
-## 7.9 Tabla event_swipes
-Registra la interacción del feed de videos con eventos.
+### 6.4 Tabla `user_place_actions`
+Registra interacción del usuario sobre un lugar.
 
 Campos sugeridos:
-- id UUID PK
-- user_id UUID FK -> profiles.id
-- event_id UUID FK -> events.id
-- action TEXT check in ('right', 'left', 'save')
-- source TEXT check in ('video_feed', 'event_card') default 'video_feed'
-- created_at TIMESTAMPTZ
+- `id UUID PK`
+- `user_id UUID FK -> profiles.id`
+- `place_id TEXT FK -> cached_places.place_id`
+- `action TEXT CHECK IN ('like', 'save', 'dismiss')`
+- `created_at TIMESTAMPTZ`
 
-Regla:
-- unique(user_id, event_id)
+Regla sugerida:
+- `unique(user_id, place_id, action)`
 
-Regla de UX:
-- right representa interés en asistir.
-- left representa descarte.
-
-## 7.10 Tabla event_attendance_intents
-Registra intención de asistir y si el usuario quiere ir acompañado.
+### 6.5 Tabla `chat_rooms`
+Sala comunitaria asociada a un lugar.
 
 Campos sugeridos:
-- id UUID PK
-- user_id UUID FK -> profiles.id
-- event_id UUID FK -> events.id
-- status TEXT check in ('interested', 'going')
-- wants_company BOOLEAN default false
-- created_at TIMESTAMPTZ
+- `id TEXT PK`  
+- `place_id TEXT FK -> cached_places.place_id`
+- `title TEXT`
+- `address TEXT`
+- `image_url TEXT NULL`
+- `created_at TIMESTAMPTZ`
 
-Regla:
-- unique(user_id, event_id)
+> Para simplificar el MVP, `id` puede reutilizar el mismo `placeId` que ya usa el frontend.
 
-## 7.11 Tabla user_matches
-Puede ser global o asociada a un evento. Para MVP conviene asociarla al evento.
+### 6.6 Tabla `chat_room_members`
+Participantes de cada sala.
 
 Campos sugeridos:
-- id UUID PK
-- event_id UUID FK -> events.id
-- user_a UUID FK -> profiles.id
-- user_b UUID FK -> profiles.id
-- status TEXT check in ('pending', 'accepted', 'rejected', 'blocked')
-- created_at TIMESTAMPTZ
+- `id UUID PK`
+- `room_id TEXT FK -> chat_rooms.id`
+- `user_id UUID FK -> profiles.id`
+- `joined_at TIMESTAMPTZ`
 
-Reglas:
-- unique(event_id, user_a, user_b)
-- user_a != user_b
+### 6.7 Tabla `chat_messages`
+Mensajes enviados dentro de una comunidad.
 
-## 8. Autenticación y autorización
-### Roles
-- user: explora eventos, guarda preferencias, usa comunidad y match.
-- organizer: crea y administra sus eventos.
-- admin: modera contenido y usuarios.
+Campos sugeridos:
+- `id UUID PK`
+- `room_id TEXT FK -> chat_rooms.id`
+- `sender_id UUID FK -> profiles.id`
+- `text TEXT`
+- `created_at TIMESTAMPTZ`
 
-### Flujo recomendado
-1. El usuario se registra con Supabase Auth.
-2. Un trigger SQL crea su fila en profiles.
-3. Si solicita cuenta de organizador, se crea organizer_profiles.
-4. Las políticas RLS controlan qué puede leer o modificar cada rol.
+---
 
-## 9. Reglas de seguridad con RLS
-### Profiles
-- cada usuario puede leer y editar su propio perfil.
-- admin puede leer y editar todos.
+## 7. Operaciones y endpoints sugeridos
 
-### Events
-- cualquiera puede leer eventos con status = 'published'.
-- organizer solo puede insertar y editar eventos propios.
-- admin puede moderar todos.
-
-### Event swipes y preferencias
-- cada usuario solo puede crear y ver sus propios registros.
-
-### Matches
-- solo los usuarios involucrados pueden ver su match.
-- admin puede moderar si es necesario.
-
-## 10. Consultas críticas del sistema
-### 10.1 Eventos cercanos
-Recomendación:
-- crear una función SQL o RPC get_nearby_events(lat, lng, radius_km, category_id, limit_count)
-- ordenar por distancia ascendente.
-
-Debe devolver como mínimo:
-- datos del evento,
-- nombre del organizador,
-- distancia estimada,
-- imagen principal,
-- categoría.
-
-### 10.2 Feed tipo swipe
-El feed debe excluir:
-- eventos ya descartados,
-- eventos finalizados,
-- eventos fuera del radio del usuario.
-
-Comportamiento requerido:
-- formato vertical tipo TikTok con clip corto principal por evento,
-- swipe right para marcar interés,
-- swipe left para descartar,
-- reproducción automática del video principal en cada tarjeta del feed.
-
-### 10.3 Match por evento
-Un match debe ocurrir cuando:
-- ambos usuarios hicieron swipe right en el mismo evento,
-- ambos tienen wants_company = true,
-- ninguno bloqueó al otro.
-
-Para MVP, esta lógica puede vivir en Route Handlers de Next.js o en una función SQL, según complejidad.
-
-## 11. Endpoints y operaciones sugeridas
-No todos deben ser API públicas. Algunas pueden resolverse con Server Actions.
+No todo tiene que ser API pública; varias operaciones pueden resolverse con `Server Actions` o `Route Handlers` internos.
 
 ### Auth
-- POST /api/auth/register
-- POST /api/auth/login
-- POST /api/auth/logout
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
 
-### Events
-- GET /api/events
-- GET /api/events/nearby
-- GET /api/events/:id
-- GET /api/events/:id/videos
-- POST /api/events
-- PATCH /api/events/:id
-- DELETE /api/events/:id
+### Perfil y preferencias
+- `GET /api/me`
+- `PATCH /api/me`
+- `GET /api/me/preferences`
+- `PUT /api/me/preferences`
 
-### Feed
-- GET /api/feed/video-swipe
+### Lugares e interacciones
+- `POST /api/places/action`
+- `GET /api/places/saved`
+- `GET /api/places/history`
 
-### Preferences
-- GET /api/me/preferences
-- PUT /api/me/preferences
+### Chat / comunidad
+- `GET /api/chat/rooms`
+- `POST /api/chat/rooms/join`
+- `GET /api/chat/rooms/:id/messages`
+- `POST /api/chat/rooms/:id/messages`
 
-### Swipes
-- POST /api/swipes
+---
 
-### Attendance
-- POST /api/events/:id/attendance
+## 8. Seguridad y autorización
 
-### Match
-- GET /api/matches
-- POST /api/matches/respond
+### Reglas base recomendadas
+- cada usuario solo puede leer y editar su propio perfil;
+- cada usuario solo puede ver y modificar sus propias preferencias;
+- las acciones `like`, `save` y `dismiss` deben quedar restringidas al usuario autenticado;
+- los mensajes de chat solo deben ser visibles para miembros de la sala;
+- las claves sensibles (`service role`, `DATABASE_URL`) nunca deben exponerse en el cliente.
 
-## 12. Estructura sugerida en Next.js
-```text
-src/
-	app/
-		api/
-			events/
-			feed/
-			swipes/
-			matches/
-			me/
-	lib/
-		supabase/
-			client.ts
-			server.ts
-			admin.ts
-		validations/
-			event.schema.ts
-			profile.schema.ts
-		services/
-			event.service.ts
-			feed.service.ts
-			match.service.ts
-			user.service.ts
-		auth/
-			permissions.ts
-```
+### Aplicación de RLS
+En `Supabase`, las políticas **RLS** deben cubrir al menos:
+- `profiles`
+- `user_preferences`
+- `user_place_actions`
+- `chat_room_members`
+- `chat_messages`
 
-Regla recomendada:
-- la lógica de negocio no debe quedar dispersa en los Route Handlers.
-- los handlers deben delegar en services.
+---
 
-## 13. Variables de entorno mínimas
+## 9. Variables de entorno mínimas
+
 ```env
+# Google Places / Maps (solo servidor)
+GOOGLE_PLACES_API_KEY=
+
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 
-# Prisma
+# Prisma / PostgreSQL
 DATABASE_URL=
 ```
 
 Reglas:
-- SUPABASE_SERVICE_ROLE_KEY solo debe usarse en servidor.
-- DATABASE_URL es la connection string de Supabase Postgres usada por Prisma.
-- En Vercel, todas las variables se configuran en el dashboard del proyecto.
+- `NEXT_PUBLIC_*` puede ser leído por el navegador;
+- `SUPABASE_SERVICE_ROLE_KEY` solo debe usarse del lado servidor;
+- `DATABASE_URL` corresponde a la conexión PostgreSQL usada por Prisma.
 
-## 14. Storage
-Buckets sugeridos:
-- event-images
-- event-videos
-- profile-avatars
+---
 
-Reglas:
-- usuarios normales solo suben su avatar.
-- organizadores suben imágenes y videos de sus propios eventos.
-- archivos públicos solo cuando realmente deban ser visibles sin firma.
+## 10. Roadmap técnico recomendado según el estado actual del frontend
 
-Validación recomendada para videos cortos:
-- duración máxima entre 15 y 45 segundos en MVP,
-- formatos permitidos: mp4 y mov,
-- tamaño máximo por archivo según presupuesto de storage.
+### Fase 1 — Reemplazar mocks críticos
+- integrar `Supabase Auth`;
+- crear tabla `profiles`;
+- persistir datos de usuario y preferencias;
+- reemplazar `AuthContext` mock por autenticación real.
 
-## 15. Validaciones clave de negocio
-- no se puede publicar un evento sin título, fecha, categoría y ubicación.
-- cada evento publicado debe tener al menos un video corto en estado ready para aparecer en el feed swipe.
-- un organizador no puede editar eventos de otro organizador.
-- un usuario no puede generar match sin estar autenticado.
-- la comunidad y match deben requerir registro.
-- no se deben mostrar eventos pausados o finalizados en el feed principal.
+### Fase 2 — Persistencia de interacciones
+- guardar `likes`, `saved` y descartes;
+- poblar realmente la vista `/saved`;
+- asociar acciones a lugares obtenidos desde Google Places.
 
-## 16. Observabilidad y mantenimiento
-Para el MVP:
-- registrar errores de Route Handlers.
-- guardar timestamps en todas las tablas principales.
-- usar soft states como published, paused y finished en vez de borrar eventos.
+### Fase 3 — Comunidad en tiempo real
+- crear salas persistentes por lugar;
+- guardar mensajes reales;
+- conectar `/chat` con `Supabase Realtime`.
 
-Más adelante:
-- agregar logs centralizados,
-- métricas de uso del feed,
-- auditoría de moderación.
+### Fase 4 — Evolución futura
+- notificaciones;
+- recomendaciones más inteligentes;
+- promociones, cupones o QR;
+- analítica de uso y moderación.
 
-## 17. Roadmap técnico recomendado
-### Fase 1
-- Auth con Supabase.
-- Tabla profiles.
-- Tabla categories.
-- Tabla events.
-- Lectura de eventos publicados.
+---
 
-### Fase 2
-- Geolocalización y consulta de eventos cercanos.
-- Preferencias de usuario.
-- Feed tipo swipe con video corto vertical.
+## 11. Recomendación final
 
-### Fase 3
-- Attendance intents.
-- Match entre usuarios.
-- Storage de imágenes.
+El backend de `eMeet` debe evolucionar **siguiendo el frontend actual**, no reemplazándolo. Hoy el MVP ya valida el flujo de descubrimiento social de lugares cercanos; por lo tanto, la prioridad correcta es construir una capa backend que:
 
-### Fase 4
-- Panel de organizadores.
-- Moderación admin.
-- Analítica básica.
+1. elimine los mocks de autenticación y chat,
+2. persista preferencias e interacciones reales,
+3. mantenga el uso de `Google Places API` como fuente de lugares,
+4. y permita escalar progresivamente con `Supabase` + `Prisma`.
 
-## 18. Recomendación final
-Para eMeet, la mejor decisión técnica en esta etapa es usar Next.js como fullstack app y Supabase como backend administrado. Eso reduce complejidad, acelera el MVP y deja una base suficientemente sólida para escalar el producto sin construir infraestructura innecesaria desde el inicio.
+Con esta estrategia, el proyecto se mantiene coherente, realista y técnicamente sostenible para las siguientes etapas.

@@ -1,16 +1,13 @@
 'use client'
 
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import Layout from '../../src/components/Layout'
 import { useAuth } from '../../src/context/AuthContext'
-import { useNearbyPlacesContext } from '../../src/context/NearbyPlacesContext'
-import PlaceTypeFilters from '../../src/components/PlaceTypeFilters'
-import DistanceFilter from '../../src/components/DistanceFilter'
 import { CATEGORY_EMOJI } from '../../src/data/mockEvents'
 import type { EventCategory } from '../../src/types'
-import { HiMapPin, HiPencil, HiArrowRightOnRectangle, HiEnvelope, HiCalendarDays } from 'react-icons/hi2'
+import { HiMapPin, HiPencil, HiArrowRightOnRectangle, HiEnvelope, HiCalendarDays, HiHeart, HiBookmark, HiSparkles } from 'react-icons/hi2'
 
 const ALL_INTERESTS: { key: EventCategory; label: string }[] = [
   { key: 'gastronomia', label: 'Gastronomía' },
@@ -42,27 +39,75 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   )
 }
 
-export default function ProfileRoutePage() {
-  const { user, logout, updateUser } = useAuth()
-  const {
-    selectedPlaceTypes,
-    selectedDistanceKm,
-    togglePlaceType,
-    setDistanceKm,
-  } = useNearbyPlacesContext()
+function ProfilePageContent() {
+  const { user, logout, updateUser, isAuthReady } = useAuth()
   const router = useRouter()
+  const [avatarError, setAvatarError] = useState(false)
 
   useEffect(() => {
-    if (!user) {
+    if (isAuthReady && !user) {
       router.replace('/auth')
     }
-  }, [router, user])
+  }, [isAuthReady, router, user])
+
+  if (!isAuthReady) {
+    return (
+      <Layout headerTitle="Perfil">
+        <div className="px-4 py-8">
+          <div className="shimmer h-10 w-40 rounded-xl" />
+          <div className="mt-4 shimmer h-40 w-full rounded-3xl" />
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="shimmer h-24 rounded-2xl" />
+            <div className="shimmer h-24 rounded-2xl" />
+            <div className="shimmer h-24 rounded-2xl" />
+          </div>
+        </div>
+      </Layout>
+    )
+  }
 
   if (!user) return null
 
-  function handleLogout() {
-    logout()
-    router.push('/auth')
+  const stats = [
+    {
+      label: 'Me gustaron',
+      value: user.likedEvents.length,
+      goal: 20,
+      icon: HiHeart,
+      tint: 'text-green-300',
+      bg: 'from-green-500/20',
+      border: 'border-green-500/25',
+      progress: Math.min(100, (user.likedEvents.length / 20) * 100),
+    },
+    {
+      label: 'Guardados',
+      value: user.savedEvents.length,
+      goal: 15,
+      icon: HiBookmark,
+      tint: 'text-primary-light',
+      bg: 'from-primary/20',
+      border: 'border-primary/25',
+      progress: Math.min(100, (user.savedEvents.length / 15) * 100),
+    },
+    {
+      label: 'Intereses',
+      value: user.interests.length,
+      goal: ALL_INTERESTS.length,
+      icon: HiSparkles,
+      tint: 'text-purple-200',
+      bg: 'from-purple-500/20',
+      border: 'border-purple-500/25',
+      progress: Math.min(100, (user.interests.length / ALL_INTERESTS.length) * 100),
+    },
+  ]
+
+  async function handleLogout() {
+    try {
+      await logout()
+      router.push('/auth')
+    } catch {
+      // Se mantiene en pantalla si falla el cierre de sesión.
+    }
   }
 
   function toggleInterest(key: EventCategory) {
@@ -70,7 +115,9 @@ export default function ProfileRoutePage() {
     const updated = current.includes(key)
       ? current.filter((i) => i !== key)
       : [...current, key]
-    updateUser({ interests: updated })
+    updateUser({ interests: updated }).catch(() => {
+      // Evita bloquear la UI si falla la actualización remota.
+    })
   }
 
   return (
@@ -89,8 +136,24 @@ export default function ProfileRoutePage() {
           <motion.div variants={itemVariants} className="mb-6 -mt-12 flex flex-col items-center text-center">
             <div className="relative mb-3">
               <div className="rounded-full bg-gradient-to-br from-primary via-purple-500 to-pink-500 p-[3px] shadow-lg shadow-primary/30">
-                <div className="rounded-full bg-surface p-0.5">
-                  <img src={user.avatarUrl} alt={user.name} className="h-24 w-24 rounded-full object-cover" />
+                <div className="flex h-24 w-24 items-center justify-center rounded-full bg-surface p-0.5">
+                  {!avatarError ? (
+                    <img
+                      src={user.avatarUrl}
+                      alt={user.name}
+                      className="h-24 w-24 rounded-full object-cover"
+                      onError={() => setAvatarError(true)}
+                    />
+                  ) : (
+                    <div className="flex h-24 w-24 items-center justify-center rounded-full bg-[radial-gradient(circle_at_25%_20%,_rgba(124,58,237,0.45),_rgba(10,14,28,1)_70%)] text-2xl font-extrabold text-white">
+                      {user.name
+                        .split(' ')
+                        .map((n) => n[0])
+                        .join('')
+                        .slice(0, 2)
+                        .toUpperCase()}
+                    </div>
+                  )}
                 </div>
               </div>
               <button className="absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-surface bg-primary shadow-md">
@@ -107,16 +170,23 @@ export default function ProfileRoutePage() {
             </div>
           </motion.div>
 
-          <motion.div variants={itemVariants} className="mb-8 grid grid-cols-3 gap-2">
-            {[
-              { label: 'Me gustaron', value: user.likedEvents.length, emoji: '💚', from: 'from-green-500/20', border: 'border-green-500/20' },
-              { label: 'Guardados', value: user.savedEvents.length, emoji: '🔖', from: 'from-primary/20', border: 'border-primary/20' },
-              { label: 'Intereses', value: user.interests.length, emoji: '✨', from: 'from-purple-500/20', border: 'border-purple-500/20' },
-            ].map((stat) => (
-              <div key={stat.label} className={`rounded-2xl border bg-gradient-to-b ${stat.from} ${stat.border} to-card p-3 text-center`}>
-                <span className="text-xl">{stat.emoji}</span>
-                <p className="mt-0.5 text-xl font-bold text-white">{stat.value}</p>
-                <p className="mt-0.5 text-[10px] leading-tight text-muted">{stat.label}</p>
+          <motion.div variants={itemVariants} className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {stats.map((stat) => (
+              <div key={stat.label} className={`rounded-2xl border bg-gradient-to-b ${stat.bg} ${stat.border} to-card p-3`}>
+                <div className="flex items-start justify-between">
+                  <stat.icon className={`h-5 w-5 ${stat.tint}`} />
+                  <span className="text-[10px] text-muted">Meta {stat.goal}</span>
+                </div>
+                <p className="mt-1 text-2xl font-black text-white">{stat.value}</p>
+                <p className="text-[11px] text-muted">{stat.label}</p>
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${stat.progress}%` }}
+                    transition={{ duration: 0.5, ease: 'easeOut' }}
+                    className="h-full rounded-full bg-gradient-to-r from-primary to-pink-500"
+                  />
+                </div>
               </div>
             ))}
           </motion.div>
@@ -134,41 +204,27 @@ export default function ProfileRoutePage() {
                     key={key}
                     whileTap={{ scale: 0.93 }}
                     onClick={() => toggleInterest(key)}
-                    className={`rounded-full border px-4 py-2 text-sm font-medium transition-all duration-200 ${
+                    className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all duration-200 ${
                       isActive
-                        ? 'border-primary bg-primary text-white'
+                        ? 'border-primary bg-primary/90 text-white'
                         : 'border-white/20 text-muted hover:border-white/40 hover:text-white'
                     }`}
                   >
-                    {CATEGORY_EMOJI[key]} {label}
+                    <span>{CATEGORY_EMOJI[key]} {label}</span>
+                    <span
+                      className={`relative h-5 w-9 rounded-full border transition-colors ${
+                        isActive ? 'border-primary-light bg-white/25' : 'border-white/20 bg-white/10'
+                      }`}
+                    >
+                      <motion.span
+                        animate={{ x: isActive ? 16 : 1 }}
+                        transition={{ type: 'spring', stiffness: 420, damping: 26 }}
+                        className={`absolute top-[1px] h-3.5 w-3.5 rounded-full ${isActive ? 'bg-white' : 'bg-white/70'}`}
+                      />
+                    </span>
                   </motion.button>
                 )
               })}
-            </div>
-          </motion.div>
-
-          <motion.div variants={itemVariants} className="mb-8 rounded-2xl border border-white/5 bg-card p-4">
-            <SectionTitle>Preferencias de descubrimiento</SectionTitle>
-            <p className="mt-1 text-xs text-muted">
-              Configura qué lugares quieres ver en el mapa y en el feed.
-            </p>
-
-            <div className="mt-4">
-              <p className="mb-2 text-xs font-semibold text-slate-300">Tipos de lugar</p>
-              <PlaceTypeFilters
-                selectedTypes={selectedPlaceTypes}
-                onToggleType={togglePlaceType}
-                className="flex flex-wrap gap-2"
-              />
-            </div>
-
-            <div className="mt-4">
-              <p className="mb-2 text-xs font-semibold text-slate-300">Distancia máxima</p>
-              <DistanceFilter
-                selectedKm={selectedDistanceKm}
-                onChange={setDistanceKm}
-                className="flex flex-wrap gap-2"
-              />
             </div>
           </motion.div>
 
@@ -203,4 +259,8 @@ export default function ProfileRoutePage() {
       </motion.div>
     </Layout>
   )
+}
+
+export default function ProfileRoutePage() {
+  return <ProfilePageContent />
 }
