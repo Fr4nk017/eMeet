@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import { useJsApiLoader } from '@react-google-maps/api'
@@ -23,6 +24,7 @@ const LOOKS_LIKE_GOOGLE_MAPS_KEY = GOOGLE_MAPS_API_KEY.startsWith('AIza')
 
 interface NearbyPlacesContextValue {
   places: ScrapedPlace[]
+  excludedPlaceIds: Set<string>
   selectedPlaceTypes: PlaceType[]
   selectedDistanceKm: number
   userLocation: google.maps.LatLngLiteral | null
@@ -38,6 +40,8 @@ interface NearbyPlacesContextValue {
   setDistanceKm: (km: number) => void
   refreshPlaces: () => void
   enrichPlace: (placeId: string) => Promise<Partial<ScrapedPlace>>
+  excludePlace: (placeId: string) => void
+  resetExcludedPlaces: () => void
 }
 
 const NearbyPlacesContext = createContext<NearbyPlacesContextValue | undefined>(undefined)
@@ -58,24 +62,34 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
   const { places, loading, error, fetchNearby, enrichPlace } = useNearbyPlaces()
   const [selectedPlaceTypes, setSelectedPlaceTypes] = useState<PlaceType[]>(DEFAULT_PLACE_TYPES)
   const [selectedDistanceKm, setSelectedDistanceKm] = useState(3)
+  const [excludedPlaceIds, setExcludedPlaceIds] = useState<Set<string>>(new Set())
   const [userLocation, setUserLocation] = useState<google.maps.LatLngLiteral | null>(null)
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState<string | null>(null)
 
+  // Refs para evitar re-renders en cascada y loops de efectos
+  const locatingRef = useRef(false)
+  const hasRequestedLocation = useRef(false)
+  const enrichRequestedRef = useRef<Set<string>>(new Set())
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const invalidApiKey = !HAS_GOOGLE_MAPS_KEY || !LOOKS_LIKE_GOOGLE_MAPS_KEY
 
   const { isLoaded, loadError } = useJsApiLoader({
-    googleMapsApiKey: GOOGLE_MAPS_API_KEY,
+    googleMapsApiKey: invalidApiKey ? '' : GOOGLE_MAPS_API_KEY,
     libraries: LIBRARIES,
     version: 'weekly',
   })
 
   const refreshPlaces = useCallback(() => {
     if (!isLoaded || !userLocation || selectedPlaceTypes.length === 0) return
-    fetchNearby(
-      createBoundsAround(userLocation, selectedDistanceKm),
-      selectedPlaceTypes,
-    )
+    if (refreshTimer.current) clearTimeout(refreshTimer.current)
+    refreshTimer.current = setTimeout(() => {
+      fetchNearby(
+        createBoundsAround(userLocation, selectedDistanceKm),
+        selectedPlaceTypes,
+      )
+    }, 300)
   }, [fetchNearby, isLoaded, selectedDistanceKm, selectedPlaceTypes, userLocation])
 
   const togglePlaceType = useCallback((type: PlaceType) => {
@@ -86,9 +100,10 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  const requestUserLocation = useCallback((recenter = true) => {
-    if (!navigator.geolocation || locating) return
+  const requestUserLocation = useCallback((_recenter = true) => {
+    if (!navigator.geolocation || locatingRef.current) return
 
+    locatingRef.current = true
     setLocating(true)
     setLocationError(null)
 
@@ -99,17 +114,8 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
           lng: pos.coords.longitude,
         }
         setUserLocation(nextLocation)
+        locatingRef.current = false
         setLocating(false)
-
-        if (recenter) {
-          window.setTimeout(() => {
-            if (selectedPlaceTypes.length === 0) return
-            fetchNearby(
-              createBoundsAround(nextLocation, selectedDistanceKm),
-              selectedPlaceTypes,
-            )
-          }, 150)
-        }
       },
       (geoError) => {
         let message = 'No se pudo obtener tu ubicación actual.'
@@ -123,46 +129,71 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
         }
 
         setLocationError(message)
+        locatingRef.current = false
         setLocating(false)
       },
       {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 60000,
+        enableHighAccuracy: false,
+        timeout: 8000,
+        maximumAge: 300000,
       },
     )
-  }, [fetchNearby, locating, selectedDistanceKm, selectedPlaceTypes])
+  }, []) // Referencia estable — locatingRef evita llamadas duplicadas sin dep en state
 
   const setDistanceKm = useCallback((km: number) => {
     setSelectedDistanceKm(km)
   }, [])
 
+  const excludePlace = useCallback((placeId: string) => {
+    setExcludedPlaceIds((prev) => {
+      if (prev.has(placeId)) return prev
+      const next = new Set(prev)
+      next.add(placeId)
+      return next
+    })
+  }, [])
+
+  const resetExcludedPlaces = useCallback(() => {
+    setExcludedPlaceIds(new Set())
+  }, [])
+
+  // Solicita ubicación una sola vez cuando Maps carga.
+  // locating se lee del ref para evitar que el effect se re-ejecute en cada cambio de estado.
   useEffect(() => {
-    if (!isLoaded || userLocation || locating || invalidApiKey) return
+    if (!isLoaded || invalidApiKey || hasRequestedLocation.current) return
+    hasRequestedLocation.current = true
     requestUserLocation(true)
-  }, [invalidApiKey, isLoaded, locating, requestUserLocation, userLocation])
+  }, [invalidApiKey, isLoaded, requestUserLocation])
 
   useEffect(() => {
     if (!userLocation || !isLoaded) return
     refreshPlaces()
   }, [isLoaded, refreshPlaces, selectedPlaceTypes, userLocation])
 
+  // Enriquece solo los 2 primeros lugares y registra cuáles ya fueron solicitados.
+  // La salida temprana evita iteraciones extra cuando enrichPlace actualiza `places`
+  // y vuelve a disparar el efecto: si no hay nada nuevo que enriquecer, se corta de inmediato.
   useEffect(() => {
-    places.slice(0, 6).forEach((place) => {
-      if (
-        place.photoUrl === undefined ||
-        place.website === undefined ||
-        place.phone === undefined ||
-        place.openingHours === undefined
-      ) {
-        void enrichPlace(place.placeId)
-      }
+    const toEnrich = places.slice(0, 2).filter(
+      (place) =>
+        !enrichRequestedRef.current.has(place.placeId) &&
+        (place.photoUrl === undefined ||
+          place.website === undefined ||
+          place.phone === undefined ||
+          place.openingHours === undefined),
+    )
+    if (toEnrich.length === 0) return
+
+    toEnrich.forEach((place) => {
+      enrichRequestedRef.current.add(place.placeId)
+      void enrichPlace(place.placeId)
     })
   }, [enrichPlace, places])
 
   const value = useMemo(
     () => ({
       places,
+      excludedPlaceIds,
       selectedPlaceTypes,
       selectedDistanceKm,
       userLocation,
@@ -178,10 +209,14 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
       setDistanceKm,
       refreshPlaces,
       enrichPlace,
+      excludePlace,
+      resetExcludedPlaces,
     }),
     [
+      excludePlace,
       enrichPlace,
       error,
+      excludedPlaceIds,
       invalidApiKey,
       isLoaded,
       loadError,
@@ -193,6 +228,7 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
       selectedPlaceTypes,
       refreshPlaces,
       requestUserLocation,
+      resetExcludedPlaces,
       setDistanceKm,
       togglePlaceType,
       userLocation,

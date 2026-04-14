@@ -2,15 +2,15 @@
 
 import type { ReactNode } from 'react'
 import { AuthProvider } from '../context/AuthContext'
-import { NearbyPlacesProvider } from '../context/NearbyPlacesContext'
 import { ChatProvider } from '../context/ChatContext'
+import { LocatarioEventsProvider } from '../context/LocatarioEventsContext'
 
 export default function AppProviders({ children }: { children: ReactNode }) {
   return (
     <AuthProvider>
-      <NearbyPlacesProvider>
+      <LocatarioEventsProvider>
         <ChatProvider>{children}</ChatProvider>
-      </NearbyPlacesProvider>
+      </LocatarioEventsProvider>
     </AuthProvider>
   )
 }

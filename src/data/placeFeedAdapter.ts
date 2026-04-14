@@ -89,5 +89,7 @@ export function placeToEvent(place: ScrapedPlace, distanceKm: number): Event {
     tags: [place.category.toLowerCase(), place.type.replace('_', ' ')],
     isLiked: false,
     isSaved: false,
+    rating: place.rating > 0 ? place.rating : undefined,
+    isOpen: place.isOpen,
   }
 }
