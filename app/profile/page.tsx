@@ -242,7 +242,11 @@ function ProfilePageContent() {
                 <HiCalendarDays className="h-4 w-4 shrink-0 text-primary-light" />
                 <div>
                   <p className="text-[10px] uppercase tracking-wide text-muted">Miembro desde</p>
-                  <p className="text-sm font-medium text-white">Marzo 2026</p>
+                  <p className="text-sm font-medium text-white">
+                    {user.createdAt
+                      ? new Date(user.createdAt).toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })
+                      : '—'}
+                  </p>
                 </div>
               </div>
             </div>

@@ -4,9 +4,26 @@ import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import Layout from '../../src/components/Layout'
 import SwipeCard from '../../src/components/SwipeCard'
-import { MOCK_EVENTS, CATEGORY_EMOJI, formatEventDate, formatPrice } from '../../src/data/mockEvents'
+import { NearbyPlacesProvider, useNearbyPlacesContext } from '../../src/context/NearbyPlacesContext'
+import { useLocatarioEvents } from '../../src/context/LocatarioEventsContext'
+import { placeToEvent } from '../../src/data/placeFeedAdapter'
+import { CATEGORY_EMOJI } from '../../src/data/mockEvents'
 import type { Event, EventCategory } from '../../src/types'
-import { HiXMark } from 'react-icons/hi2'
+import { HiXMark, HiMagnifyingGlass } from 'react-icons/hi2'
+
+function toRad(value: number) {
+  return (value * Math.PI) / 180
+}
+
+function getDistanceKm(lat: number, lng: number, refLat: number, refLng: number): number {
+  const R = 6371
+  const dLat = toRad(lat - refLat)
+  const dLng = toRad(lng - refLng)
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(refLat)) * Math.cos(toRad(lat)) * Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
 
 const CATEGORIES: { key: EventCategory; label: string }[] = [
   { key: 'gastronomia', label: 'Gastronomía' },
@@ -19,27 +36,59 @@ const CATEGORIES: { key: EventCategory; label: string }[] = [
   { key: 'arte', label: 'Arte' },
 ]
 
-export default function SearchRoutePage() {
+function formatPrice(price: number | null) {
+  if (price === null) return 'Gratis'
+  return `$${price.toLocaleString('es-CL')}`
+}
+
+function SearchPageContent() {
+  const { places, userLocation, loading, locating } = useNearbyPlacesContext()
+  const { locatarioEvents } = useLocatarioEvents()
+
+  const [query, setQuery] = useState('')
   const [isFiltersOpen, setIsFiltersOpen] = useState(false)
   const [activeCategory, setActiveCategory] = useState<EventCategory | null>(null)
   const [maxDistanceKm, setMaxDistanceKm] = useState<number | null>(5)
   const [onlyFree, setOnlyFree] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
 
+  const allEvents = useMemo<Event[]>(() => {
+    if (!userLocation) return []
+
+    const placeEvents = places.map((place) => {
+      const distance = getDistanceKm(
+        place.position.lat,
+        place.position.lng,
+        userLocation.lat,
+        userLocation.lng,
+      )
+      return placeToEvent(place, distance)
+    })
+
+    const locEvents = locatarioEvents.map((e) => {
+      if (e.lat != null && e.lng != null) {
+        return { ...e, distance: getDistanceKm(e.lat, e.lng, userLocation.lat, userLocation.lng) }
+      }
+      return e
+    })
+
+    return [...placeEvents, ...locEvents].sort((a, b) => a.distance - b.distance)
+  }, [places, locatarioEvents, userLocation])
+
   const filtered = useMemo(() => {
-    return MOCK_EVENTS.filter((e) => {
+    const q = query.trim().toLowerCase()
+    return allEvents.filter((e) => {
+      const matchesQuery =
+        !q || e.title.toLowerCase().includes(q) || e.address.toLowerCase().includes(q)
       const matchesCategory = activeCategory === null || e.category === activeCategory
       const matchesDistance = maxDistanceKm === null || e.distance <= maxDistanceKm
       const matchesFree = !onlyFree || e.price === null
-
-      return matchesCategory && matchesDistance && matchesFree
+      return matchesQuery && matchesCategory && matchesDistance && matchesFree
     })
-  }, [activeCategory, maxDistanceKm, onlyFree])
+  }, [allEvents, query, activeCategory, maxDistanceKm, onlyFree])
 
   const activeFilterCount =
-    (activeCategory ? 1 : 0) +
-    (maxDistanceKm !== null ? 1 : 0) +
-    (onlyFree ? 1 : 0)
+    (activeCategory ? 1 : 0) + (maxDistanceKm !== null ? 1 : 0) + (onlyFree ? 1 : 0)
 
   function resetFilters() {
     setActiveCategory(null)
@@ -47,11 +96,25 @@ export default function SearchRoutePage() {
     setOnlyFree(false)
   }
 
+  const isLoading = loading || locating
+
   return (
     <Layout headerTitle="Explorar">
       <div className="px-4 pb-4 pt-4 lg:px-5 lg:pt-5">
+
+        {/* Barra de búsqueda + filtros */}
         <div className="sticky top-0 z-20 -mx-4 mb-4 border-b border-white/10 bg-surface/90 px-4 py-3 backdrop-blur-md lg:-mx-5 lg:px-5">
-          <div className="flex items-center justify-end">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <HiMagnifyingGlass className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar por nombre o dirección..."
+                className="w-full rounded-full border border-white/10 bg-card py-2 pl-9 pr-4 text-sm text-white placeholder-muted outline-none focus:border-primary/50"
+              />
+            </div>
             <button
               type="button"
               onClick={() => setIsFiltersOpen((v) => !v)}
@@ -75,7 +138,9 @@ export default function SearchRoutePage() {
                 className="mt-3 rounded-2xl border border-white/10 bg-card/95 p-3 shadow-2xl backdrop-blur-lg"
               >
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">Opciones de filtro</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+                    Opciones de filtro
+                  </p>
                   <button
                     type="button"
                     onClick={() => setIsFiltersOpen(false)}
@@ -103,7 +168,9 @@ export default function SearchRoutePage() {
                       {CATEGORIES.map((cat) => (
                         <button
                           key={cat.key}
-                          onClick={() => setActiveCategory(activeCategory === cat.key ? null : cat.key)}
+                          onClick={() =>
+                            setActiveCategory(activeCategory === cat.key ? null : cat.key)
+                          }
                           className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
                             activeCategory === cat.key
                               ? 'border-primary bg-primary text-white'
@@ -184,43 +251,72 @@ export default function SearchRoutePage() {
           </AnimatePresence>
         </div>
 
-        <p className="mb-3 text-xs text-muted">{filtered.length} eventos encontrados</p>
-
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
-            <span className="text-4xl">🔎</span>
-            <p className="text-sm text-muted">No hay eventos que coincidan con tu búsqueda.</p>
-          </div>
-        ) : (
+        {/* Contenido */}
+        {isLoading ? (
           <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
-            {filtered.map((event) => (
-              <motion.button
-                key={event.id}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => setSelectedEvent(event)}
-                className="overflow-hidden rounded-2xl border border-white/10 bg-card text-left transition-colors hover:border-primary/50"
-              >
-                <img src={event.imageUrl} alt={event.title} className="aspect-[16/10] w-full object-cover" />
-                <div className="p-3.5">
-                  <span className="text-xs font-semibold text-primary-light">
-                    {CATEGORY_EMOJI[event.category]} {event.category}
-                  </span>
-                  <h3 className="mt-1 line-clamp-2 text-base font-semibold leading-tight text-white">
-                    {event.title}
-                  </h3>
-                  <p className="mt-1 text-xs text-muted">{event.location}</p>
-                  <div className="mt-2 flex items-center justify-between text-xs">
-                    <span className="text-slate-300">{event.distance} km</span>
-                    <span className="font-semibold text-primary-light">{formatPrice(event.price)}</span>
-                  </div>
-                  <p className="mt-1 text-[11px] text-muted">{formatEventDate(event.date)}</p>
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="overflow-hidden rounded-2xl bg-card">
+                <div className="shimmer aspect-[16/10] w-full" />
+                <div className="p-3.5 space-y-2">
+                  <div className="shimmer h-3 w-1/3 rounded-md" />
+                  <div className="shimmer h-4 w-3/4 rounded-md" />
+                  <div className="shimmer h-3 w-1/2 rounded-md" />
                 </div>
-              </motion.button>
+              </div>
             ))}
           </div>
+        ) : !userLocation ? (
+          <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+            <span className="text-5xl">📍</span>
+            <h2 className="text-lg font-bold text-white">Ubicación requerida</h2>
+            <p className="max-w-xs text-sm text-muted">
+              Activa la ubicación en el feed principal para ver lugares y eventos cercanos.
+            </p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
+            <span className="text-4xl">🔎</span>
+            <p className="text-sm text-muted">No hay resultados que coincidan con tu búsqueda.</p>
+          </div>
+        ) : (
+          <>
+            <p className="mb-3 text-xs text-muted">{filtered.length} lugares encontrados</p>
+            <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
+              {filtered.map((event) => (
+                <motion.button
+                  key={event.id}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => setSelectedEvent(event)}
+                  className="overflow-hidden rounded-2xl border border-white/10 bg-card text-left transition-colors hover:border-primary/50"
+                >
+                  <img
+                    src={event.imageUrl}
+                    alt={event.title}
+                    className="aspect-[16/10] w-full object-cover"
+                  />
+                  <div className="p-3.5">
+                    <span className="text-xs font-semibold text-primary-light">
+                      {CATEGORY_EMOJI[event.category]} {event.category}
+                    </span>
+                    <h3 className="mt-1 line-clamp-2 text-base font-semibold leading-tight text-white">
+                      {event.title}
+                    </h3>
+                    <p className="mt-1 text-xs text-muted">{event.address}</p>
+                    <div className="mt-2 flex items-center justify-between text-xs">
+                      <span className="text-slate-300">{event.distance.toFixed(1)} km</span>
+                      <span className="font-semibold text-primary-light">
+                        {formatPrice(event.price)}
+                      </span>
+                    </div>
+                  </div>
+                </motion.button>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
+      {/* Modal SwipeCard al hacer click */}
       {selectedEvent && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -242,11 +338,19 @@ export default function SearchRoutePage() {
               stackIndex={0}
               onSwipeRight={() => setSelectedEvent(null)}
               onSwipeLeft={() => setSelectedEvent(null)}
-              onSave={() => {}}
+              onSave={() => setSelectedEvent(null)}
             />
           </motion.div>
         </motion.div>
       )}
     </Layout>
+  )
+}
+
+export default function SearchRoutePage() {
+  return (
+    <NearbyPlacesProvider>
+      <SearchPageContent />
+    </NearbyPlacesProvider>
   )
 }
