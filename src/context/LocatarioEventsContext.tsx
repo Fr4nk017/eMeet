@@ -71,6 +71,8 @@ type LocatarioEventRow = {
   image_url: string | null
   organizer_name: string
   organizer_avatar: string | null
+  lat: number | null
+  lng: number | null
 }
 
 function dbRowToEvent(row: LocatarioEventRow): Event {
@@ -83,6 +85,8 @@ function dbRowToEvent(row: LocatarioEventRow): Event {
     location: row.organizer_name,
     address: row.address,
     distance: 0,
+    lat: row.lat ?? undefined,
+    lng: row.lng ?? undefined,
     price: row.price,
     imageUrl: row.image_url || FALLBACK_EVENT_IMAGE,
     websiteUrl: null,
@@ -227,6 +231,8 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
         image_url: input.imageUrl || null,
         organizer_name: input.organizerName,
         organizer_avatar: input.organizerAvatar,
+        lat: input.lat ?? null,
+        lng: input.lng ?? null,
       }),
     })
 

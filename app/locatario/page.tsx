@@ -209,32 +209,53 @@ export default function LocatarioPage() {
         )}
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-card border border-card rounded-lg p-4">
-            <p className="text-muted text-sm mb-2">Eventos Activos</p>
-            <div className="text-3xl font-bold text-accent">
-              {isLoading ? <FiLoader className="animate-spin" size={28} /> : locatarioEvents.length}
+        {(() => {
+          const withGps = locatarioEvents.filter((e) => e.lat != null && e.lng != null).length
+          const free = locatarioEvents.filter((e) => e.price === null).length
+          const paid = locatarioEvents.filter((e) => e.price !== null)
+          const avgPrice = paid.length > 0
+            ? Math.round(paid.reduce((sum, e) => sum + (e.price ?? 0), 0) / paid.length)
+            : null
+
+          return (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              <div className="bg-card border border-card rounded-lg p-4">
+                <p className="text-muted text-sm mb-2">Eventos Activos</p>
+                <div className="text-3xl font-bold text-accent">
+                  {isLoading ? <FiLoader className="animate-spin" size={28} /> : locatarioEvents.length}
+                </div>
+                <p className="text-xs text-muted mt-2">Publicados desde tu panel</p>
+              </div>
+              <div className="bg-card border border-card rounded-lg p-4">
+                <p className="text-muted text-sm mb-2">Con Ubicación GPS</p>
+                <div className="text-3xl font-bold text-primary">
+                  {isLoading ? <FiLoader className="animate-spin" size={28} /> : withGps}
+                </div>
+                <p className="text-xs text-muted mt-2">Aparecen en el mapa del feed</p>
+              </div>
+              <div className="bg-card border border-card rounded-lg p-4">
+                <p className="text-muted text-sm mb-2">Eventos Gratuitos</p>
+                <div className="text-3xl font-bold text-green-400">
+                  {isLoading ? <FiLoader className="animate-spin" size={28} /> : free}
+                </div>
+                <p className="text-xs text-muted mt-2">Sin costo de entrada</p>
+              </div>
+              <div className="bg-card border border-card rounded-lg p-4">
+                <p className="text-muted text-sm mb-2">Precio Promedio</p>
+                <div className="text-3xl font-bold text-orange-400">
+                  {isLoading
+                    ? <FiLoader className="animate-spin" size={28} />
+                    : avgPrice != null
+                      ? `$${avgPrice.toLocaleString('es-CL')}`
+                      : '—'}
+                </div>
+                <p className="text-xs text-muted mt-2">
+                  {paid.length > 0 ? `${paid.length} eventos de pago` : 'Sin eventos de pago'}
+                </p>
+              </div>
             </div>
-            <p className="text-xs text-muted mt-2">Publicados desde tu panel</p>
-          </div>
-          <div className="bg-card border border-card rounded-lg p-4">
-            <p className="text-muted text-sm mb-2">Asistentes Totales</p>
-            <div className="text-3xl font-bold text-primary">
-              {locatarioEvents.reduce((sum, event) => sum + event.attendees, 0)}
-            </div>
-            <p className="text-xs text-muted mt-2">Acumulado de tus eventos</p>
-          </div>
-          <div className="bg-card border border-card rounded-lg p-4">
-            <p className="text-muted text-sm mb-2">Cupones Disponibles</p>
-            <div className="text-3xl font-bold text-orange-400">12</div>
-            <p className="text-xs text-muted mt-2">+8 redeemidos</p>
-          </div>
-          <div className="bg-card border border-card rounded-lg p-4">
-            <p className="text-muted text-sm mb-2">Ingresos Estimados</p>
-            <div className="text-3xl font-bold text-green-400">$2,340</div>
-            <p className="text-xs text-muted mt-2">+$340 en 7 días</p>
-          </div>
-        </div>
+          )
+        })()}
 
         {/* Tabla de eventos */}
         <div className="bg-card border border-card rounded-lg overflow-hidden mb-8">
@@ -249,8 +270,8 @@ export default function LocatarioPage() {
                 <tr className="border-b border-card">
                   <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Evento</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Fecha</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Asistentes</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Estado</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Precio</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-muted">GPS</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Acciones</th>
                 </tr>
               </thead>
@@ -276,11 +297,15 @@ export default function LocatarioPage() {
                     <td className="px-6 py-4 text-sm text-muted">
                       {new Date(event.date).toLocaleString('es-CL')}
                     </td>
-                    <td className="px-6 py-4 text-sm text-accent font-semibold">{event.attendees}</td>
+                    <td className="px-6 py-4 text-sm font-semibold">
+                      {event.price == null
+                        ? <span className="text-green-400">Gratis</span>
+                        : <span className="text-primary-light">${event.price.toLocaleString('es-CL')}</span>}
+                    </td>
                     <td className="px-6 py-4 text-sm">
-                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-400">
-                        Activo
-                      </span>
+                      {event.lat != null && event.lng != null
+                        ? <span className="flex items-center gap-1 text-green-400"><FiMapPin size={13} /> Sí</span>
+                        : <span className="text-muted">—</span>}
                     </td>
                     <td className="px-6 py-4 text-sm">
                       <button
@@ -303,80 +328,88 @@ export default function LocatarioPage() {
         </div>
 
         {/* Cupones + Analytics */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-card border border-card rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Crea Cupones de Descuento</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-muted mb-2">Descripción del cupón</label>
-                <input
-                  type="text"
-                  placeholder="Ej: Descuento de bienvenida"
-                  className="w-full bg-surface border border-card hover:border-primary/30 focus:border-primary outline-none py-2 px-3 rounded-lg text-white placeholder-muted transition-colors"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-muted mb-2">Descuento (%)</label>
-                  <input
-                    type="number"
-                    placeholder="20"
-                    className="w-full bg-surface border border-card hover:border-primary/30 focus:border-primary outline-none py-2 px-3 rounded-lg text-white placeholder-muted transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-muted mb-2">Cantidad</label>
-                  <input
-                    type="number"
-                    placeholder="50"
-                    className="w-full bg-surface border border-card hover:border-primary/30 focus:border-primary outline-none py-2 px-3 rounded-lg text-white placeholder-muted transition-colors"
-                  />
-                </div>
-              </div>
-              <button className="w-full bg-accent hover:bg-accent/80 text-black font-semibold py-2 px-4 rounded-lg transition-colors">
-                Crear Cupón
-              </button>
-            </div>
-          </div>
+        {(() => {
+          const total = locatarioEvents.length
+          const withGps = locatarioEvents.filter((e) => e.lat != null && e.lng != null).length
+          const free = locatarioEvents.filter((e) => e.price === null).length
+          const paid = total - free
+          const gpsPercent = total > 0 ? Math.round((withGps / total) * 100) : 0
+          const freePercent = total > 0 ? Math.round((free / total) * 100) : 0
 
-          <div className="bg-card border border-card rounded-lg p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <FiBarChart2 className="text-accent" size={20} />
-              <h3 className="text-lg font-semibold text-white">Analítica Rápida</h3>
+          const categoryCount = locatarioEvents.reduce<Record<string, number>>((acc, e) => {
+            acc[e.category] = (acc[e.category] ?? 0) + 1
+            return acc
+          }, {})
+          const topCategories = Object.entries(categoryCount)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 4)
+
+          return (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Cupones — próximamente */}
+              <div className="bg-card border border-card rounded-lg p-6 flex flex-col items-center justify-center gap-3 text-center min-h-[200px]">
+                <span className="text-4xl">🎟️</span>
+                <h3 className="text-lg font-semibold text-white">Cupones de Descuento</h3>
+                <span className="inline-block rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary-light">
+                  Próximamente
+                </span>
+                <p className="max-w-xs text-sm text-muted">
+                  Pronto podrás crear y gestionar cupones de descuento para tus eventos directamente desde aquí.
+                </p>
+              </div>
+
+              {/* Analítica real derivada de los eventos */}
+              <div className="bg-card border border-card rounded-lg p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <FiBarChart2 className="text-accent" size={20} />
+                  <h3 className="text-lg font-semibold text-white">Resumen de Eventos</h3>
+                </div>
+
+                {total === 0 ? (
+                  <p className="text-sm text-muted">Crea tu primer evento para ver estadísticas aquí.</p>
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm text-muted">Con ubicación GPS</span>
+                        <span className="text-sm font-bold text-primary-light">{withGps} / {total}</span>
+                      </div>
+                      <div className="w-full bg-surface rounded-full h-2">
+                        <div className="bg-primary h-2 rounded-full transition-all" style={{ width: `${gpsPercent}%` }} />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm text-muted">Eventos gratuitos</span>
+                        <span className="text-sm font-bold text-green-400">{free} gratis · {paid} de pago</span>
+                      </div>
+                      <div className="w-full bg-surface rounded-full h-2">
+                        <div className="bg-green-500 h-2 rounded-full transition-all" style={{ width: `${freePercent}%` }} />
+                      </div>
+                    </div>
+
+                    {topCategories.length > 0 && (
+                      <div>
+                        <p className="text-sm text-muted mb-2">Categorías más usadas</p>
+                        <div className="flex flex-wrap gap-2">
+                          {topCategories.map(([cat, count]) => (
+                            <span
+                              key={cat}
+                              className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary-light"
+                            >
+                              {cat} · {count}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-muted">Visitas a perfil</span>
-                  <span className="text-lg font-bold text-accent">342</span>
-                </div>
-                <div className="w-full bg-surface rounded-full h-2">
-                  <div className="bg-accent h-2 rounded-full" style={{ width: '75%' }} />
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-muted">Tasa de conversión</span>
-                  <span className="text-lg font-bold text-primary">68%</span>
-                </div>
-                <div className="w-full bg-surface rounded-full h-2">
-                  <div className="bg-primary h-2 rounded-full" style={{ width: '68%' }} />
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-muted">Satisfacción</span>
-                  <span className="text-lg font-bold text-green-400">4.8/5.0</span>
-                </div>
-                <div className="flex gap-1">
-                  {[...Array(5)].map((_, i) => (
-                    <span key={i} className="text-xl">⭐</span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+          )
+        })()}
       </main>
 
       {/* Modal crear evento */}
