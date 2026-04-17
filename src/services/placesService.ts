@@ -27,6 +27,14 @@ const PLACE_TYPE_MAPPING: Record<PlaceType, string> = {
   food:         'food',
 }
 
+function buildPhotoProxyUrl(photoReference: string, maxWidth: number) {
+  const params = new URLSearchParams({
+    photoReference,
+    maxWidth: String(maxWidth),
+  })
+  return `${BACKEND_URL}/places/photo?${params.toString()}`
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function boundsToCircle(
@@ -116,7 +124,7 @@ export async function searchNearbyPlaces(
           isOpen: null,
           position: { lat, lng },
           photoUrl: place.photos?.[0]?.photo_reference
-            ? `${BACKEND_URL}/places/photo?photoReference=${place.photos[0].photo_reference}&maxWidth=800`
+            ? buildPhotoProxyUrl(place.photos[0].photo_reference, 800)
             : undefined,
           website: undefined,
           phone: undefined,
@@ -150,7 +158,7 @@ export async function fetchPlaceDetails(placeId: string): Promise<Partial<Scrape
 
     return {
       photoUrl: details.photos?.[0]?.photo_reference
-        ? `${BACKEND_URL}/places/photo?photoReference=${details.photos[0].photo_reference}&maxWidth=400`
+        ? buildPhotoProxyUrl(details.photos[0].photo_reference, 400)
         : null,
       website: details.website || null,
       phone: details.formatted_phone_number || details.international_phone_number || null,
