@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useRef, useEffect, useMemo } from 'react'
-import { GoogleMap, OverlayView } from '@react-google-maps/api'
+import { useCallback, useRef, useEffect, useMemo, useState } from 'react'
+import { GoogleMap, OverlayView, DirectionsRenderer } from '@react-google-maps/api'
 import { PLACE_TYPE_CONFIG } from '../services/placesService'
 import { useNearbyPlacesContext } from '../context/NearbyPlacesContext'
 
@@ -87,9 +87,13 @@ export default function BellavistaMap() {
     mapsLoadError,
     selectedPlaceTypes,
     selectedDistanceKm,
+    selectedDestination,
+    setSelectedDestination,
     requestUserLocation,
   } = useNearbyPlacesContext()
   const mapRef = useRef<google.maps.Map | null>(null)
+  const [directionsResult, setDirectionsResult] = useState<google.maps.DirectionsResult | null>(null)
+  const [routeInfo, setRouteInfo] = useState<{ distance: string; duration: string } | null>(null)
   // Ref para userLocation: onMapLoad es estable y no se recrea en cada cambio de ubicación
   const userLocationRef = useRef(userLocation)
   useEffect(() => { userLocationRef.current = userLocation }, [userLocation])
@@ -115,9 +119,48 @@ export default function BellavistaMap() {
 
   useEffect(() => {
     if (!userLocation || !mapRef.current) return
+    if (selectedDestination) return // no recentrar si hay ruta activa
     mapRef.current.panTo(userLocation)
     mapRef.current.setZoom(15)
-  }, [userLocation])
+  }, [userLocation, selectedDestination])
+
+  // Calcula la ruta cuando hay un destino seleccionado
+  useEffect(() => {
+    if (!userLocation || !selectedDestination) {
+      setDirectionsResult(null)
+      setRouteInfo(null)
+      return
+    }
+
+    const service = new google.maps.DirectionsService()
+    service.route(
+      {
+        origin: userLocation,
+        destination: { placeId: selectedDestination.placeId },
+        travelMode: google.maps.TravelMode.WALKING,
+      },
+      (result, status) => {
+        if (status === google.maps.DirectionsStatus.OK && result) {
+          setDirectionsResult(result)
+          const leg = result.routes[0]?.legs[0]
+          if (leg) {
+            setRouteInfo({
+              distance: leg.distance?.text ?? '',
+              duration: leg.duration?.text ?? '',
+            })
+          }
+        } else {
+          // Fallback: centrar el mapa en el destino
+          setDirectionsResult(null)
+          setRouteInfo(null)
+          if (mapRef.current) {
+            mapRef.current.panTo(selectedDestination.position)
+            mapRef.current.setZoom(15)
+          }
+        }
+      },
+    )
+  }, [userLocation, selectedDestination])
 
   // Memoizado: sin esto, se crea un nuevo array en cada render
   // y nearestPlaceIds (que depende de visiblePlaces) recalcula constantemente
@@ -187,6 +230,74 @@ export default function BellavistaMap() {
       options={MAP_OPTIONS}
       onLoad={onMapLoad}
     >
+      {/* ── Ruta hacia el lugar likeado ─────────────────────────────────── */}
+      {directionsResult && (
+        <DirectionsRenderer
+          directions={directionsResult}
+          options={{
+            suppressMarkers: true,
+            polylineOptions: {
+              strokeColor: '#a855f7',
+              strokeWeight: 5,
+              strokeOpacity: 0.85,
+            },
+          }}
+        />
+      )}
+
+      {/* ── Marcador del destino ─────────────────────────────────────────── */}
+      {selectedDestination && (
+        <OverlayView
+          position={selectedDestination.position}
+          mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+          getPixelPositionOffset={(w, h) => ({ x: -w / 2, y: -h })}
+        >
+          <div className="flex flex-col items-center">
+            <div
+              className="flex items-center justify-center rounded-full border-2 border-fuchsia-400 shadow-lg"
+              style={{
+                width: '36px',
+                height: '36px',
+                backgroundColor: 'rgba(168,85,247,0.9)',
+                boxShadow: '0 0 0 6px rgba(168,85,247,0.25)',
+              }}
+            >
+              <span style={{ fontSize: '18px' }}>📍</span>
+            </div>
+            <div
+              style={{ width: 0, height: 0, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '8px solid rgba(168,85,247,0.9)' }}
+            />
+          </div>
+        </OverlayView>
+      )}
+
+      {/* ── Badge de ruta activa ─────────────────────────────────────────── */}
+      {selectedDestination && (
+        <div className="absolute bottom-24 left-4 right-14 z-40 max-w-xs">
+          <div className="flex items-start gap-2 rounded-2xl border border-fuchsia-500/30 bg-slate-950/92 px-3 py-2.5 backdrop-blur-md shadow-lg">
+            <span className="mt-0.5 text-base">🗺️</span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-semibold text-fuchsia-300">{selectedDestination.title}</p>
+              {routeInfo ? (
+                <p className="mt-0.5 text-[11px] text-slate-300">
+                  🚶 {routeInfo.duration} · {routeInfo.distance}
+                </p>
+              ) : (
+                <p className="mt-0.5 text-[11px] text-slate-400">Calculando ruta...</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedDestination(null)}
+              className="ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-slate-400 hover:bg-white/20 hover:text-white transition-colors"
+              aria-label="Cerrar ruta"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Indicador de carga ──────────────────────────────────────────── */}
       {loading && (
         <div className="absolute top-4 right-4 z-40">
@@ -243,7 +354,7 @@ export default function BellavistaMap() {
 
       {/* ── Estado real de ubicación/eventos ───────────────────────────── */}
       {userLocation && (
-        <div className="absolute top-4 left-4 z-30 rounded-xl border border-white/10 bg-slate-950/85 px-3 py-2 backdrop-blur-md">
+        <div className="absolute top-14 left-4 z-30 rounded-xl border border-white/10 bg-slate-950/85 px-3 py-2 backdrop-blur-md">
           <p className="text-[11px] font-semibold text-slate-200">📍 Tu ubicación detectada</p>
           <p className="text-[11px] text-emerald-300">
             {visiblePlaces.length > 0

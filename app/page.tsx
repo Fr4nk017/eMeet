@@ -1,9 +1,19 @@
 'use client'
 
 import { useState, useCallback, useMemo, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
 import SwipeCard from '../src/components/SwipeCard'
 import Layout from '../src/components/Layout'
+
+const BellavistaMapMobile = dynamic(() => import('../src/components/BellavistaMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full w-full items-center justify-center text-sm text-muted">
+      Cargando mapa...
+    </div>
+  ),
+})
 import DistanceFilter from '../src/components/DistanceFilter'
 import PlaceTypeFilters from '../src/components/PlaceTypeFilters'
 import { placeToEvent } from '../src/data/placeFeedAdapter'
@@ -11,11 +21,11 @@ import { NearbyPlacesProvider, useNearbyPlacesContext } from '../src/context/Nea
 import { useChatContext } from '../src/context/ChatContext'
 import { useAuth } from '../src/context/AuthContext'
 import { useLocatarioEvents } from '../src/context/LocatarioEventsContext'
-import { getSupabaseBrowserClient, hasSupabaseEnv } from '../src/lib/supabase'
+import { hasSupabaseEnv } from '../src/lib/supabase'
+import { fetchApi } from '../src/lib/fetchApi'
 import type { PlaceType } from '../src/types'
 
 const DEFAULT_FEED_TYPES: PlaceType[] = ['restaurant', 'bar', 'night_club', 'cafe']
-const supabase = hasSupabaseEnv ? getSupabaseBrowserClient() : null
 
 function toRad(value: number) {
   return (value * Math.PI) / 180
@@ -108,6 +118,7 @@ function HomePageContent() {
     setDistanceKm,
     togglePlaceType,
     refreshPlaces,
+    setSelectedDestination,
   } = useNearbyPlacesContext()
   const { joinRoom } = useChatContext()
   const { user, updateUser } = useAuth()
@@ -117,6 +128,7 @@ function HomePageContent() {
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
   const [isFiltersOpen, setIsFiltersOpen] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'like' | 'nope' | 'save' } | null>(null)
+  const [mobileView, setMobileView] = useState<'cards' | 'map'>('cards')
   const [carretee, setCarretee] = useState<{
     title: string
     address: string
@@ -185,20 +197,23 @@ function HomePageContent() {
       return
     }
 
-    if (hasSupabaseEnv && supabase) {
-      const { error } = await supabase.from('user_events').upsert(
-        {
-          user_id: user.id,
-          event_id: likedEvent.id,
-          event_title: likedEvent.title,
-          event_image_url: likedEvent.imageUrl,
-          event_address: likedEvent.address,
-          action: 'like',
-        },
-        { onConflict: 'user_id,event_id,action' },
-      )
-
-      if (error) {
+    if (hasSupabaseEnv) {
+      try {
+        await fetchApi('/api/events/like', {
+          method: 'POST',
+          body: JSON.stringify({
+            eventId: likedEvent.id,
+            eventTitle: likedEvent.title,
+            eventImageUrl: likedEvent.imageUrl,
+            eventAddress: likedEvent.address,
+          }),
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : ''
+        if (message.toLowerCase().includes('sesión') || message.toLowerCase().includes('token')) {
+          showToast('Tu sesión expiró. Inicia sesión nuevamente.', 'nope')
+          return
+        }
         showToast('No se pudo registrar tu like.', 'nope')
         return
       }
@@ -221,16 +236,28 @@ function HomePageContent() {
       address: likedEvent.address,
     })
 
+    // Mostrar ruta en el mapa lateral si el lugar tiene posición conocida
+    const likedPlace = places.find((p) => p.placeId === likedEvent.id)
+    if (likedPlace) {
+      setSelectedDestination({
+        placeId: likedEvent.id,
+        title: likedEvent.title,
+        position: likedPlace.position,
+      })
+    }
+
+    // El backend ya creó la sala y unió al usuario en /api/events/like.
+    // Solo recargamos la lista de salas en el contexto de chat.
     try {
       await joinRoom(likedEvent.id, likedEvent.title, likedEvent.imageUrl, likedEvent.address)
     } catch {
-      showToast('No se pudo unir al chat del lugar.', 'nope')
+      // No bloquear el flujo si falla la sincronización del chat
     }
 
     if (likedEvent.websiteUrl) {
       window.open(likedEvent.websiteUrl, '_blank', 'noopener,noreferrer')
     }
-  }, [events, excludePlace, joinRoom, updateUser, user])
+  }, [events, excludePlace, joinRoom, places, setSelectedDestination, updateUser, user])
 
   const handleSwipeLeft = useCallback((id: string) => {
     setDismissedIds((prev) => new Set(prev).add(id))
@@ -249,36 +276,29 @@ function HomePageContent() {
 
     const isCurrentlySaved = savedIds.has(id)
 
-    if (hasSupabaseEnv && supabase) {
-      if (isCurrentlySaved) {
-        const { error } = await supabase
-          .from('user_events')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('event_id', id)
-          .eq('action', 'save')
-
-        if (error) {
-          showToast('No se pudo quitar de guardados.', 'nope')
+    if (hasSupabaseEnv) {
+      try {
+        if (isCurrentlySaved) {
+          await fetchApi(`/api/events/save/${id}`, { method: 'DELETE' })
+        } else {
+          await fetchApi('/api/events/save', {
+            method: 'POST',
+            body: JSON.stringify({
+              eventId: eventToSave.id,
+              eventTitle: eventToSave.title,
+              eventImageUrl: eventToSave.imageUrl,
+              eventAddress: eventToSave.address,
+            }),
+          })
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : ''
+        if (message.toLowerCase().includes('sesión') || message.toLowerCase().includes('token')) {
+          showToast('Tu sesión expiró. Inicia sesión nuevamente.', 'nope')
           return
         }
-      } else {
-        const { error } = await supabase.from('user_events').upsert(
-          {
-            user_id: user.id,
-            event_id: eventToSave.id,
-            event_title: eventToSave.title,
-            event_image_url: eventToSave.imageUrl,
-            event_address: eventToSave.address,
-            action: 'save',
-          },
-          { onConflict: 'user_id,event_id,action' },
-        )
-
-        if (error) {
-          showToast('No se pudo guardar el evento.', 'nope')
-          return
-        }
+        showToast(isCurrentlySaved ? 'No se pudo quitar de guardados.' : 'No se pudo guardar el evento.', 'nope')
+        return
       }
     }
 
@@ -390,6 +410,40 @@ function HomePageContent() {
         </AnimatePresence>
 
         <div className="relative flex min-h-0 flex-1 px-4 pb-4 pt-3 lg:px-5 lg:pb-5 lg:pt-2">
+          {/* Toggle Tarjetas / Mapa — solo visible en móvil */}
+          <div className="absolute left-1/2 top-2 z-30 -translate-x-1/2 lg:hidden">
+            <div className="flex rounded-full bg-white/10 p-1 backdrop-blur-md border border-white/15 shadow-lg">
+              <button
+                type="button"
+                onClick={() => setMobileView('cards')}
+                className={`rounded-full px-5 py-1.5 text-xs font-semibold transition-all ${
+                  mobileView === 'cards'
+                    ? 'bg-primary text-white shadow-md'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                Tarjetas
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileView('map')}
+                className={`rounded-full px-5 py-1.5 text-xs font-semibold transition-all ${
+                  mobileView === 'map'
+                    ? 'bg-primary text-white shadow-md'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                Mapa
+              </button>
+            </div>
+          </div>
+
+          {/* Vista mapa en móvil */}
+          {mobileView === 'map' && (
+            <div className="absolute inset-0 lg:hidden">
+              <BellavistaMapMobile />
+            </div>
+          )}
           <div className="absolute right-4 top-2 z-30 hidden lg:block lg:right-5">
             <button
               type="button"
@@ -455,6 +509,7 @@ function HomePageContent() {
             </AnimatePresence>
           </div>
 
+          <div className={mobileView === 'map' ? 'hidden lg:contents' : 'contents'}>
           {invalidApiKey ? (
             <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center">
               <span className="text-5xl">🔑</span>
@@ -512,6 +567,7 @@ function HomePageContent() {
               </div>
             </motion.div>
           )}
+          </div>
         </div>
 
         {visibleEvents.length > 0 && (

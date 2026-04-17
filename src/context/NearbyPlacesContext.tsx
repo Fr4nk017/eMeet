@@ -22,6 +22,12 @@ const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() 
 const HAS_GOOGLE_MAPS_KEY = GOOGLE_MAPS_API_KEY.length > 0
 const LOOKS_LIKE_GOOGLE_MAPS_KEY = GOOGLE_MAPS_API_KEY.startsWith('AIza')
 
+export interface MapDestination {
+  placeId: string
+  title: string
+  position: google.maps.LatLngLiteral
+}
+
 interface NearbyPlacesContextValue {
   places: ScrapedPlace[]
   excludedPlaceIds: Set<string>
@@ -35,6 +41,7 @@ interface NearbyPlacesContextValue {
   mapsReady: boolean
   invalidApiKey: boolean
   mapsLoadError: Error | undefined
+  selectedDestination: MapDestination | null
   requestUserLocation: (recenter?: boolean) => void
   togglePlaceType: (type: PlaceType) => void
   setDistanceKm: (km: number) => void
@@ -42,6 +49,7 @@ interface NearbyPlacesContextValue {
   enrichPlace: (placeId: string) => Promise<Partial<ScrapedPlace>>
   excludePlace: (placeId: string) => void
   resetExcludedPlaces: () => void
+  setSelectedDestination: (dest: MapDestination | null) => void
 }
 
 const NearbyPlacesContext = createContext<NearbyPlacesContextValue | undefined>(undefined)
@@ -66,6 +74,7 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
   const [userLocation, setUserLocation] = useState<google.maps.LatLngLiteral | null>(null)
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState<string | null>(null)
+  const [selectedDestination, setSelectedDestination] = useState<MapDestination | null>(null)
 
   // Refs para evitar re-renders en cascada y loops de efectos
   const locatingRef = useRef(false)
@@ -204,6 +213,7 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
       mapsReady: isLoaded,
       invalidApiKey,
       mapsLoadError: loadError,
+      selectedDestination,
       requestUserLocation,
       togglePlaceType,
       setDistanceKm,
@@ -211,6 +221,7 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
       enrichPlace,
       excludePlace,
       resetExcludedPlaces,
+      setSelectedDestination,
     }),
     [
       excludePlace,
@@ -224,6 +235,7 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
       locationError,
       locating,
       places,
+      selectedDestination,
       selectedDistanceKm,
       selectedPlaceTypes,
       refreshPlaces,
