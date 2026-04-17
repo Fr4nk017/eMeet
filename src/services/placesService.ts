@@ -27,6 +27,25 @@ const PLACE_TYPE_MAPPING: Record<PlaceType, string> = {
   food:         'food',
 }
 
+interface GooglePlaceSearchResult {
+  place_id?: string
+  name?: string
+  formatted_address?: string
+  geometry?: {
+    location?: {
+      lat?: number
+      lng?: number
+    }
+  }
+  rating?: number
+  user_ratings_total?: number
+  photos?: Array<{ photo_reference?: string }>
+}
+
+interface PlacesSearchNearbyResponse {
+  places?: GooglePlaceSearchResult[]
+}
+
 function buildPhotoProxyUrl(photoReference: string, maxWidth: number) {
   const params = new URLSearchParams({
     photoReference,
@@ -76,7 +95,8 @@ export async function searchNearbyPlaces(
   try {
     const { center, radius } = boundsToCircle(bounds)
     const allPlaces: ScrapedPlace[] = []
-    const seen = new Set<string>()
+    const seenIds = new Set<string>()
+    const seenNames = new Set<string>()
 
     // Buscar cada tipo en paralelo
     const searches = types.map((type) =>
@@ -89,23 +109,29 @@ export async function searchNearbyPlaces(
           type: PLACE_TYPE_MAPPING[type],
         }),
       })
-        .then((res) => res.json())
+        .then(async (res): Promise<{ type: PlaceType; places: GooglePlaceSearchResult[] }> => {
+          const payload = (await res.json()) as PlacesSearchNearbyResponse
+          return { type, places: payload.places ?? [] }
+        })
         .catch((err) => {
           console.error(`Error searching ${type}:`, err)
-          return { places: [] }
+          return { type, places: [] }
         }),
     )
 
     const results = await Promise.all(searches)
 
     // Procesar y deduplicar resultados
-    results.forEach(({ places = [] }) => {
-      places.forEach((place: any) => {
+    results.forEach(({ type, places }) => {
+      places.forEach((place) => {
         const name = place.name || 'Sin nombre'
         const nameKey = name.toLowerCase()
+        const placeId = place.place_id || ''
 
-        if (seen.has(nameKey)) return
-        seen.add(nameKey)
+        if (placeId && seenIds.has(placeId)) return
+        if (seenNames.has(nameKey)) return
+        if (placeId) seenIds.add(placeId)
+        seenNames.add(nameKey)
 
         const lat = place.geometry?.location?.lat
         const lng = place.geometry?.location?.lng
@@ -113,11 +139,11 @@ export async function searchNearbyPlaces(
         if (typeof lat !== 'number' || typeof lng !== 'number') return
 
         allPlaces.push({
-          placeId: place.place_id || '',
+          placeId,
           name,
           address: place.formatted_address || '',
-          type: types[0], // simplificado para esta versión
-          category: PLACE_TYPE_CONFIG[types[0]].category,
+          type,
+          category: PLACE_TYPE_CONFIG[type].category,
           rating: place.rating || 0,
           totalRatings: place.user_ratings_total || 0,
           priceLevel: null,

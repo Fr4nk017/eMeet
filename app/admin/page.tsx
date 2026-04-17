@@ -1,158 +1,248 @@
 'use client'
 
-import { useAuth } from '@/src/context/AuthContext'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { FiLogOut, FiUsers, FiBarChart, FiAlertCircle, FiSettings } from 'react-icons/fi'
+import dynamic from 'next/dynamic'
+import { Users, CalendarDays, ShieldAlert, Activity, RefreshCw } from 'lucide-react'
+import { useAuth } from '@/src/context/AuthContext'
+import { getSupabaseBrowserClient, hasSupabaseEnv } from '@/src/lib/supabase'
+import KpiCard, { KpiCardSkeleton } from '@/src/components/admin/KpiCard'
+import EventsTable from '@/src/components/admin/EventsTable'
+import type { AdminEvent, EventStatus } from '@/src/components/admin/EventsTable'
+
+// Charts are client-only (recharts uses browser APIs)
+const TicketAreaChart = dynamic(() => import('@/src/components/admin/TicketAreaChart'), {
+  ssr: false,
+  loading: () => <div className="h-[220px] animate-pulse rounded-lg bg-white/5" />,
+})
+const CategoryDonut = dynamic(() => import('@/src/components/admin/CategoryDonut'), {
+  ssr: false,
+  loading: () => <div className="h-[300px] animate-pulse rounded-lg bg-white/5" />,
+})
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type Kpis = {
+  totalProfiles: number
+  locatariosWithEvents: number
+  totalEvents: number
+  totalCommunities: number
+  totalLikes: number
+  totalSaves: number
+  totalMessages: number
+}
+
+type RawRecentEvent = {
+  id: string
+  title: string
+  category: string
+  address: string
+  created_at: string
+  organizer_name: string
+  status?: EventStatus
+}
+
+type AdminStats = {
+  kpis: Kpis
+  recentProfiles: { id: string; name: string; created_at: string }[]
+  recentEvents: RawRecentEvent[]
+  recentCommunities: { id: string; event_title: string; created_at: string }[]
+}
+
+// Status rotation for demo (status field not in API yet)
+const DEMO_STATUSES: EventStatus[] = ['live', 'draft', 'draft', 'flagged', 'live']
+
+function toAdminEvent(e: RawRecentEvent, i: number): AdminEvent {
+  return {
+    id: e.id,
+    title: e.title,
+    category: e.category,
+    organizerName: e.organizer_name,
+    status: e.status ?? DEMO_STATUSES[i % DEMO_STATUSES.length],
+    createdAt: e.created_at,
+  }
+}
+
+// ─── Section wrapper ──────────────────────────────────────────────────────────
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-em-text">
+        <span className="h-4 w-0.5 rounded-full bg-em-accent" />
+        {title}
+      </h2>
+      {children}
+    </div>
+  )
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
-  const { user, logout } = useAuth()
+  const { user, isAuthReady } = useAuth()
   const router = useRouter()
+  const [stats, setStats] = useState<AdminStats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
 
-  const handleLogout = () => {
-    logout()
-    router.push('/auth')
-  }
+  useEffect(() => {
+    if (isAuthReady && (!user || user.role !== 'admin')) {
+      router.replace('/auth')
+    }
+  }, [isAuthReady, user, router])
 
-  if (!user || user.role !== 'admin') {
+  const load = useCallback(async () => {
+    if (!user || user.role !== 'admin') return
+    setLoading(true)
+    setError(null)
+
+    try {
+      let token: string | null = null
+      if (hasSupabaseEnv) {
+        const { data } = await getSupabaseBrowserClient().auth.getSession()
+        token = data.session?.access_token ?? null
+      }
+
+      const res = await fetch('/api/admin/stats', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null
+        throw new Error(body?.error ?? 'Error al cargar estadísticas')
+      }
+
+      setStats((await res.json()) as AdminStats)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error desconocido')
+    } finally {
+      setLoading(false)
+    }
+  }, [user])
+
+  useEffect(() => {
+    load()
+  }, [load, refreshKey])
+
+  // ── Auth guard ────────────────────────────────────────────────────────────
+  if (!isAuthReady) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
-        <div className="text-center">
-          <FiAlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-white mb-2">Acceso Denegado</h1>
-          <p className="text-muted mb-6">No tienes permisos para acceder a esta página</p>
-          <button
-            onClick={() => router.push('/chat')}
-            className="bg-primary hover:bg-primary-dark text-white font-semibold py-2 px-6 rounded-lg"
-          >
-            Volver al inicio
-          </button>
-        </div>
+      <div className="flex h-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-em-border border-t-em-accent" />
       </div>
     )
   }
 
+  if (!user || user.role !== 'admin') return null
+
+  const kpis = stats?.kpis
+  const events: AdminEvent[] = (stats?.recentEvents ?? []).map(toAdminEvent)
+
+  // KPI config — real data where available, mock placeholders where API is pending
+  const kpiCards = [
+    {
+      label: 'GMV Total',
+      value: '$124.500', // TODO: wire to revenue/ticket-sales endpoint
+      change: 8.4,
+      icon: Activity,
+      accentColor: '#FF6B00',
+    },
+    {
+      label: 'Usuarios activos',
+      value: kpis ? kpis.totalProfiles.toLocaleString('es-CL') : '—',
+      change: 2.4,
+      icon: Users,
+      accentColor: '#3B82F6',
+    },
+    {
+      label: 'Reportes pendientes',
+      value: '12', // TODO: wire to moderation endpoint
+      change: -3.1,
+      icon: ShieldAlert,
+      accentColor: '#F6465D',
+    },
+    {
+      label: 'Server uptime',
+      value: '99.97%', // TODO: wire to infra health endpoint
+      change: 0,
+      icon: CalendarDays,
+      accentColor: '#0ECB81',
+    },
+  ]
+
   return (
-    <div className="min-h-screen bg-surface">
-      {/* Header */}
-      <header className="bg-card border-b border-card sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">Panel de Administración</h1>
-            <p className="text-sm text-muted">Gestión de eMeet</p>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-lg transition-colors"
-          >
-            <FiLogOut size={18} />
-            Cerrar sesión
-          </button>
+    <div className="min-h-full p-6">
+      {/* ── Page header ── */}
+      <div className="mb-7 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-black tracking-tight text-em-text">Overview</h1>
+          <p className="mt-0.5 text-xs text-em-muted">Panel de control · eMeet</p>
         </div>
-      </header>
+        <button
+          type="button"
+          onClick={() => setRefreshKey((k) => k + 1)}
+          disabled={loading}
+          className="flex items-center gap-2 rounded-lg border border-em-border bg-em-surface px-3 py-2 text-xs font-medium text-em-muted transition-colors hover:border-white/30 hover:text-em-text disabled:opacity-50"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          Actualizar
+        </button>
+      </div>
 
-      {/* Contenido principal */}
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        {/* Bienvenida */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-white mb-2">Bienvenido, {user.name}</h2>
-          <p className="text-muted">Administra todos los aspectos de la plataforma eMeet</p>
+      {/* ── Error banner ── */}
+      {error && (
+        <div className="mb-6 rounded-lg border border-em-negative/30 bg-em-negative/10 px-4 py-3 text-sm text-em-negative">
+          {error}
+        </div>
+      )}
+
+      {/* ── 12-col responsive grid ── */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
+        {/* KPI Cards */}
+        <div className="col-span-1 grid grid-cols-2 gap-3 md:col-span-12 lg:grid-cols-4">
+          {loading
+            ? Array.from({ length: 4 }).map((_, i) => <KpiCardSkeleton key={i} />)
+            : kpiCards.map((c) => (
+                <KpiCard
+                  key={c.label}
+                  label={c.label}
+                  value={c.value}
+                  change={c.change}
+                  icon={c.icon}
+                  accentColor={c.accentColor}
+                />
+              ))}
         </div>
 
-        {/* Grid de opciones */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          {/* Card: Usuarios */}
-          <div className="bg-card border border-card hover:border-primary/30 rounded-lg p-6 cursor-pointer hover:shadow-lg transition-all">
-            <div className="inline-flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg mb-4">
-              <FiUsers className="text-primary" size={24} />
+        {/* Area chart — 8/12 cols */}
+        <div className="col-span-1 md:col-span-8">
+          <Section title="Venta de Tickets vs Tiempo">
+            <div className="rounded-lg border border-em-border bg-em-surface p-5">
+              <TicketAreaChart />
             </div>
-            <h3 className="text-lg font-semibold text-white mb-2">Usuarios</h3>
-            <p className="text-sm text-muted mb-4">Gestiona usuarios, roles y permisos</p>
-            <div className="text-2xl font-bold text-accent">1.234</div>
-            <p className="text-xs text-muted mt-1">+12% este mes</p>
-          </div>
-
-          {/* Card: Eventos */}
-          <div className="bg-card border border-card hover:border-primary/30 rounded-lg p-6 cursor-pointer hover:shadow-lg transition-all">
-            <div className="inline-flex items-center justify-center w-12 h-12 bg-accent/10 rounded-lg mb-4">
-              <FiBarChart className="text-accent" size={24} />
-            </div>
-            <h3 className="text-lg font-semibold text-white mb-2">Eventos</h3>
-            <p className="text-sm text-muted mb-4">Revisa y modera eventos publicados</p>
-            <div className="text-2xl font-bold text-accent">456</div>
-            <p className="text-xs text-muted mt-1">+8 nuevos hoy</p>
-          </div>
-
-          {/* Card: Reportes */}
-          <div className="bg-card border border-card hover:border-primary/30 rounded-lg p-6 cursor-pointer hover:shadow-lg transition-all">
-            <div className="inline-flex items-center justify-center w-12 h-12 bg-orange-500/10 rounded-lg mb-4">
-              <FiAlertCircle className="text-orange-400" size={24} />
-            </div>
-            <h3 className="text-lg font-semibold text-white mb-2">Reportes</h3>
-            <p className="text-sm text-muted mb-4">Revisa reportes y quejas de usuarios</p>
-            <div className="text-2xl font-bold text-orange-400">23</div>
-            <p className="text-xs text-muted mt-1">Pendientes de revisión</p>
-          </div>
+          </Section>
         </div>
 
-        {/* Tabla de estadísticas */}
-        <div className="bg-card border border-card rounded-lg overflow-hidden">
-          <div className="px-6 py-4 border-b border-card">
-            <h3 className="text-lg font-semibold text-white">Actividad Reciente</h3>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-surface">
-                <tr className="border-b border-card">
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Tipo</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Descripción</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Usuario</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Hora</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  { type: 'Nuevo evento', desc: 'Club Social Bellavista creó un evento', user: 'Carlos R.', time: 'Hace 2h', status: 'Pendiente' },
-                  { type: 'Reporte', desc: 'Usuario reportó comentario inapropiado', user: 'Juan P.', time: 'Hace 4h', status: 'Nuevo' },
-                  { type: 'Registro', desc: 'Nuevo usuario se registró', user: 'María L.', time: 'Hace 6h', status: 'Completado' },
-                  { type: 'Evento cancelado', desc: 'Evento cancelado por organizador', user: 'Admin', time: 'Hace 8h', status: 'Completado' },
-                ].map((item, i) => (
-                  <tr key={i} className="border-b border-card/50 hover:bg-surface/50 transition-colors">
-                    <td className="px-6 py-4 text-sm text-primary font-medium">{item.type}</td>
-                    <td className="px-6 py-4 text-sm text-white">{item.desc}</td>
-                    <td className="px-6 py-4 text-sm text-muted">{item.user}</td>
-                    <td className="px-6 py-4 text-sm text-muted">{item.time}</td>
-                    <td className="px-6 py-4 text-sm">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        item.status === 'Completado' ? 'bg-green-500/10 text-green-400' :
-                        item.status === 'Nuevo' ? 'bg-blue-500/10 text-blue-400' :
-                        'bg-yellow-500/10 text-yellow-400'
-                      }`}>
-                        {item.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Configuración rápida */}
-        <div className="mt-8 bg-card border border-card rounded-lg p-6">
-          <div className="flex items-center gap-4">
-            <FiSettings className="text-primary" size={24} />
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-white">Configuración del Sistema</h3>
-              <p className="text-sm text-muted">Accede a la configuración avanzada de la plataforma</p>
+        {/* Donut chart — 4/12 cols */}
+        <div className="col-span-1 md:col-span-4">
+          <Section title="Distribución de Categorías">
+            <div className="rounded-lg border border-em-border bg-em-surface p-5">
+              <CategoryDonut />
             </div>
-            <button className="bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-lg transition-colors">
-              Ir a Configuración
-            </button>
-          </div>
+          </Section>
         </div>
-      </main>
+
+        {/* Events table — full width */}
+        <div className="col-span-1 md:col-span-12">
+          <Section title="Eventos Recientes">
+            <div className="overflow-hidden rounded-lg border border-em-border bg-em-surface">
+              <EventsTable events={events} loading={loading} />
+            </div>
+          </Section>
+        </div>
+      </div>
     </div>
   )
 }

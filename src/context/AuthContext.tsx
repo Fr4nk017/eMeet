@@ -47,6 +47,9 @@ type UserEventPayload = {
 type AuthResponsePayload = {
   user: {
     email?: string | null
+    app_metadata?: {
+      role?: User['role']
+    }
     user_metadata?: {
       role?: User['role']
       business_name?: string | null
@@ -64,6 +67,31 @@ function resolveRole(email: string, roleHint?: User['role']): User['role'] {
     return roleHint
   }
   return inferLocalRoleByEmail(email)
+}
+
+function readRoleBucket(value: unknown): User['role'] | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const role = (value as { role?: unknown }).role
+  if (role === 'admin' || role === 'locatario' || role === 'user') {
+    return role
+  }
+  return undefined
+}
+
+function extractRoleFromAuthUser(user: unknown): User['role'] | undefined {
+  if (!user || typeof user !== 'object') return undefined
+
+  const appRole = readRoleBucket((user as { app_metadata?: unknown }).app_metadata)
+  if (appRole === 'admin' || appRole === 'locatario' || appRole === 'user') {
+    return appRole
+  }
+
+  const userRole = readRoleBucket((user as { user_metadata?: unknown }).user_metadata)
+  if (userRole === 'admin' || userRole === 'locatario' || userRole === 'user') {
+    return userRole
+  }
+
+  return undefined
 }
 
 const LOCAL_AUTH_STORAGE_KEY = 'emeet-local-auth-user'
@@ -227,7 +255,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const { data: userData } = await getSupabaseBrowserClient().auth.getUser()
-    const roleHint = userData.user?.user_metadata?.role as User['role'] | undefined
+    const roleHint = extractRoleFromAuthUser(userData.user)
     const businessName = userData.user?.user_metadata?.business_name as string | undefined
     const businessLocation = userData.user?.user_metadata?.business_location as string | undefined
     await syncUserData(sessionPayload.session.user.email ?? '', roleHint, {
@@ -281,7 +309,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Usamos syncUserData en lugar de syncFromApi: la sesión ya existe,
     // no hace falta un round-trip extra a /api/auth/session.
-    await syncUserData(email, payload.user?.user_metadata?.role, {
+    await syncUserData(email, extractRoleFromAuthUser(payload.user), {
       businessName: payload.user?.user_metadata?.business_name,
       businessLocation: payload.user?.user_metadata?.business_location,
     })
@@ -312,7 +340,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         access_token: payload.session.access_token,
         refresh_token: payload.session.refresh_token,
       })
-      await syncUserData(email, options?.role ?? payload.user?.user_metadata?.role, {
+      await syncUserData(email, options?.role ?? extractRoleFromAuthUser(payload.user), {
         businessName: options?.businessName ?? payload.user?.user_metadata?.business_name,
         businessLocation: options?.businessLocation ?? payload.user?.user_metadata?.business_location,
       })

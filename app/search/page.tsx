@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import Layout from '../../src/components/Layout'
 import SwipeCard from '../../src/components/SwipeCard'
@@ -41,16 +42,83 @@ function formatPrice(price: number | null) {
   return `$${price.toLocaleString('es-CL')}`
 }
 
+function normalizeText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+}
+
+const VALID_CATEGORIES = new Set<EventCategory>(CATEGORIES.map((c) => c.key))
+type SortMode = 'relevance' | 'distance' | 'rating'
+
+const SORT_OPTIONS: Array<{ key: SortMode; label: string }> = [
+  { key: 'relevance', label: 'Relevancia' },
+  { key: 'distance', label: 'Distancia' },
+  { key: 'rating', label: 'Rating' },
+]
+
+function isEventCategory(value: string): value is EventCategory {
+  return VALID_CATEGORIES.has(value as EventCategory)
+}
+
+function isSortMode(value: string): value is SortMode {
+  return value === 'relevance' || value === 'distance' || value === 'rating'
+}
+
 function SearchPageContent() {
   const { places, userLocation, loading, locating } = useNearbyPlacesContext()
   const { locatarioEvents } = useLocatarioEvents()
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
 
-  const [query, setQuery] = useState('')
+  const initialQuery = searchParams.get('q') ?? ''
+  const initialCategory = searchParams.get('cat')
+  const initialDistance = searchParams.get('dist')
+  const initialOnlyFree = searchParams.get('free') === '1'
+  const initialSort = searchParams.get('sort')
+
+  const parsedInitialDistance =
+    initialDistance === null
+      ? 5
+      : initialDistance === 'any'
+      ? null
+      : Number.isFinite(Number(initialDistance))
+      ? Number(initialDistance)
+      : 5
+
+  const [query, setQuery] = useState(initialQuery)
   const [isFiltersOpen, setIsFiltersOpen] = useState(false)
-  const [activeCategory, setActiveCategory] = useState<EventCategory | null>(null)
-  const [maxDistanceKm, setMaxDistanceKm] = useState<number | null>(5)
-  const [onlyFree, setOnlyFree] = useState(false)
+  const [activeCategory, setActiveCategory] = useState<EventCategory | null>(
+    initialCategory && isEventCategory(initialCategory) ? initialCategory : null,
+  )
+  const [maxDistanceKm, setMaxDistanceKm] = useState<number | null>(parsedInitialDistance)
+  const [onlyFree, setOnlyFree] = useState(initialOnlyFree)
+  const [sortMode, setSortMode] = useState<SortMode>(
+    initialSort && isSortMode(initialSort) ? initialSort : 'relevance',
+  )
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
+  const deferredQuery = useDeferredValue(query)
+
+  useEffect(() => {
+    const params = new URLSearchParams()
+
+    if (query.trim()) params.set('q', query.trim())
+    if (activeCategory) params.set('cat', activeCategory)
+    if (maxDistanceKm !== null && maxDistanceKm !== 5) params.set('dist', String(maxDistanceKm))
+    if (maxDistanceKm === null) params.set('dist', 'any')
+    if (onlyFree) params.set('free', '1')
+    if (sortMode !== 'relevance') params.set('sort', sortMode)
+
+    const nextQuery = params.toString()
+    const currentQuery = searchParams.toString()
+    if (nextQuery === currentQuery) return
+
+    const nextUrl = nextQuery ? `${pathname}?${nextQuery}` : pathname
+    router.replace(nextUrl, { scroll: false })
+  }, [activeCategory, maxDistanceKm, onlyFree, pathname, query, router, searchParams, sortMode])
 
   const allEvents = useMemo<Event[]>(() => {
     if (!userLocation) return []
@@ -76,25 +144,117 @@ function SearchPageContent() {
   }, [places, locatarioEvents, userLocation])
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return allEvents.filter((e) => {
-      const matchesQuery =
-        !q || e.title.toLowerCase().includes(q) || e.address.toLowerCase().includes(q)
+    const q = normalizeText(deferredQuery)
+    const categoryLabelMap = new Map(CATEGORIES.map((c) => [c.key, normalizeText(c.label)]))
+
+    return allEvents
+      .map((e) => {
+        const normalizedTitle = normalizeText(e.title)
+        const normalizedAddress = normalizeText(e.address)
+        const normalizedCategory = categoryLabelMap.get(e.category) ?? ''
+        const normalizedTags = e.tags.map(normalizeText).join(' ')
+
+        const matchesQuery =
+          !q ||
+          normalizedTitle.includes(q) ||
+          normalizedAddress.includes(q) ||
+          normalizedCategory.includes(q) ||
+          normalizedTags.includes(q)
+
+        if (!matchesQuery) return null
+
+        let score = 0
+        if (q) {
+          if (normalizedTitle.includes(q)) score += 120
+          if (normalizedAddress.includes(q)) score += 70
+          if (normalizedCategory.includes(q)) score += 45
+          if (normalizedTags.includes(q)) score += 25
+        }
+
+        score += (e.rating ?? 0) * 12
+        score -= e.distance * 2.5
+
+        return { event: e, score }
+      })
+      .filter((entry): entry is { event: Event; score: number } => entry !== null)
+      .filter(({ event: e }) => {
       const matchesCategory = activeCategory === null || e.category === activeCategory
       const matchesDistance = maxDistanceKm === null || e.distance <= maxDistanceKm
       const matchesFree = !onlyFree || e.price === null
-      return matchesQuery && matchesCategory && matchesDistance && matchesFree
-    })
-  }, [allEvents, query, activeCategory, maxDistanceKm, onlyFree])
+      return matchesCategory && matchesDistance && matchesFree
+      })
+      .sort((a, b) => {
+        if (sortMode === 'distance') {
+          return a.event.distance - b.event.distance || b.score - a.score
+        }
+
+        if (sortMode === 'rating') {
+          return (b.event.rating ?? 0) - (a.event.rating ?? 0) || a.event.distance - b.event.distance
+        }
+
+        return b.score - a.score || a.event.distance - b.event.distance
+      })
+      .map(({ event }) => event)
+  }, [activeCategory, allEvents, deferredQuery, maxDistanceKm, onlyFree, sortMode])
 
   const activeFilterCount =
-    (activeCategory ? 1 : 0) + (maxDistanceKm !== null ? 1 : 0) + (onlyFree ? 1 : 0)
+    (query.trim() ? 1 : 0) +
+    (activeCategory ? 1 : 0) +
+    (maxDistanceKm !== null && maxDistanceKm !== 5 ? 1 : 0) +
+    (maxDistanceKm === null ? 1 : 0) +
+    (onlyFree ? 1 : 0) +
+    (sortMode !== 'relevance' ? 1 : 0)
 
   function resetFilters() {
     setActiveCategory(null)
     setMaxDistanceKm(5)
     setOnlyFree(false)
   }
+
+  const activeChips = [
+    query.trim()
+      ? {
+          key: 'query',
+          label: `Busqueda: ${query.trim()}`,
+          clear: () => setQuery(''),
+        }
+      : null,
+    activeCategory
+      ? {
+          key: 'category',
+          label: `Categoria: ${CATEGORIES.find((c) => c.key === activeCategory)?.label ?? activeCategory}`,
+          clear: () => setActiveCategory(null),
+        }
+      : null,
+    maxDistanceKm !== null && maxDistanceKm !== 5
+      ? {
+          key: 'distance',
+          label: `Distancia: hasta ${maxDistanceKm} km`,
+          clear: () => setMaxDistanceKm(5),
+        }
+      : null,
+    maxDistanceKm === null
+      ? {
+          key: 'distance-any',
+          label: 'Distancia: cualquiera',
+          clear: () => setMaxDistanceKm(5),
+        }
+      : null,
+    onlyFree
+      ? {
+          key: 'free',
+          label: 'Solo gratis',
+          clear: () => setOnlyFree(false),
+        }
+      : null,
+    sortMode !== 'relevance'
+      ? {
+          key: 'sort',
+          label: `Orden: ${SORT_OPTIONS.find((opt) => opt.key === sortMode)?.label ?? sortMode}`,
+          clear: () => setSortMode('relevance'),
+        }
+      : null,
+  ].filter((chip): chip is { key: string; label: string; clear: () => void } => chip !== null)
 
   const isLoading = loading || locating
 
@@ -128,6 +288,21 @@ function SearchPageContent() {
             </button>
           </div>
 
+          {activeChips.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {activeChips.map((chip) => (
+                <button
+                  key={chip.key}
+                  type="button"
+                  onClick={chip.clear}
+                  className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-200 transition-colors hover:border-white/40"
+                >
+                  {chip.label} ✕
+                </button>
+              ))}
+            </div>
+          )}
+
           <AnimatePresence>
             {isFiltersOpen && (
               <motion.div
@@ -152,6 +327,26 @@ function SearchPageContent() {
                 </div>
 
                 <div className="space-y-3">
+                  <div>
+                    <p className="mb-1 text-[11px] font-semibold text-muted">Ordenar por</p>
+                    <div className="flex flex-wrap gap-2">
+                      {SORT_OPTIONS.map((option) => (
+                        <button
+                          key={option.key}
+                          type="button"
+                          onClick={() => setSortMode(option.key)}
+                          className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                            sortMode === option.key
+                              ? 'border-primary bg-primary text-white'
+                              : 'border-white/20 text-muted hover:border-white/40'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <div>
                     <p className="mb-1 text-[11px] font-semibold text-muted">Tipo de evento</p>
                     <div className="flex flex-wrap gap-2">
@@ -280,7 +475,12 @@ function SearchPageContent() {
           </div>
         ) : (
           <>
-            <p className="mb-3 text-xs text-muted">{filtered.length} lugares encontrados</p>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted">{filtered.length} lugares encontrados</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
+                Orden: {SORT_OPTIONS.find((opt) => opt.key === sortMode)?.label}
+              </p>
+            </div>
             <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
               {filtered.map((event) => (
                 <motion.button
