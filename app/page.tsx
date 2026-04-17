@@ -197,6 +197,28 @@ function HomePageContent() {
       return
     }
 
+    // Actualizar estado local inmediatamente — la tarjeta ya salió de pantalla
+    setLikedIds((prev) => new Set(prev).add(id))
+    setDismissedIds((prev) => new Set(prev).add(id))
+    excludePlace(id)
+    showToast('¡Te interesa! 💚', 'like')
+
+    showCarretee({ id: likedEvent.id, title: likedEvent.title, address: likedEvent.address })
+
+    const likedPlace = places.find((p) => p.placeId === likedEvent.id)
+    if (likedPlace) {
+      setSelectedDestination({
+        placeId: likedEvent.id,
+        title: likedEvent.title,
+        position: likedPlace.position,
+      })
+    }
+
+    if (likedEvent.websiteUrl) {
+      window.open(likedEvent.websiteUrl, '_blank', 'noopener,noreferrer')
+    }
+
+    // Persistir en backend — si falla no revertimos (la tarjeta ya salió)
     if (hasSupabaseEnv) {
       try {
         await fetchApi('/api/events/like', {
@@ -212,50 +234,21 @@ function HomePageContent() {
         const message = error instanceof Error ? error.message : ''
         if (message.toLowerCase().includes('sesión') || message.toLowerCase().includes('token')) {
           showToast('Tu sesión expiró. Inicia sesión nuevamente.', 'nope')
-          return
         }
-        showToast('No se pudo registrar tu like.', 'nope')
         return
       }
     }
 
-    setLikedIds((prev) => new Set(prev).add(id))
-    setDismissedIds((prev) => new Set(prev).add(id))
-    excludePlace(id)
-    showToast('¡Te interesa! 💚', 'like')
-
     try {
       await updateUser({ likedEvents: Array.from(new Set([...(user.likedEvents ?? []), likedEvent.id])) })
     } catch {
-      // El like ya fue persistido, solo falló la sincronización local del perfil.
+      // Fallo silencioso de sync de perfil — el like ya fue persistido en Supabase.
     }
 
-    showCarretee({
-      id: likedEvent.id,
-      title: likedEvent.title,
-      address: likedEvent.address,
-    })
-
-    // Mostrar ruta en el mapa lateral si el lugar tiene posición conocida
-    const likedPlace = places.find((p) => p.placeId === likedEvent.id)
-    if (likedPlace) {
-      setSelectedDestination({
-        placeId: likedEvent.id,
-        title: likedEvent.title,
-        position: likedPlace.position,
-      })
-    }
-
-    // El backend ya creó la sala y unió al usuario en /api/events/like.
-    // Solo recargamos la lista de salas en el contexto de chat.
     try {
       await joinRoom(likedEvent.id, likedEvent.title, likedEvent.imageUrl, likedEvent.address)
     } catch {
-      // No bloquear el flujo si falla la sincronización del chat
-    }
-
-    if (likedEvent.websiteUrl) {
-      window.open(likedEvent.websiteUrl, '_blank', 'noopener,noreferrer')
+      // No bloquear el flujo si falla la sincronización del chat.
     }
   }, [events, excludePlace, joinRoom, places, setSelectedDestination, updateUser, user])
 
@@ -276,6 +269,12 @@ function HomePageContent() {
 
     const isCurrentlySaved = savedIds.has(id)
 
+    // Actualizar estado optimisticamente antes del fetch
+    const nextSaved = new Set(savedIds)
+    if (nextSaved.has(id)) nextSaved.delete(id)
+    else nextSaved.add(id)
+    setSavedIds(nextSaved)
+
     if (hasSupabaseEnv) {
       try {
         if (isCurrentlySaved) {
@@ -292,29 +291,25 @@ function HomePageContent() {
           })
         }
       } catch (error) {
+        // Revertir el estado optimista si falla la API
+        setSavedIds(savedIds)
         const message = error instanceof Error ? error.message : ''
         if (message.toLowerCase().includes('sesión') || message.toLowerCase().includes('token')) {
           showToast('Tu sesión expiró. Inicia sesión nuevamente.', 'nope')
-          return
+        } else {
+          showToast(isCurrentlySaved ? 'No se pudo quitar de guardados.' : 'No se pudo guardar el evento.', 'nope')
         }
-        showToast(isCurrentlySaved ? 'No se pudo quitar de guardados.' : 'No se pudo guardar el evento.', 'nope')
         return
       }
     }
 
-    const nextSaved = new Set(savedIds)
-    if (nextSaved.has(id)) nextSaved.delete(id)
-    else nextSaved.add(id)
-
-    setSavedIds(nextSaved)
-
     try {
       await updateUser({ savedEvents: Array.from(nextSaved) })
     } catch {
-      // El guardado ya fue persistido, solo falló la sincronización local del perfil.
+      // Fallo silencioso de sync de perfil — el guardado ya fue persistido en Supabase.
     }
 
-    showToast('Evento guardado 🔖', 'save')
+    showToast(!isCurrentlySaved ? 'Evento guardado 🔖' : 'Quitado de guardados', 'save')
   }, [events, savedIds, updateUser, user])
 
   const visibleEvents = events.slice(0, 3)

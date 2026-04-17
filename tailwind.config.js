@@ -18,6 +18,21 @@ export default {
         surface: '#07040F',     // fondo base casi negro-púrpura
         card: '#100A1F',        // superficies de tarjeta
         muted: '#A5B4FC',       // texto secundario (azul-lavanda)
+        // ── Admin panel palette (enterprise dark) ────────
+        em: {
+          bg: '#0B0E11',
+          surface: '#15191C',
+          border: '#1E2329',
+          muted: '#848E9C',
+          text: '#EAECEF',
+          'text-dim': '#B7BDC6',
+          accent: '#FF6B00',
+          'accent-light': '#FF8C3B',
+          'accent-dark': '#CC5500',
+          positive: '#0ECB81',
+          negative: '#F6465D',
+          warning: '#F0B90B',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
