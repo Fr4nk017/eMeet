@@ -2,36 +2,15 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import dynamic from 'next/dynamic'
-import { Users, CalendarDays, ShieldAlert, Activity, RefreshCw } from 'lucide-react'
+import { CalendarDays, MessageSquare, Heart, Users, RefreshCw } from 'lucide-react'
 import { useAuth } from '@/src/context/AuthContext'
 import { getSupabaseBrowserClient, hasSupabaseEnv } from '@/src/lib/supabase'
 import KpiCard, { KpiCardSkeleton } from '@/src/components/admin/KpiCard'
-import EventsTable from '@/src/components/admin/EventsTable'
-import type { AdminEvent, EventStatus } from '@/src/components/admin/EventsTable'
-
-// Charts are client-only (recharts uses browser APIs)
-const TicketAreaChart = dynamic(() => import('@/src/components/admin/TicketAreaChart'), {
-  ssr: false,
-  loading: () => <div className="h-[220px] animate-pulse rounded-lg bg-white/5" />,
-})
-const CategoryDonut = dynamic(() => import('@/src/components/admin/CategoryDonut'), {
-  ssr: false,
-  loading: () => <div className="h-[300px] animate-pulse rounded-lg bg-white/5" />,
-})
+import EventsTable, { EventsTableSkeleton } from '@/src/components/admin/EventsTable'
+import type { AdminEvent } from '@/src/components/admin/EventsTable'
+import { cn } from '@/src/lib/cn'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-type Kpis = {
-  totalProfiles: number
-  locatariosWithEvents: number
-  totalEvents: number
-  totalCommunities: number
-  totalLikes: number
-  totalSaves: number
-  totalMessages: number
-  reportsPending?: number
-}
 
 type RawRecentEvent = {
   id: string
@@ -40,31 +19,33 @@ type RawRecentEvent = {
   address: string
   created_at: string
   organizer_name: string
-  status?: EventStatus
+  status?: 'live' | 'draft' | 'flagged' // migración 006 añade esta columna
+}
+
+type AdminKpis = {
+  totalEvents: number
+  totalCommunities: number
+  totalLikes: number
+  totalMessages: number
 }
 
 type AdminStats = {
-  kpis: Kpis
-  recentProfiles: { id: string; name: string; created_at: string }[]
+  kpis: AdminKpis
   recentEvents: RawRecentEvent[]
-  recentCommunities: { id: string; event_title: string; created_at: string }[]
 }
 
-// Status rotation for demo (status field not in API yet)
-const DEMO_STATUSES: EventStatus[] = ['live', 'draft', 'draft', 'flagged', 'live']
-
-function toAdminEvent(e: RawRecentEvent, i: number): AdminEvent {
+function toAdminEvent(e: RawRecentEvent): AdminEvent {
   return {
     id: e.id,
     title: e.title,
     category: e.category,
     organizerName: e.organizer_name,
-    status: e.status ?? DEMO_STATUSES[i % DEMO_STATUSES.length],
+    status: e.status ?? 'draft',
     createdAt: e.created_at,
   }
 }
 
-// ─── Section wrapper ──────────────────────────────────────────────────────────
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -80,7 +61,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function AdminPage() {
+export default function AdminEventsPage() {
   const { user, isAuthReady } = useAuth()
   const router = useRouter()
   const [stats, setStats] = useState<AdminStats | null>(null)
@@ -98,23 +79,19 @@ export default function AdminPage() {
     if (!user || user.role !== 'admin') return
     setLoading(true)
     setError(null)
-
     try {
       let token: string | null = null
       if (hasSupabaseEnv) {
         const { data } = await getSupabaseBrowserClient().auth.getSession()
         token = data.session?.access_token ?? null
       }
-
       const res = await fetch('/api/admin/stats', {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
-
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null
         throw new Error(body?.error ?? 'Error al cargar estadísticas')
       }
-
       setStats((await res.json()) as AdminStats)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error desconocido')
@@ -123,11 +100,8 @@ export default function AdminPage() {
     }
   }, [user])
 
-  useEffect(() => {
-    load()
-  }, [load, refreshKey])
+  useEffect(() => { load() }, [load, refreshKey])
 
-  // ── Auth guard ────────────────────────────────────────────────────────────
   if (!isAuthReady) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -135,51 +109,26 @@ export default function AdminPage() {
       </div>
     )
   }
-
   if (!user || user.role !== 'admin') return null
 
   const kpis = stats?.kpis
   const events: AdminEvent[] = (stats?.recentEvents ?? []).map(toAdminEvent)
 
-  // KPI config — real data where available, mock placeholders where API is pending
+  // Todos los KPIs son reales desde /api/admin/stats
   const kpiCards = [
-    {
-      label: 'GMV Total',
-      value: '$124.500', // TODO: wire to revenue/ticket-sales endpoint
-      change: 8.4,
-      icon: Activity,
-      accentColor: '#FF6B00',
-    },
-    {
-      label: 'Usuarios activos',
-      value: kpis ? kpis.totalProfiles.toLocaleString('es-CL') : '—',
-      change: 2.4,
-      icon: Users,
-      accentColor: '#3B82F6',
-    },
-    {
-      label: 'Reportes pendientes',
-      value: kpis ? String(kpis.reportsPending ?? 0) : '—',
-      change: -3.1,
-      icon: ShieldAlert,
-      accentColor: '#F6465D',
-    },
-    {
-      label: 'Server uptime',
-      value: '99.97%', // TODO: wire to infra health endpoint
-      change: 0,
-      icon: CalendarDays,
-      accentColor: '#0ECB81',
-    },
+    { label: 'Total eventos', value: kpis ? kpis.totalEvents.toLocaleString('es-CL') : '—', change: undefined, icon: CalendarDays, accentColor: '#3B82F6' },
+    { label: 'Comunidades activas', value: kpis ? kpis.totalCommunities.toLocaleString('es-CL') : '—', change: undefined, icon: Users, accentColor: '#0ECB81' },
+    { label: 'Likes totales', value: kpis ? kpis.totalLikes.toLocaleString('es-CL') : '—', change: undefined, icon: Heart, accentColor: '#F6465D' },
+    { label: 'Mensajes enviados', value: kpis ? kpis.totalMessages.toLocaleString('es-CL') : '—', change: undefined, icon: MessageSquare, accentColor: '#A855F7' },
   ]
 
   return (
     <div className="min-h-full p-6">
-      {/* ── Page header ── */}
+      {/* Header */}
       <div className="mb-7 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-black tracking-tight text-em-text">Overview</h1>
-          <p className="mt-0.5 text-xs text-em-muted">Panel de control · eMeet</p>
+          <h1 className="text-xl font-black tracking-tight text-em-text">Eventos</h1>
+          <p className="mt-0.5 text-xs text-em-muted">Publicaciones recientes · eMeet</p>
         </div>
         <button
           type="button"
@@ -187,60 +136,40 @@ export default function AdminPage() {
           disabled={loading}
           className="flex items-center gap-2 rounded-lg border border-em-border bg-em-surface px-3 py-2 text-xs font-medium text-em-muted transition-colors hover:border-white/30 hover:text-em-text disabled:opacity-50"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
           Actualizar
         </button>
       </div>
 
-      {/* ── Error banner ── */}
       {error && (
         <div className="mb-6 rounded-lg border border-em-negative/30 bg-em-negative/10 px-4 py-3 text-sm text-em-negative">
           {error}
         </div>
       )}
 
-      {/* ── 12-col responsive grid ── */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-        {/* KPI Cards */}
+        {/* KPIs — todos reales */}
         <div className="col-span-1 grid grid-cols-2 gap-3 md:col-span-12 lg:grid-cols-4">
           {loading
             ? Array.from({ length: 4 }).map((_, i) => <KpiCardSkeleton key={i} />)
             : kpiCards.map((c) => (
-                <KpiCard
-                  key={c.label}
-                  label={c.label}
-                  value={c.value}
-                  change={c.change}
-                  icon={c.icon}
-                  accentColor={c.accentColor}
-                />
+                <KpiCard key={c.label} label={c.label} value={c.value} change={c.change} icon={c.icon} accentColor={c.accentColor} />
               ))}
         </div>
 
-        {/* Area chart — 8/12 cols */}
-        <div className="col-span-1 md:col-span-8">
-          <Section title="Venta de Tickets vs Tiempo">
-            <div className="rounded-lg border border-em-border bg-em-surface p-5">
-              <TicketAreaChart />
-            </div>
-          </Section>
-        </div>
-
-        {/* Donut chart — 4/12 cols */}
-        <div className="col-span-1 md:col-span-4">
-          <Section title="Distribución de Categorías">
-            <div className="rounded-lg border border-em-border bg-em-surface p-5">
-              <CategoryDonut />
-            </div>
-          </Section>
-        </div>
-
-        {/* Events table — full width */}
+        {/* Tabla real de eventos recientes */}
         <div className="col-span-1 md:col-span-12">
-          <Section title="Eventos Recientes">
+          <Section title="Eventos recientes">
             <div className="overflow-hidden rounded-lg border border-em-border bg-em-surface">
-              <EventsTable events={events} loading={loading} />
+              {loading ? (
+                <EventsTableSkeleton />
+              ) : (
+                <EventsTable events={events} loading={false} />
+              )}
             </div>
+            <p className="mt-2 text-[11px] text-em-muted">
+              Mostrando los 8 más recientes. El estado será real tras ejecutar <code className="rounded bg-white/5 px-1">006_transactions_and_event_status.sql</code> en Supabase.
+            </p>
           </Section>
         </div>
       </div>
