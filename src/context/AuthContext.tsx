@@ -12,10 +12,14 @@ type RegisterOptions = {
   businessLocation?: string
 }
 
+type RegisterResult = { needsEmailVerification: true; email: string } | { needsEmailVerification: false }
+
 interface AuthContextValue extends AuthState {
   isAuthReady: boolean
-  login: (email: string, password: string) => Promise<void>
-  register: (name: string, email: string, password: string, options?: RegisterOptions) => Promise<void>
+  login: (email: string, password: string) => Promise<User['role']>
+  loginWithGoogle: () => Promise<void>
+  loginWithApple: () => Promise<void>
+  register: (name: string, email: string, password: string, options?: RegisterOptions) => Promise<RegisterResult>
   logout: () => Promise<void>
   updateUser: (data: Partial<User>) => Promise<void>
 }
@@ -60,13 +64,6 @@ type AuthResponsePayload = {
     access_token: string
     refresh_token: string
   } | null
-}
-
-function resolveRole(email: string, roleHint?: User['role']): User['role'] {
-  if (roleHint === 'admin' || roleHint === 'locatario' || roleHint === 'user') {
-    return roleHint
-  }
-  return inferLocalRoleByEmail(email)
 }
 
 function readRoleBucket(value: unknown): User['role'] | undefined {
@@ -204,17 +201,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     roleHint?: User['role'],
     businessMeta?: { businessName?: string | null; businessLocation?: string | null },
   ) => {
-    const [profile, likedEvents, savedEvents] = await Promise.all([
+    const [profileResult, likedResult, savedResult] = await Promise.allSettled([
       fetchApi<ProfilePayload>('/api/profile', { method: 'GET' }),
       fetchApi<UserEventPayload[]>('/api/events/liked', { method: 'GET' }),
       fetchApi<UserEventPayload[]>('/api/events/saved', { method: 'GET' }),
     ])
 
+    if (profileResult.status === 'rejected') throw profileResult.reason
+
+    const profile = profileResult.value
+    const likedEvents = likedResult.status === 'fulfilled' ? likedResult.value : []
+    const savedEvents = savedResult.status === 'fulfilled' ? savedResult.value : []
+
     const nextUser: User = {
       id: profile.id,
       name: profile.name,
       email,
-      role: resolveRole(email, roleHint),
+      role: roleHint ?? 'user',
       avatarUrl: profile.avatar_url ?? '',
       bio: profile.bio ?? '',
       interests: profile.interests ?? [],
@@ -286,13 +289,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [syncFromApi])
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string): Promise<User['role']> => {
     if (!hasSupabaseEnv) {
       const previous = loadLocalUser()
       const localUser = createLocalUser(previous?.name ?? email.split('@')[0], email, previous)
       saveLocalUser(localUser)
       setAuthState({ user: localUser, isAuthenticated: true })
-      return
+      return localUser.role
     }
 
     const payload = await fetchApi<AuthResponsePayload>('/api/auth/login', {
@@ -307,20 +310,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
     }
 
-    // Usamos syncUserData en lugar de syncFromApi: la sesión ya existe,
-    // no hace falta un round-trip extra a /api/auth/session.
-    await syncUserData(email, extractRoleFromAuthUser(payload.user), {
+    const role = extractRoleFromAuthUser(payload.user) ?? 'user'
+    await syncUserData(email, role, {
       businessName: payload.user?.user_metadata?.business_name,
       businessLocation: payload.user?.user_metadata?.business_location,
     })
+    return role
   }, [syncUserData])
 
-  const register = useCallback(async (name: string, email: string, password: string, options?: RegisterOptions) => {
+  const register = useCallback(async (name: string, email: string, password: string, options?: RegisterOptions): Promise<RegisterResult> => {
     if (!hasSupabaseEnv) {
       const localUser = createLocalUser(name, email, loadLocalUser(), options)
       saveLocalUser(localUser)
       setAuthState({ user: localUser, isAuthenticated: true })
-      return
+      return { needsEmailVerification: false }
     }
 
     const payload = await fetchApi<AuthResponsePayload>('/api/auth/register', {
@@ -344,13 +347,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         businessName: options?.businessName ?? payload.user?.user_metadata?.business_name,
         businessLocation: options?.businessLocation ?? payload.user?.user_metadata?.business_location,
       })
-      return
+      return { needsEmailVerification: false }
     }
 
-    // Cuando Supabase requiere confirmación por email, signUp puede devolver user pero sin session.
-    // Evitamos llamar endpoints protegidos sin token y devolvemos un mensaje claro al usuario.
-    throw new Error('Registro creado. Revisa tu correo para confirmar la cuenta antes de iniciar sesión.')
+    // Supabase requiere confirmación por email — user creado pero sin sesión activa.
+    return { needsEmailVerification: true, email }
   }, [syncUserData])
+
+  const loginWithGoogle = useCallback(async () => {
+    const { error } = await getSupabaseBrowserClient().auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    })
+    if (error) throw error
+  }, [])
+
+  const loginWithApple = useCallback(async () => {
+    const { error } = await getSupabaseBrowserClient().auth.signInWithOAuth({
+      provider: 'apple',
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    })
+    if (error) throw error
+  }, [])
 
   const logout = useCallback(async () => {
     if (!hasSupabaseEnv) {
@@ -404,7 +422,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [authState.user])
 
   return (
-    <AuthContext.Provider value={{ ...authState, isAuthReady, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ ...authState, isAuthReady, login, loginWithGoogle, loginWithApple, register, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   )

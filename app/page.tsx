@@ -119,6 +119,7 @@ function HomePageContent() {
     togglePlaceType,
     refreshPlaces,
     setSelectedDestination,
+    setActiveEventLocation,
   } = useNearbyPlacesContext()
   const { joinRoom } = useChatContext()
   const { user, updateUser } = useAuth()
@@ -313,6 +314,24 @@ function HomePageContent() {
   }, [events, savedIds, updateUser, user])
 
   const visibleEvents = events.slice(0, 3)
+
+  // Highlight the top card's location on the side map
+  useEffect(() => {
+    const active = visibleEvents[0]
+    if (!active) { setActiveEventLocation(null); return }
+
+    if (active.lat != null && active.lng != null) {
+      setActiveEventLocation({ id: active.id, lat: active.lat, lng: active.lng, title: active.title })
+    } else {
+      const place = places.find(p => p.placeId === active.id)
+      if (place) {
+        setActiveEventLocation({ id: active.id, lat: place.position.lat, lng: place.position.lng, title: active.title })
+      } else {
+        setActiveEventLocation(null)
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleEvents[0]?.id])
 
   const activeFilterCount =
     (selectedDistanceKm !== 3 ? 1 : 0) +

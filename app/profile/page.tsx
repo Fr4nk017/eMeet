@@ -10,6 +10,7 @@ import { useChatContext } from '../../src/context/ChatContext'
 import { getSupabaseBrowserClient, hasSupabaseEnv } from '../../src/lib/supabase'
 import { CATEGORY_EMOJI } from '../../src/data/mockEvents'
 import type { EventCategory } from '../../src/types'
+import { useImageUpload } from '../../src/hooks/useImageUpload'
 import {
   HiMapPin, HiPencil, HiArrowRightOnRectangle, HiEnvelope,
   HiCalendarDays, HiHeart, HiBookmark, HiSparkles, HiChevronRight,
@@ -66,6 +67,23 @@ function ProfilePageContent() {
   const [avatarError, setAvatarError] = useState(false)
   const [savedPreviews, setSavedPreviews] = useState<SavedEventPreview[]>([])
   const [loadingPreviews, setLoadingPreviews] = useState(true)
+
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+  const { upload: uploadAvatar, uploading: uploadingAvatar } = useImageUpload({
+    bucket: 'avatars',
+    folder: user?.id ?? 'unknown',
+  })
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    const url = await uploadAvatar(file)
+    if (url) {
+      setAvatarError(false)
+      await updateUser({ avatarUrl: url }).catch(() => {})
+    }
+  }
 
   // Inline editing
   const [editingField, setEditingField] = useState<'name' | 'bio' | null>(null)
@@ -232,9 +250,23 @@ function ProfilePageContent() {
           {/* ── Avatar + info editable ── */}
           <motion.div variants={itemVariants} className="mb-6 -mt-12 flex flex-col items-center text-center">
             <div className="relative mb-3">
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
               <div className="rounded-full bg-gradient-to-br from-primary via-purple-500 to-pink-500 p-[3px] shadow-lg shadow-primary/30">
                 <div className="flex h-24 w-24 items-center justify-center rounded-full bg-surface p-0.5">
-                  {!avatarError && user.avatarUrl ? (
+                  {uploadingAvatar ? (
+                    <div className="flex h-24 w-24 items-center justify-center rounded-full bg-surface">
+                      <svg className="h-6 w-6 animate-spin text-primary" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                    </div>
+                  ) : !avatarError && user.avatarUrl ? (
                     <img
                       src={user.avatarUrl}
                       alt={user.name}
@@ -253,7 +285,11 @@ function ProfilePageContent() {
                   )}
                 </div>
               </div>
-              <button className="absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-surface bg-primary shadow-md">
+              <button
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-surface bg-primary shadow-md disabled:opacity-60"
+              >
                 <HiPencil className="h-3.5 w-3.5 text-white" />
               </button>
             </div>

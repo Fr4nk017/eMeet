@@ -1,6 +1,26 @@
 import type { ScrapedPlace, PlaceType } from '../types'
 
 const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL ?? '').trim().replace(/\/$/, '')
+const PLACES_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_PLACES_TIMEOUT_MS ?? 9000)
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === 'AbortError'
+}
+
+async function fetchJsonWithTimeout<T>(input: string, init?: RequestInit): Promise<T> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), Math.max(1000, PLACES_TIMEOUT_MS))
+
+  try {
+    const response = await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    })
+    return (await response.json()) as T
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
 
 // ─── Configuración visual por tipo de lugar ──────────────────────────────────
 
@@ -100,7 +120,7 @@ export async function searchNearbyPlaces(
 
     // Buscar cada tipo en paralelo
     const searches = types.map((type) =>
-      fetch(`${BACKEND_URL}/places/search-nearby`, {
+      fetchJsonWithTimeout<PlacesSearchNearbyResponse>(`${BACKEND_URL}/places/search-nearby`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -109,12 +129,15 @@ export async function searchNearbyPlaces(
           type: PLACE_TYPE_MAPPING[type],
         }),
       })
-        .then(async (res): Promise<{ type: PlaceType; places: GooglePlaceSearchResult[] }> => {
-          const payload = (await res.json()) as PlacesSearchNearbyResponse
+        .then(async (payload): Promise<{ type: PlaceType; places: GooglePlaceSearchResult[] }> => {
           return { type, places: payload.places ?? [] }
         })
         .catch((err) => {
-          console.error(`Error searching ${type}:`, err)
+          if (isAbortError(err)) {
+            console.warn(`Timeout searching ${type}`)
+          } else {
+            console.error(`Error searching ${type}:`, err)
+          }
           return { type, places: [] }
         }),
     )
@@ -175,8 +198,14 @@ export async function fetchPlaceDetails(placeId: string): Promise<Partial<Scrape
   }
 
   try {
-    const response = await fetch(`${BACKEND_URL}/places/${placeId}/details`)
-    const { details } = await response.json()
+    const { details } = await fetchJsonWithTimeout<{ details?: {
+      photos?: Array<{ photo_reference?: string }>
+      website?: string
+      formatted_phone_number?: string
+      international_phone_number?: string
+      opening_hours?: { weekday_text?: string[] }
+      rating?: number
+    } | null }>(`${BACKEND_URL}/places/${placeId}/details`)
 
     if (!details) {
       return { photoUrl: null, website: null, phone: null, openingHours: null }
@@ -192,7 +221,11 @@ export async function fetchPlaceDetails(placeId: string): Promise<Partial<Scrape
       rating: details.rating || undefined,
     }
   } catch (error) {
-    console.error('Error in fetchPlaceDetails:', error)
+    if (isAbortError(error)) {
+      console.warn('Timeout in fetchPlaceDetails')
+    } else {
+      console.error('Error in fetchPlaceDetails:', error)
+    }
     return { photoUrl: null, website: null, phone: null, openingHours: null }
   }
 }

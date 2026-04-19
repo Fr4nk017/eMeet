@@ -3,9 +3,13 @@
 import { useAuth } from '@/src/context/AuthContext'
 import { useLocatarioEvents } from '@/src/context/LocatarioEventsContext'
 import { useRouter } from 'next/navigation'
-import { FiLogOut, FiPlus, FiBarChart2, FiCalendar, FiAlertCircle, FiLoader, FiTrash2, FiHome, FiMapPin, FiNavigation } from 'react-icons/fi'
+import { FiLogOut, FiPlus, FiBarChart2, FiCalendar, FiAlertCircle, FiLoader, FiTrash2, FiHome, FiMapPin } from 'react-icons/fi'
 import { useEffect, useRef, useState } from 'react'
 import type { EventCategory } from '@/src/types'
+import { ImageUpload } from '@/src/components/ImageUpload'
+import { VideoUpload } from '@/src/components/VideoUpload'
+import { DateTimePicker } from '@/src/components/DateTimePicker'
+import { LocationPickerMap } from '@/src/components/LocationPickerMap'
 
 const EMPTY_FORM = {
   title: '',
@@ -14,6 +18,8 @@ const EMPTY_FORM = {
   price: '',
   address: '',
   imageUrl: '',
+  videoUrl: '',
+  mediaType: 'image' as 'image' | 'video',
   category: 'fiesta' as EventCategory,
 }
 
@@ -26,7 +32,6 @@ export default function LocatarioPage() {
   const [feedback, setFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [gpsStatus, setGpsStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [eventForm, setEventForm] = useState({
     ...EMPTY_FORM,
@@ -64,7 +69,8 @@ export default function LocatarioPage() {
         date: eventForm.date,
         address: eventForm.address || user?.businessLocation || user?.location || 'Santiago, Chile',
         price: eventForm.price.trim() === '' ? null : Number(eventForm.price),
-        imageUrl: eventForm.imageUrl,
+        imageUrl: eventForm.mediaType === 'image' ? eventForm.imageUrl : undefined,
+        videoUrl: eventForm.mediaType === 'video' ? eventForm.videoUrl : undefined,
         organizerName: user?.businessName || user?.name || '',
         organizerAvatar: user?.avatarUrl || 'https://i.pravatar.cc/150?img=32',
         lat: gpsCoords?.lat,
@@ -73,7 +79,6 @@ export default function LocatarioPage() {
 
       setEventForm({ ...EMPTY_FORM, address: user?.businessLocation ?? user?.location ?? '' })
       setGpsCoords(null)
-      setGpsStatus('idle')
       setShowCreateEvent(false)
       setFeedback({ message: '¡Evento publicado! Ya aparece en el feed principal.', type: 'success' })
     } catch (err) {
@@ -84,35 +89,6 @@ export default function LocatarioPage() {
     }
   }
 
-  const handleGetGPS = () => {
-    if (!navigator.geolocation) {
-      setFeedback({ message: 'Tu navegador no soporta geolocalización.', type: 'error' })
-      return
-    }
-    setGpsStatus('loading')
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords
-        setGpsCoords({ lat: latitude, lng: longitude })
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=es`,
-          )
-          const data = (await res.json()) as { display_name?: string }
-          const addr = data.display_name ?? `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
-          setEventForm((prev) => ({ ...prev, address: addr }))
-        } catch {
-          setEventForm((prev) => ({ ...prev, address: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}` }))
-        }
-        setGpsStatus('success')
-      },
-      () => {
-        setGpsStatus('error')
-        setFeedback({ message: 'No se pudo obtener tu ubicación. Verifica los permisos del navegador.', type: 'error' })
-      },
-      { enableHighAccuracy: true, timeout: 10000 },
-    )
-  }
 
   const handleDelete = async (eventId: string) => {
     setDeletingId(eventId)
@@ -447,52 +423,78 @@ export default function LocatarioPage() {
                 <option value="teatro">Teatro</option>
                 <option value="deporte">Deporte</option>
               </select>
-              <input
-                type="datetime-local"
+              <DateTimePicker
                 value={eventForm.date}
-                onChange={(e) => setEventForm((prev) => ({ ...prev, date: e.target.value }))}
-                className="w-full bg-surface border border-card focus:border-primary outline-none py-3 px-4 rounded-lg text-white"
+                onChange={(val) => setEventForm((prev) => ({ ...prev, date: val }))}
               />
-              <div className="relative">
+              <div className="space-y-2">
+                <LocationPickerMap
+                  value={gpsCoords}
+                  onLocationChange={(coords, address) => {
+                    setGpsCoords(coords)
+                    setEventForm((prev) => ({ ...prev, address }))
+                  }}
+                />
+                {gpsCoords && (
+                  <div className="flex items-center gap-2 text-xs text-green-400">
+                    <FiMapPin size={12} />
+                    <span className="truncate">{eventForm.address || `${gpsCoords.lat.toFixed(4)}, ${gpsCoords.lng.toFixed(4)}`}</span>
+                  </div>
+                )}
                 <input
                   type="text"
-                  placeholder="Dirección"
+                  placeholder="Dirección (se auto-completa al fijar en el mapa)"
                   value={eventForm.address}
                   onChange={(e) => {
                     setEventForm((prev) => ({ ...prev, address: e.target.value }))
                     setGpsCoords(null)
-                    setGpsStatus('idle')
                   }}
-                  className="w-full bg-surface border border-card focus:border-primary outline-none py-3 pl-4 pr-28 rounded-lg text-white placeholder-muted"
+                  className="w-full bg-surface border border-card focus:border-primary outline-none py-2.5 px-4 rounded-lg text-white placeholder-muted text-sm"
                 />
+              </div>
+              {/* Selector imagen / video */}
+              <div className="flex rounded-lg overflow-hidden border border-card">
                 <button
                   type="button"
-                  onClick={handleGetGPS}
-                  disabled={gpsStatus === 'loading'}
-                  title="Usar mi ubicación GPS"
-                  className={`absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors disabled:opacity-60 ${
-                    gpsStatus === 'success'
-                      ? 'bg-green-500/20 text-green-300'
-                      : 'bg-primary/20 hover:bg-primary/30 text-primary-light'
+                  onClick={() => setEventForm((prev) => ({ ...prev, mediaType: 'image', videoUrl: '' }))}
+                  className={`flex-1 py-2 text-sm font-semibold transition-colors ${
+                    eventForm.mediaType === 'image'
+                      ? 'bg-primary text-white'
+                      : 'bg-surface text-muted hover:text-white'
                   }`}
                 >
-                  {gpsStatus === 'loading' ? (
-                    <FiLoader className="animate-spin" size={13} />
-                  ) : gpsStatus === 'success' ? (
-                    <FiMapPin size={13} />
-                  ) : (
-                    <FiNavigation size={13} />
-                  )}
-                  {gpsStatus === 'loading' ? 'Buscando...' : gpsStatus === 'success' ? 'GPS ✓' : 'GPS'}
+                  Imagen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEventForm((prev) => ({ ...prev, mediaType: 'video', imageUrl: '' }))}
+                  className={`flex-1 py-2 text-sm font-semibold transition-colors ${
+                    eventForm.mediaType === 'video'
+                      ? 'bg-primary text-white'
+                      : 'bg-surface text-muted hover:text-white'
+                  }`}
+                >
+                  Video (15-20 s)
                 </button>
               </div>
-              <input
-                type="url"
-                placeholder="URL de imagen (opcional)"
-                value={eventForm.imageUrl}
-                onChange={(e) => setEventForm((prev) => ({ ...prev, imageUrl: e.target.value }))}
-                className="w-full bg-surface border border-card focus:border-primary outline-none py-3 px-4 rounded-lg text-white placeholder-muted"
-              />
+
+              {eventForm.mediaType === 'image' ? (
+                <ImageUpload
+                  bucket="event-images"
+                  folder="events"
+                  value={eventForm.imageUrl}
+                  onChange={(url) => setEventForm((prev) => ({ ...prev, imageUrl: url }))}
+                  placeholder="Subir imagen del evento"
+                  aspectRatio="video"
+                />
+              ) : (
+                <VideoUpload
+                  bucket="event-videos"
+                  folder="events"
+                  value={eventForm.videoUrl}
+                  onChange={(url) => setEventForm((prev) => ({ ...prev, videoUrl: url }))}
+                />
+              )}
               <input
                 type="number"
                 placeholder="Precio (vacío = gratis)"
