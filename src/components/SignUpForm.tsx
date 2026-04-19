@@ -3,7 +3,27 @@
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
-import { FiUser, FiUserPlus, FiMail, FiLock, FiEye, FiEyeOff, FiBriefcase } from 'react-icons/fi'
+import {
+  FiUser, FiUserPlus, FiMail, FiLock, FiEye, FiEyeOff,
+  FiBriefcase, FiMapPin, FiCheck, FiX,
+} from 'react-icons/fi'
+
+function getPasswordStrength(password: string): { score: number; label: string; color: string } {
+  if (!password) return { score: 0, label: '', color: '' }
+  let score = 0
+  if (password.length >= 8) score++
+  if (/[A-Z]/.test(password)) score++
+  if (/[0-9]/.test(password)) score++
+  if (/[^A-Za-z0-9]/.test(password)) score++
+  const levels = [
+    { score: 0, label: '', color: '' },
+    { score: 1, label: 'Muy débil', color: 'bg-red-500' },
+    { score: 2, label: 'Débil', color: 'bg-orange-400' },
+    { score: 3, label: 'Buena', color: 'bg-yellow-400' },
+    { score: 4, label: 'Fuerte', color: 'bg-green-500' },
+  ]
+  return levels[score]
+}
 
 export default function SignUpForm() {
   const router = useRouter()
@@ -55,11 +75,16 @@ export default function SignUpForm() {
 
     try {
       const name = role === 'locatario' ? formData.businessName : formData.name
-      await register(name, formData.email, formData.password, {
+      const result = await register(name, formData.email, formData.password, {
         role,
         businessName: role === 'locatario' ? formData.businessName : undefined,
         businessLocation: role === 'locatario' ? formData.location : undefined,
       })
+
+      if (result.needsEmailVerification) {
+        router.push(`/auth/verify-email?email=${encodeURIComponent(formData.email)}`)
+        return
+      }
 
       const next = searchParams.get('next')
       if (next && next.startsWith('/')) {
@@ -75,12 +100,17 @@ export default function SignUpForm() {
     }
   }
 
+  const strength = getPasswordStrength(formData.password)
+  const passwordsMatch = formData.confirmPassword.length > 0 && formData.password === formData.confirmPassword
+  const passwordsMismatch = formData.confirmPassword.length > 0 && formData.password !== formData.confirmPassword
+
+  const inputBase = 'w-full bg-[hsl(222,30%,16%)] border border-white/10 hover:border-[hsl(262,80%,60%)]/30 focus:border-[hsl(262,80%,60%)] outline-none py-3 rounded-xl text-white placeholder-slate-500 transition-colors'
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="space-y-2">
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <div className="space-y-1">
         <h2 className="text-2xl font-semibold text-white">Crea tu cuenta</h2>
         <p className="text-sm text-slate-400">Regístrate como usuario o locatario y comienza a explorar.</p>
-        <p className="text-xs text-slate-500">La cuenta admin no se crea desde este formulario.</p>
       </div>
 
       {error && (
@@ -89,6 +119,7 @@ export default function SignUpForm() {
         </div>
       )}
 
+      {/* Selector de rol */}
       <div>
         <label className="block text-sm font-medium text-slate-300 mb-3">Tipo de cuenta</label>
         <div className="grid grid-cols-2 gap-3">
@@ -119,143 +150,143 @@ export default function SignUpForm() {
         </div>
       </div>
 
+      {/* Nombre (usuario regular) */}
       {role === 'user' && (
         <div>
-          <label htmlFor="name" className="block text-sm font-medium text-white mb-2">
-            Tu nombre
-          </label>
+          <label htmlFor="name" className="block text-sm font-medium text-white mb-2">Tu nombre</label>
           <div className="relative">
             <FiUser className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
-              id="name"
-              name="name"
-              type="text"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              placeholder="Juan Pérez"
-              className="w-full bg-[hsl(222,30%,16%)] border border-white/10 hover:border-[hsl(262,80%,60%)]/30 focus:border-[hsl(262,80%,60%)] outline-none py-3 pl-10 pr-4 rounded-xl text-white placeholder-slate-500 transition-colors"
+              id="name" name="name" type="text"
+              value={formData.name} onChange={handleChange}
+              required placeholder="Juan Pérez"
+              className={`${inputBase} pl-10 pr-4`}
             />
           </div>
         </div>
       )}
 
+      {/* Email */}
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-white mb-2">
-          Correo electrónico
-        </label>
+        <label htmlFor="email" className="block text-sm font-medium text-white mb-2">Correo electrónico</label>
         <div className="relative">
           <FiMail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
-            id="email"
-            name="email"
-            type="email"
-            value={formData.email}
-            onChange={handleChange}
-            required
-            placeholder="tu@email.com"
-            className="w-full bg-[hsl(222,30%,16%)] border border-white/10 hover:border-[hsl(262,80%,60%)]/30 focus:border-[hsl(262,80%,60%)] outline-none py-3 pl-10 pr-4 rounded-xl text-white placeholder-slate-500 transition-colors"
+            id="email" name="email" type="email"
+            value={formData.email} onChange={handleChange}
+            required placeholder="tu@email.com"
+            className={`${inputBase} pl-10 pr-4`}
           />
         </div>
       </div>
 
+      {/* Contraseña + barra de fortaleza */}
       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-white mb-2">
-          Contraseña
-        </label>
+        <label htmlFor="password" className="block text-sm font-medium text-white mb-2">Contraseña</label>
         <div className="relative">
           <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
-            id="password"
-            name="password"
+            id="password" name="password"
             type={showPassword ? 'text' : 'password'}
-            value={formData.password}
-            onChange={handleChange}
-            required
-            placeholder="••••••••"
-            className="w-full bg-[hsl(222,30%,16%)] border border-white/10 hover:border-[hsl(262,80%,60%)]/30 focus:border-[hsl(262,80%,60%)] outline-none py-3 pl-10 pr-12 rounded-xl text-white placeholder-slate-500 transition-colors"
+            value={formData.password} onChange={handleChange}
+            required placeholder="••••••••"
+            className={`${inputBase} pl-10 pr-12`}
           />
           <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
+            type="button" onClick={() => setShowPassword(!showPassword)}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[hsl(262,80%,60%)] transition-colors"
           >
             {showPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
           </button>
         </div>
+        {formData.password && (
+          <div className="mt-2 space-y-1">
+            <div className="flex gap-1">
+              {[1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className={`h-1 flex-1 rounded-full transition-all duration-300 ${
+                    i <= strength.score ? strength.color : 'bg-white/10'
+                  }`}
+                />
+              ))}
+            </div>
+            <p className={`text-xs ${
+              strength.score <= 1 ? 'text-red-400' :
+              strength.score === 2 ? 'text-orange-400' :
+              strength.score === 3 ? 'text-yellow-400' : 'text-green-400'
+            }`}>{strength.label}</p>
+          </div>
+        )}
       </div>
 
+      {/* Confirmar contraseña + indicador inline */}
       <div>
-        <label htmlFor="confirmPassword" className="block text-sm font-medium text-white mb-2">
-          Confirmar contraseña
-        </label>
+        <label htmlFor="confirmPassword" className="block text-sm font-medium text-white mb-2">Confirmar contraseña</label>
         <div className="relative">
           <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
-            id="confirmPassword"
-            name="confirmPassword"
+            id="confirmPassword" name="confirmPassword"
             type={showConfirmPassword ? 'text' : 'password'}
-            value={formData.confirmPassword}
-            onChange={handleChange}
-            required
-            placeholder="••••••••"
-            className="w-full bg-[hsl(222,30%,16%)] border border-white/10 hover:border-[hsl(262,80%,60%)]/30 focus:border-[hsl(262,80%,60%)] outline-none py-3 pl-10 pr-12 rounded-xl text-white placeholder-slate-500 transition-colors"
+            value={formData.confirmPassword} onChange={handleChange}
+            required placeholder="••••••••"
+            className={`${inputBase} pl-10 pr-20 ${
+              passwordsMismatch ? 'border-red-500/60' :
+              passwordsMatch ? 'border-green-500/60' : ''
+            }`}
           />
+          <div className="absolute right-10 top-1/2 -translate-y-1/2">
+            {passwordsMatch && <FiCheck size={16} className="text-green-400" />}
+            {passwordsMismatch && <FiX size={16} className="text-red-400" />}
+          </div>
           <button
-            type="button"
-            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+            type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[hsl(262,80%,60%)] transition-colors"
           >
             {showConfirmPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
           </button>
         </div>
+        {passwordsMismatch && (
+          <p className="mt-1 text-xs text-red-400">Las contraseñas no coinciden</p>
+        )}
       </div>
 
+      {/* Campos de locatario */}
       {role === 'locatario' && (
         <>
           <div>
-            <label htmlFor="businessName" className="block text-sm font-medium text-white mb-2">
-              Nombre del negocio
-            </label>
-            <input
-              id="businessName"
-              name="businessName"
-              type="text"
-              value={formData.businessName}
-              required
-              onChange={handleChange}
-              placeholder="Mi Restaurante"
-              className="w-full bg-[hsl(222,30%,16%)] border border-white/10 hover:border-[hsl(262,80%,60%)]/30 focus:border-[hsl(262,80%,60%)] outline-none py-3 px-4 rounded-xl text-white placeholder-slate-500 transition-colors"
-            />
+            <label htmlFor="businessName" className="block text-sm font-medium text-white mb-2">Nombre del negocio</label>
+            <div className="relative">
+              <FiBriefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                id="businessName" name="businessName" type="text"
+                value={formData.businessName} required onChange={handleChange}
+                placeholder="Mi Restaurante"
+                className={`${inputBase} pl-10 pr-4`}
+              />
+            </div>
           </div>
 
           <div>
-            <label htmlFor="location" className="block text-sm font-medium text-white mb-2">
-              Ubicación
-            </label>
-            <input
-              id="location"
-              name="location"
-              type="text"
-              value={formData.location}
-              onChange={handleChange}
-              placeholder="Santiago, Chile"
-              className="w-full bg-[hsl(222,30%,16%)] border border-white/10 hover:border-[hsl(262,80%,60%)]/30 focus:border-[hsl(262,80%,60%)] outline-none py-3 px-4 rounded-xl text-white placeholder-slate-500 transition-colors"
-            />
+            <label htmlFor="location" className="block text-sm font-medium text-white mb-2">Ubicación</label>
+            <div className="relative">
+              <FiMapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                id="location" name="location" type="text"
+                value={formData.location} onChange={handleChange}
+                placeholder="Santiago, Chile"
+                className={`${inputBase} pl-10 pr-4`}
+              />
+            </div>
           </div>
 
           <div>
-            <label htmlFor="bio" className="block text-sm font-medium text-white mb-2">
-              Sobre ti (opcional)
-            </label>
+            <label htmlFor="bio" className="block text-sm font-medium text-white mb-2">Sobre ti (opcional)</label>
             <textarea
-              id="bio"
-              name="bio"
-              value={formData.bio}
-              onChange={handleChange}
-              rows={3}
-              placeholder="Cuéntanos sobre tu negocio..."
-              className="w-full bg-[hsl(222,30%,16%)] border border-white/10 hover:border-[hsl(262,80%,60%)]/30 focus:border-[hsl(262,80%,60%)] outline-none py-3 px-4 rounded-xl text-white placeholder-slate-500 transition-colors resize-none"
+              id="bio" name="bio"
+              value={formData.bio} onChange={handleChange}
+              rows={3} placeholder="Cuéntanos sobre tu negocio..."
+              className={`${inputBase} px-4 resize-none`}
             />
           </div>
         </>

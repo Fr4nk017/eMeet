@@ -50,6 +50,8 @@ type AdminStats = {
   recentCommunities: { id: string; event_title: string; created_at: string }[]
 }
 
+const ADMIN_STATS_CACHE_KEY = 'emeet-admin-stats-cache'
+
 // Status rotation for demo (status field not in API yet)
 const DEMO_STATUSES: EventStatus[] = ['live', 'draft', 'draft', 'flagged', 'live']
 
@@ -115,9 +117,30 @@ export default function AdminPage() {
         throw new Error(body?.error ?? 'Error al cargar estadísticas')
       }
 
-      setStats((await res.json()) as AdminStats)
+      const payload = (await res.json()) as AdminStats
+      setStats(payload)
+
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(ADMIN_STATS_CACHE_KEY, JSON.stringify(payload))
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error desconocido')
+      const message = e instanceof Error ? e.message : 'Error desconocido'
+
+      if (typeof window !== 'undefined') {
+        try {
+          const raw = window.sessionStorage.getItem(ADMIN_STATS_CACHE_KEY)
+          if (raw) {
+            const cached = JSON.parse(raw) as AdminStats
+            setStats(cached)
+            setError(`${message} Mostrando datos guardados temporalmente.`)
+            return
+          }
+        } catch {
+          // Si el cache está corrupto, seguimos con el error normal.
+        }
+      }
+
+      setError(message)
     } finally {
       setLoading(false)
     }

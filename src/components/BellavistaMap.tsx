@@ -88,6 +88,7 @@ export default function BellavistaMap() {
     selectedPlaceTypes,
     selectedDistanceKm,
     selectedDestination,
+    activeEventLocation,
     setSelectedDestination,
     requestUserLocation,
   } = useNearbyPlacesContext()
@@ -123,6 +124,13 @@ export default function BellavistaMap() {
     mapRef.current.panTo(userLocation)
     mapRef.current.setZoom(15)
   }, [userLocation, selectedDestination])
+
+  // Pan to active event card when it changes (only if no route is active)
+  useEffect(() => {
+    if (!activeEventLocation || selectedDestination || !mapRef.current) return
+    mapRef.current.panTo({ lat: activeEventLocation.lat, lng: activeEventLocation.lng })
+    mapRef.current.setZoom(16)
+  }, [activeEventLocation, selectedDestination])
 
   // Calcula la ruta cuando hay un destino seleccionado
   useEffect(() => {
@@ -393,10 +401,63 @@ export default function BellavistaMap() {
         </button>
       </div>
 
+      {/* ── Marcador del evento activo (tarjeta visible) ─────────────── */}
+      {activeEventLocation && !selectedDestination && (
+        <OverlayView
+          position={{ lat: activeEventLocation.lat, lng: activeEventLocation.lng }}
+          mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+          getPixelPositionOffset={(w, h) => ({ x: -w / 2, y: -h })}
+        >
+          <div className="flex flex-col items-center pointer-events-none">
+            <div
+              style={{
+                position: 'relative',
+                width: 44,
+                height: 44,
+                borderRadius: '50%',
+                background: 'rgba(250,204,21,0.92)',
+                border: '2.5px solid white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 0 0 8px rgba(250,204,21,0.25), 0 6px 20px rgba(0,0,0,0.6)',
+                animation: 'pulse 2s cubic-bezier(0.4,0,0.6,1) infinite',
+              }}
+            >
+              <span style={{ fontSize: 22, lineHeight: 1 }}>📍</span>
+            </div>
+            <div
+              style={{
+                width: 0, height: 0,
+                borderLeft: '6px solid transparent',
+                borderRight: '6px solid transparent',
+                borderTop: '8px solid rgba(250,204,21,0.92)',
+              }}
+            />
+            <div
+              style={{
+                marginTop: 4,
+                background: 'rgba(0,0,0,0.75)',
+                border: '1px solid rgba(250,204,21,0.4)',
+                borderRadius: 6,
+                padding: '2px 6px',
+                maxWidth: 120,
+                textAlign: 'center',
+              }}
+            >
+              <span style={{ fontSize: 10, color: '#fde68a', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>
+                {activeEventLocation.title}
+              </span>
+            </div>
+          </div>
+        </OverlayView>
+      )}
+
       {/* ── Marcadores de lugares reales ────────────────────────────────── */}
       {visiblePlaces.map((place) => {
         const config = PLACE_TYPE_CONFIG[place.type] ?? PLACE_TYPE_CONFIG.restaurant
         const isNearest = nearestPlaceIds.has(place.placeId)
+        const isActivePlace = activeEventLocation?.id === place.placeId
 
         return (
           <OverlayView
@@ -409,14 +470,16 @@ export default function BellavistaMap() {
               type="button"
               onClick={(e) => e.stopPropagation()}
               style={{
-                backgroundColor: 'rgba(20, 22, 48, 0.85)',
-                border: `2px solid ${config.color}`,
-                boxShadow: isNearest
+                backgroundColor: isActivePlace ? 'rgba(250,204,21,0.15)' : 'rgba(20, 22, 48, 0.85)',
+                border: isActivePlace ? '2.5px solid #facc15' : `2px solid ${config.color}`,
+                boxShadow: isActivePlace
+                  ? '0 0 0 6px rgba(250,204,21,0.25), 0 8px 24px rgba(0,0,0,0.65)'
+                  : isNearest
                   ? `0 0 0 5px ${config.color}3d, 0 8px 24px rgba(0,0,0,0.65)`
                   : `0 2px 8px rgba(0,0,0,0.5)`,
-                width: isNearest ? '42px' : '34px',
-                height: isNearest ? '42px' : '34px',
-                transform: isNearest ? 'scale(1.1)' : 'scale(1)',
+                width: isActivePlace ? '46px' : isNearest ? '42px' : '34px',
+                height: isActivePlace ? '46px' : isNearest ? '42px' : '34px',
+                transform: isActivePlace ? 'scale(1.18)' : isNearest ? 'scale(1.1)' : 'scale(1)',
               }}
               className="flex cursor-pointer items-center justify-center rounded-full text-base transition-all duration-200"
             >

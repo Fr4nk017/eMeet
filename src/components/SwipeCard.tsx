@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
 import type { PanInfo } from 'framer-motion'
 import { HiMapPin, HiClock, HiUsers, HiGlobeAlt } from 'react-icons/hi2'
@@ -69,8 +69,19 @@ export default function SwipeCard({
   const yOffset = stackIndex * 10
 
   const cardRef = useRef<HTMLDivElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
 
   const isActive = stackIndex === 0
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    if (isActive) {
+      video.play().catch(() => undefined)
+    } else {
+      video.pause()
+    }
+  }, [isActive])
 
   function handleDragEnd(_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) {
     setIsDragging(false)
@@ -117,13 +128,25 @@ export default function SwipeCard({
       {/* Tarjeta contenido */}
       <div className="relative h-full w-full overflow-hidden rounded-[30px] bg-card shadow-2xl select-none lg:rounded-[36px]">
 
-        {/* Imagen de fondo */}
-        <img
-          src={event.imageUrl}
-          alt={event.title}
-          className="absolute inset-0 w-full h-full object-cover"
-          draggable={false}
-        />
+        {/* Media de fondo: video promocional o imagen */}
+        {event.videoUrl ? (
+          <video
+            ref={videoRef}
+            src={event.videoUrl}
+            muted
+            playsInline
+            loop
+            preload="metadata"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : (
+          <img
+            src={event.imageUrl}
+            alt={event.title}
+            className="absolute inset-0 w-full h-full object-cover"
+            draggable={false}
+          />
+        )}
 
         {/* Doble gradiente para elevar contraste en textos y badges */}
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-black/20" />

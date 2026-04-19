@@ -5,13 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
 import { FiMail, FiLock, FiEye, FiEyeOff, FiLogIn } from 'react-icons/fi'
 
-function inferRoleByEmail(email: string): 'admin' | 'locatario' | 'user' {
-  const normalized = email.toLowerCase()
-  if (normalized.includes('admin')) return 'admin'
-  if (normalized.includes('locatario')) return 'locatario'
-  return 'user'
-}
-
 export default function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -29,14 +22,13 @@ export default function LoginForm() {
     setIsLoading(true)
 
     try {
-      await login(email, password)
+      const role = await login(email, password)
       const next = searchParams.get('next')
       if (next && next.startsWith('/')) {
         router.push(next)
         return
       }
 
-      const role = inferRoleByEmail(email)
       router.push(role === 'locatario' ? '/locatario' : role === 'admin' ? '/admin' : '/')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido al iniciar sesión')

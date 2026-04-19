@@ -28,6 +28,13 @@ export interface MapDestination {
   position: google.maps.LatLngLiteral
 }
 
+export interface ActiveEventLocation {
+  id: string
+  lat: number
+  lng: number
+  title: string
+}
+
 interface NearbyPlacesContextValue {
   places: ScrapedPlace[]
   excludedPlaceIds: Set<string>
@@ -42,6 +49,7 @@ interface NearbyPlacesContextValue {
   invalidApiKey: boolean
   mapsLoadError: Error | undefined
   selectedDestination: MapDestination | null
+  activeEventLocation: ActiveEventLocation | null
   requestUserLocation: (recenter?: boolean) => void
   togglePlaceType: (type: PlaceType) => void
   setDistanceKm: (km: number) => void
@@ -50,6 +58,7 @@ interface NearbyPlacesContextValue {
   excludePlace: (placeId: string) => void
   resetExcludedPlaces: () => void
   setSelectedDestination: (dest: MapDestination | null) => void
+  setActiveEventLocation: (loc: ActiveEventLocation | null) => void
 }
 
 const NearbyPlacesContext = createContext<NearbyPlacesContextValue | undefined>(undefined)
@@ -75,6 +84,7 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState<string | null>(null)
   const [selectedDestination, setSelectedDestination] = useState<MapDestination | null>(null)
+  const [activeEventLocation, setActiveEventLocation] = useState<ActiveEventLocation | null>(null)
 
   // Refs para evitar re-renders en cascada y loops de efectos
   const locatingRef = useRef(false)
@@ -214,6 +224,7 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
       invalidApiKey,
       mapsLoadError: loadError,
       selectedDestination,
+      activeEventLocation,
       requestUserLocation,
       togglePlaceType,
       setDistanceKm,
@@ -222,6 +233,7 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
       excludePlace,
       resetExcludedPlaces,
       setSelectedDestination,
+      setActiveEventLocation,
     }),
     [
       excludePlace,
@@ -236,6 +248,7 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
       locating,
       places,
       selectedDestination,
+      activeEventLocation,
       selectedDistanceKm,
       selectedPlaceTypes,
       refreshPlaces,

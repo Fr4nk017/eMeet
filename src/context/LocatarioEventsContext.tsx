@@ -13,6 +13,7 @@ interface CreateLocatarioEventInput {
   address: string
   price: number | null
   imageUrl?: string
+  videoUrl?: string
   organizerName: string
   organizerAvatar: string
   lat?: number
@@ -69,6 +70,7 @@ type LocatarioEventRow = {
   address: string
   price: number | null
   image_url: string | null
+  video_url: string | null
   organizer_name: string
   organizer_avatar: string | null
   lat: number | null
@@ -89,6 +91,7 @@ function dbRowToEvent(row: LocatarioEventRow): Event {
     lng: row.lng ?? undefined,
     price: row.price,
     imageUrl: row.image_url || FALLBACK_EVENT_IMAGE,
+    videoUrl: row.video_url ?? null,
     websiteUrl: null,
     organizerName: row.organizer_name,
     organizerAvatar: row.organizer_avatar || 'https://i.pravatar.cc/150?img=32',
@@ -194,6 +197,7 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
         lng: input.lng,
         price: input.price,
         imageUrl: input.imageUrl?.trim() || FALLBACK_EVENT_IMAGE,
+        videoUrl: input.videoUrl?.trim() || null,
         websiteUrl: null,
         organizerName: input.organizerName,
         organizerAvatar: input.organizerAvatar,
@@ -229,6 +233,7 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
         address: input.address,
         price: input.price,
         image_url: input.imageUrl || null,
+        video_url: input.videoUrl || null,
         organizer_name: input.organizerName,
         organizer_avatar: input.organizerAvatar,
         lat: input.lat ?? null,
