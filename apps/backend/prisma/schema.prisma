@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Profile {
+  id         String   @id @db.Uuid
+  name       String
+  bio        String   @default("")
+  avatar_url String?
+  location   String   @default("")
+  interests  String[] @default([])
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  user_events      UserEvent[]
+  room_members     RoomMember[]
+  chat_messages    ChatMessage[]
+  locatario_events LocatarioEvent[]
+
+  @@map("profiles")
+}
+
+model LocatarioEvent {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  creator_id       String   @db.Uuid
+  title            String
+  description      String
+  category         String
+  event_date       DateTime @db.Timestamptz(6)
+  address          String
+  price            Decimal?
+  image_url        String?
+  organizer_name   String
+  organizer_avatar String?
+  created_at       DateTime @db.Timestamptz(6)
+
+  profile Profile @relation(fields: [creator_id], references: [id], onDelete: Cascade)
+
+  @@index([creator_id, created_at(sort: Desc)])
+  @@index([event_date(sort: Desc)])
+  @@map("locatario_events")
+}
+
+model UserEvent {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id         String   @db.Uuid
+  event_id        String
+  event_title     String?
+  event_image_url String?
+  event_address   String?
+  action          String
+  created_at      DateTime @db.Timestamptz(6)
+
+  profile Profile @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, event_id, action])
+  @@index([user_id, action, created_at(sort: Desc)])
+  @@index([event_id])
+  @@map("user_events")
+}
+
+model ChatRoom {
+  id              String   @id
+  event_title     String
+  event_image_url String?
+  event_address   String?
+  created_at      DateTime @db.Timestamptz(6)
+
+  room_members  RoomMember[]
+  chat_messages ChatMessage[]
+
+  @@map("chat_rooms")
+}
+
+model RoomMember {
+  room_id      String
+  user_id      String   @db.Uuid
+  joined_at    DateTime @db.Timestamptz(6)
+  last_read_at DateTime @db.Timestamptz(6)
+
+  room    ChatRoom @relation(fields: [room_id], references: [id], onDelete: Cascade)
+  profile Profile  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([room_id, user_id])
+  @@index([user_id])
+  @@index([room_id])
+  @@map("room_members")
+}
+
+model ChatMessage {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  room_id    String
+  user_id    String   @db.Uuid
+  text       String
+  created_at DateTime @db.Timestamptz(6)
+
+  room    ChatRoom @relation(fields: [room_id], references: [id], onDelete: Cascade)
+  profile Profile  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([room_id, created_at(sort: Desc)])
+  @@index([user_id])
+  @@map("chat_messages")
+}
