@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import dynamic from 'next/dynamic'
 import SwipeCard from '../src/components/SwipeCard'
 import Layout from '../src/components/Layout'
 import DistanceFilter from '../src/components/DistanceFilter'
@@ -13,6 +14,15 @@ import { useAuth } from '../src/context/AuthContext'
 import { useLocatarioEvents } from '../src/context/LocatarioEventsContext'
 import { getSupabaseBrowserClient, hasSupabaseEnv } from '../src/lib/supabase'
 import type { PlaceType } from '../src/types'
+
+const BellavistaMapMobile = dynamic(() => import('../src/components/BellavistaMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full items-center justify-center bg-card text-sm text-muted">
+      Cargando mapa...
+    </div>
+  ),
+})
 
 const DEFAULT_FEED_TYPES: PlaceType[] = ['restaurant', 'bar', 'night_club', 'cafe']
 const SAVED_URL = (process.env.NEXT_PUBLIC_SAVED_URL ?? '').trim().replace(/\/$/, '')
@@ -166,6 +176,7 @@ function HomePageContent() {
   const [isFiltersOpen, setIsFiltersOpen] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'like' | 'nope' | 'save' } | null>(null)
   const [focusedPlaceId, setFocusedPlaceId] = useState<string | null>(null)
+  const [showMobileMap, setShowMobileMap] = useState(false)
 
   useEffect(() => {
     if (!user) {
@@ -239,6 +250,10 @@ function HomePageContent() {
               eventTitle: likedEvent.title,
               eventImageUrl: likedEvent.imageUrl,
               eventAddress: likedEvent.address,
+              eventType: likedEvent.type,
+              eventLat: likedEvent.position?.lat,
+              eventLng: likedEvent.position?.lng,
+              eventDistance: likedEvent.distance,
             }),
           })
         } catch {
@@ -253,6 +268,7 @@ function HomePageContent() {
 
       showToast(`¡Like! ${likedEvent.title}`, 'like')
       setFocusedPlaceId(likedEvent.id)
+      setShowMobileMap(true)
 
       try {
         await updateUser({ likedEvents: Array.from(new Set([...(user.likedEvents ?? []), likedEvent.id])) })
@@ -454,22 +470,56 @@ function HomePageContent() {
           ) : loading || locating || !userLocation ? (
             <FeedSkeleton />
           ) : visibleEvents.length > 0 ? (
-            <div className="card-stack mx-auto h-full min-h-[500px] w-full max-w-[380px] lg:min-h-[560px] xl:min-h-[620px]">
-              {[...visibleEvents].reverse().map((event, reverseIndex) => {
-                const stackIndex = visibleEvents.length - 1 - reverseIndex
-                return (
-                  <SwipeCard
-                    key={event.id}
-                    event={event}
-                    stackIndex={stackIndex}
-                    onSwipeRight={handleSwipeRight}
-                    onSwipeLeft={handleSwipeLeft}
-                    onSave={handleSave}
-                    onRefresh={refreshPlaces}
-                  />
-                )
-              })}
-            </div>
+            <>
+              {/* Mobile Map View - solo mostrar en pantallas pequeñas cuando hay like */}
+              <AnimatePresence>
+                {showMobileMap && (
+                  <motion.div
+                    key="mobile-map"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 20 }}
+                    className="absolute inset-0 z-40 flex flex-col overflow-hidden rounded-[24px] lg:hidden"
+                  >
+                    {/* Mapa dinámico */}
+                    <div className="flex-1 overflow-hidden rounded-t-[24px]">
+                      <BellavistaMapMobile focusedPlaceId={focusedPlaceId} />
+                    </div>
+
+                    {/* Botón para cerrar el mapa y volver a la card */}
+                    <motion.button
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 }}
+                      onClick={() => setShowMobileMap(false)}
+                      className="shrink-0 border-t border-white/10 bg-gradient-to-t from-card to-card/80 px-4 py-4 font-semibold text-primary-light transition-colors hover:text-primary"
+                    >
+                      ← Volver a eventos
+                    </motion.button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Desktop Card View + Mobile Card View (cuando no hay showMobileMap) */}
+              {!showMobileMap && (
+                <div className="card-stack mx-auto h-full min-h-[500px] w-full max-w-[380px] lg:min-h-[560px] xl:min-h-[620px]">
+                  {[...visibleEvents].reverse().map((event, reverseIndex) => {
+                    const stackIndex = visibleEvents.length - 1 - reverseIndex
+                    return (
+                      <SwipeCard
+                        key={event.id}
+                        event={event}
+                        stackIndex={stackIndex}
+                        onSwipeRight={handleSwipeRight}
+                        onSwipeLeft={handleSwipeLeft}
+                        onSave={handleSave}
+                        onRefresh={refreshPlaces}
+                      />
+                    )
+                  })}
+                </div>
+              )}
+            </>
           ) : (
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}

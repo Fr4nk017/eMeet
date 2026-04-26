@@ -1,18 +1,18 @@
 'use client'
 
 import { useAuth } from '@/src/context/AuthContext'
+import { useAdmin } from '@/src/context/AdminContext'
 import { useRouter } from 'next/navigation'
-import { FiLogOut, FiUsers, FiBarChart, FiAlertCircle, FiSettings } from 'react-icons/fi'
+import { useEffect, useState } from 'react'
+import { FiLogOut, FiUsers, FiBarChart, FiAlertCircle, FiTrash2, FiRefreshCw } from 'react-icons/fi'
 
 export default function AdminPage() {
   const { user, logout } = useAuth()
+  const { users, events, statistics, isLoadingUsers, isLoadingEvents, isLoadingStats, fetchUsers, fetchEvents, fetchStatistics, deleteUser, deleteEvent, error } = useAdmin()
   const router = useRouter()
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'events'>('overview')
 
-  const handleLogout = () => {
-    logout()
-    router.push('/auth')
-  }
-
+  // Verificar que sea admin
   if (!user || user.role !== 'admin') {
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center">
@@ -21,7 +21,7 @@ export default function AdminPage() {
           <h1 className="text-2xl font-bold text-white mb-2">Acceso Denegado</h1>
           <p className="text-muted mb-6">No tienes permisos para acceder a esta página</p>
           <button
-            onClick={() => router.push('/chat')}
+            onClick={() => router.push('/')}
             className="bg-primary hover:bg-primary-dark text-white font-semibold py-2 px-6 rounded-lg"
           >
             Volver al inicio
@@ -29,6 +29,18 @@ export default function AdminPage() {
         </div>
       </div>
     )
+  }
+
+  // Cargar datos al montar el componente
+  useEffect(() => {
+    fetchUsers()
+    fetchEvents()
+    fetchStatistics()
+  }, [fetchUsers, fetchEvents, fetchStatistics])
+
+  const handleLogout = async () => {
+    await logout()
+    router.push('/auth')
   }
 
   return (
@@ -52,106 +64,232 @@ export default function AdminPage() {
 
       {/* Contenido principal */}
       <main className="max-w-7xl mx-auto px-4 py-8">
+        {/* Error message */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
         {/* Bienvenida */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-white mb-2">Bienvenido, {user.name}</h2>
           <p className="text-muted">Administra todos los aspectos de la plataforma eMeet</p>
         </div>
 
-        {/* Grid de opciones */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          {/* Card: Usuarios */}
-          <div className="bg-card border border-card hover:border-primary/30 rounded-lg p-6 cursor-pointer hover:shadow-lg transition-all">
-            <div className="inline-flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg mb-4">
-              <FiUsers className="text-primary" size={24} />
+        {/* Estadísticas */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="bg-card border border-card rounded-lg p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-muted text-sm">Total de Usuarios</p>
+                <p className="text-3xl font-bold text-white mt-2">{isLoadingStats ? '-' : statistics?.totalUsers ?? 0}</p>
+              </div>
+              <FiUsers className="text-primary text-4xl opacity-20" />
             </div>
-            <h3 className="text-lg font-semibold text-white mb-2">Usuarios</h3>
-            <p className="text-sm text-muted mb-4">Gestiona usuarios, roles y permisos</p>
-            <div className="text-2xl font-bold text-accent">1.234</div>
-            <p className="text-xs text-muted mt-1">+12% este mes</p>
           </div>
 
-          {/* Card: Eventos */}
-          <div className="bg-card border border-card hover:border-primary/30 rounded-lg p-6 cursor-pointer hover:shadow-lg transition-all">
-            <div className="inline-flex items-center justify-center w-12 h-12 bg-accent/10 rounded-lg mb-4">
-              <FiBarChart className="text-accent" size={24} />
+          <div className="bg-card border border-card rounded-lg p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-muted text-sm">Total de Eventos</p>
+                <p className="text-3xl font-bold text-white mt-2">{isLoadingStats ? '-' : statistics?.totalEvents ?? 0}</p>
+              </div>
+              <FiBarChart className="text-accent text-4xl opacity-20" />
             </div>
-            <h3 className="text-lg font-semibold text-white mb-2">Eventos</h3>
-            <p className="text-sm text-muted mb-4">Revisa y modera eventos publicados</p>
-            <div className="text-2xl font-bold text-accent">456</div>
-            <p className="text-xs text-muted mt-1">+8 nuevos hoy</p>
           </div>
 
-          {/* Card: Reportes */}
-          <div className="bg-card border border-card hover:border-primary/30 rounded-lg p-6 cursor-pointer hover:shadow-lg transition-all">
-            <div className="inline-flex items-center justify-center w-12 h-12 bg-orange-500/10 rounded-lg mb-4">
-              <FiAlertCircle className="text-orange-400" size={24} />
+          <div className="bg-card border border-card rounded-lg p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-muted text-sm">Total de Likes</p>
+                <p className="text-3xl font-bold text-white mt-2">{isLoadingStats ? '-' : statistics?.totalLikes ?? 0}</p>
+              </div>
+              <FiBarChart className="text-green-400 text-4xl opacity-20" />
             </div>
-            <h3 className="text-lg font-semibold text-white mb-2">Reportes</h3>
-            <p className="text-sm text-muted mb-4">Revisa reportes y quejas de usuarios</p>
-            <div className="text-2xl font-bold text-orange-400">23</div>
-            <p className="text-xs text-muted mt-1">Pendientes de revisión</p>
+          </div>
+
+          <div className="bg-card border border-card rounded-lg p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-muted text-sm">Usuarios Banneados</p>
+                <p className="text-3xl font-bold text-white mt-2">{isLoadingStats ? '-' : statistics?.bannedUsers ?? 0}</p>
+              </div>
+              <FiAlertCircle className="text-red-400 text-4xl opacity-20" />
+            </div>
           </div>
         </div>
 
-        {/* Tabla de estadísticas */}
-        <div className="bg-card border border-card rounded-lg overflow-hidden">
-          <div className="px-6 py-4 border-b border-card">
-            <h3 className="text-lg font-semibold text-white">Actividad Reciente</h3>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-surface">
-                <tr className="border-b border-card">
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Tipo</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Descripción</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Usuario</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Hora</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  { type: 'Nuevo evento', desc: 'Club Social Bellavista creó un evento', user: 'Carlos R.', time: 'Hace 2h', status: 'Pendiente' },
-                  { type: 'Reporte', desc: 'Usuario reportó comentario inapropiado', user: 'Juan P.', time: 'Hace 4h', status: 'Nuevo' },
-                  { type: 'Registro', desc: 'Nuevo usuario se registró', user: 'María L.', time: 'Hace 6h', status: 'Completado' },
-                  { type: 'Evento cancelado', desc: 'Evento cancelado por organizador', user: 'Admin', time: 'Hace 8h', status: 'Completado' },
-                ].map((item, i) => (
-                  <tr key={i} className="border-b border-card/50 hover:bg-surface/50 transition-colors">
-                    <td className="px-6 py-4 text-sm text-primary font-medium">{item.type}</td>
-                    <td className="px-6 py-4 text-sm text-white">{item.desc}</td>
-                    <td className="px-6 py-4 text-sm text-muted">{item.user}</td>
-                    <td className="px-6 py-4 text-sm text-muted">{item.time}</td>
-                    <td className="px-6 py-4 text-sm">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        item.status === 'Completado' ? 'bg-green-500/10 text-green-400' :
-                        item.status === 'Nuevo' ? 'bg-blue-500/10 text-blue-400' :
-                        'bg-yellow-500/10 text-yellow-400'
-                      }`}>
-                        {item.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Configuración rápida */}
-        <div className="mt-8 bg-card border border-card rounded-lg p-6">
-          <div className="flex items-center gap-4">
-            <FiSettings className="text-primary" size={24} />
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-white">Configuración del Sistema</h3>
-              <p className="text-sm text-muted">Accede a la configuración avanzada de la plataforma</p>
-            </div>
-            <button className="bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-lg transition-colors">
-              Ir a Configuración
+        {/* Tabs */}
+        <div className="mb-6 flex gap-4 border-b border-card">
+          {[
+            { id: 'overview' as const, label: 'Resumen', icon: FiBarChart },
+            { id: 'users' as const, label: 'Usuarios', icon: FiUsers },
+            { id: 'events' as const, label: 'Eventos', icon: FiBarChart },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-3 font-medium transition-colors border-b-2 ${
+                activeTab === tab.id
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted hover:text-white'
+              }`}
+            >
+              {tab.label}
             </button>
-          </div>
+          ))}
         </div>
+
+        {/* Contenido por tab */}
+        {activeTab === 'overview' && (
+          <div className="bg-card border border-card rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-white mb-4">Resumen General</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h4 className="text-white font-semibold mb-3">Información del Sistema</h4>
+                <div className="space-y-2 text-sm text-muted">
+                  <p>Usuarios activos: <span className="text-white font-medium">{statistics?.totalUsers ?? 0}</span></p>
+                  <p>Eventos en la plataforma: <span className="text-white font-medium">{statistics?.totalEvents ?? 0}</span></p>
+                  <p>Interacciones totales: <span className="text-white font-medium">{statistics?.totalLikes ?? 0}</span></p>
+                  <p>Última actualización: <span className="text-white font-medium">{statistics?.timestamp ? new Date(statistics.timestamp).toLocaleString() : '-'}</span></p>
+                </div>
+              </div>
+              <div>
+                <h4 className="text-white font-semibold mb-3">Acciones Rápidas</h4>
+                <div className="space-y-2">
+                  <button
+                    onClick={fetchStatistics}
+                    className="w-full bg-primary/10 hover:bg-primary/20 text-primary px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    <FiRefreshCw size={16} />
+                    Actualizar Datos
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'users' && (
+          <div className="bg-card border border-card rounded-lg overflow-hidden">
+            <div className="px-6 py-4 border-b border-card flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-white">Gestión de Usuarios</h3>
+              <button
+                onClick={fetchUsers}
+                disabled={isLoadingUsers}
+                className="bg-primary/10 hover:bg-primary/20 text-primary px-4 py-2 rounded-lg transition-colors text-sm flex items-center gap-2"
+              >
+                <FiRefreshCw size={16} className={isLoadingUsers ? 'animate-spin' : ''} />
+                Actualizar
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              {isLoadingUsers ? (
+                <div className="p-6 text-center text-muted">Cargando usuarios...</div>
+              ) : users.length > 0 ? (
+                <table className="w-full">
+                  <thead className="bg-surface">
+                    <tr className="border-b border-card">
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Nombre</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Email</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Rol</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Estado</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((u) => (
+                      <tr key={u.id} className="border-b border-card/50 hover:bg-surface/50 transition-colors">
+                        <td className="px-6 py-4 text-sm text-white">{u.name}</td>
+                        <td className="px-6 py-4 text-sm text-muted">{u.email}</td>
+                        <td className="px-6 py-4 text-sm">
+                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                            {u.role}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            u.is_banned
+                              ? 'bg-red-500/10 text-red-400'
+                              : 'bg-green-500/10 text-green-400'
+                          }`}>
+                            {u.is_banned ? 'Banneado' : 'Activo'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm">
+                          <button
+                            onClick={() => deleteUser(u.id)}
+                            className="text-red-400 hover:text-red-300 transition-colors flex items-center gap-1"
+                          >
+                            <FiTrash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="p-6 text-center text-muted">No hay usuarios</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'events' && (
+          <div className="bg-card border border-card rounded-lg overflow-hidden">
+            <div className="px-6 py-4 border-b border-card flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-white">Gestión de Eventos</h3>
+              <button
+                onClick={fetchEvents}
+                disabled={isLoadingEvents}
+                className="bg-primary/10 hover:bg-primary/20 text-primary px-4 py-2 rounded-lg transition-colors text-sm flex items-center gap-2"
+              >
+                <FiRefreshCw size={16} className={isLoadingEvents ? 'animate-spin' : ''} />
+                Actualizar
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              {isLoadingEvents ? (
+                <div className="p-6 text-center text-muted">Cargando eventos...</div>
+              ) : events.length > 0 ? (
+                <table className="w-full">
+                  <thead className="bg-surface">
+                    <tr className="border-b border-card">
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Título</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Ubicación</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Fecha</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Organizador</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-muted">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {events.map((e) => (
+                      <tr key={e.id} className="border-b border-card/50 hover:bg-surface/50 transition-colors">
+                        <td className="px-6 py-4 text-sm text-white truncate">{e.title}</td>
+                        <td className="px-6 py-4 text-sm text-muted truncate">{e.location}</td>
+                        <td className="px-6 py-4 text-sm text-muted">{new Date(e.date).toLocaleDateString()}</td>
+                        <td className="px-6 py-4 text-sm text-muted">{e.created_by}</td>
+                        <td className="px-6 py-4 text-sm">
+                          <button
+                            onClick={() => deleteEvent(e.id)}
+                            className="text-red-400 hover:text-red-300 transition-colors flex items-center gap-1"
+                          >
+                            <FiTrash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="p-6 text-center text-muted">No hay eventos</div>
+              )}
+            </div>
+          </div>
+        )}
       </main>
     </div>
   )
