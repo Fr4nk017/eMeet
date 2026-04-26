@@ -1,0 +1,161 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  // Para runtime (apps): usa el pooler de Supabase (puerto 6543)
+  // Para migraciones: usa la conexión directa (puerto 5432) en DIRECT_URL
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  schemas   = ["public", "auth"]
+}
+
+// ─── ENUM ────────────────────────────────────────────────────────────────────
+
+enum EventCategory {
+  gastronomia
+  musica
+  cultura
+  networking
+  deporte
+  fiesta
+  teatro
+  arte
+
+  @@schema("public")
+}
+
+// ─── AUTH (solo lectura — gestionado por Supabase Auth) ──────────────────────
+
+model AuthUser {
+  id    String   @id @db.Uuid
+  email String?
+
+  profile Profile?
+
+  @@map("users")
+  @@schema("auth")
+}
+
+// ─── PROFILES ────────────────────────────────────────────────────────────────
+
+model Profile {
+  id        String          @id @db.Uuid
+  name      String          @default("")
+  bio       String          @default("")
+  avatarUrl String?         @map("avatar_url")
+  location  String          @default("")
+  interests EventCategory[]
+  createdAt DateTime        @default(now()) @map("created_at")
+
+  authUser        AuthUser         @relation(fields: [id], references: [id], onDelete: Cascade)
+  userEvents      UserEvent[]
+  locatarioEvents LocatarioEvent[]
+  roomMembers     RoomMember[]
+  chatMessages    ChatMessage[]
+
+  @@map("profiles")
+  @@schema("public")
+}
+
+// ─── USER_EVENTS ─────────────────────────────────────────────────────────────
+
+enum UserEventAction {
+  like
+  save
+
+  @@schema("public")
+}
+
+model UserEvent {
+  id            String          @id @default(uuid()) @db.Uuid
+  userId        String          @map("user_id") @db.Uuid
+  eventId       String          @map("event_id")
+  eventTitle    String?         @map("event_title")
+  eventImageUrl String?         @map("event_image_url")
+  eventAddress  String?         @map("event_address")
+  action        UserEventAction
+  createdAt     DateTime        @default(now()) @map("created_at")
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Constraint requerida para upsert onConflict en Supabase
+  @@unique([userId, eventId, action], name: "user_events_user_event_action_key")
+  @@map("user_events")
+  @@schema("public")
+}
+
+// ─── LOCATARIO_EVENTS ────────────────────────────────────────────────────────
+
+model LocatarioEvent {
+  id             String        @id @default(uuid()) @db.Uuid
+  creatorId      String        @map("creator_id") @db.Uuid
+  title          String
+  description    String        @default("")
+  category       EventCategory
+  eventDate      DateTime      @map("event_date")
+  address        String        @default("")
+  price          Decimal?      @db.Decimal(10, 2)
+  imageUrl       String?       @map("image_url")
+  organizerName  String        @default("") @map("organizer_name")
+  organizerAvatar String?      @map("organizer_avatar")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  creator Profile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@map("locatario_events")
+  @@schema("public")
+}
+
+// ─── CHAT_ROOMS ──────────────────────────────────────────────────────────────
+
+model ChatRoom {
+  id            String   @id
+  eventTitle    String   @map("event_title")
+  eventImageUrl String?  @map("event_image_url")
+  eventAddress  String?  @map("event_address")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  members  RoomMember[]
+  messages ChatMessage[]
+
+  @@map("chat_rooms")
+  @@schema("public")
+}
+
+// ─── ROOM_MEMBERS ────────────────────────────────────────────────────────────
+
+model RoomMember {
+  roomId     String   @map("room_id")
+  userId     String   @map("user_id") @db.Uuid
+  joinedAt   DateTime @default(now()) @map("joined_at")
+  lastReadAt DateTime @default(now()) @map("last_read_at")
+
+  room ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([roomId, userId])
+  @@map("room_members")
+  @@schema("public")
+}
+
+// ─── CHAT_MESSAGES ───────────────────────────────────────────────────────────
+
+model ChatMessage {
+  id        String   @id @default(uuid()) @db.Uuid
+  roomId    String   @map("room_id")
+  userId    String   @map("user_id") @db.Uuid
+  text      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  room ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("chat_messages")
+  @@schema("public")
+}
