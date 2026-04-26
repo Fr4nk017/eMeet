@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import dynamic from 'next/dynamic'
 import SwipeCard from '../src/components/SwipeCard'
+import RecommendationsCard from '../src/components/RecommendationsCard'
 import Layout from '../src/components/Layout'
 import DistanceFilter from '../src/components/DistanceFilter'
 import PlaceTypeFilters from '../src/components/PlaceTypeFilters'
@@ -174,6 +175,7 @@ function HomePageContent() {
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const processingIds = useRef<Set<string>>(new Set())
   const [isFiltersOpen, setIsFiltersOpen] = useState(false)
+  const [showRecommendations, setShowRecommendations] = useState(true)
   const [toast, setToast] = useState<{ message: string; type: 'like' | 'nope' | 'save' } | null>(null)
   const [focusedPlaceId, setFocusedPlaceId] = useState<string | null>(null)
   const [showMobileMap, setShowMobileMap] = useState(false)
@@ -188,6 +190,20 @@ function HomePageContent() {
     setLikedIds(new Set(user.likedEvents))
     setSavedIds(new Set(user.savedEvents))
   }, [user])
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(min-width: 1024px)')
+    const onDesktop = () => {
+      if (mediaQuery.matches) {
+        setShowMobileMap(false)
+      }
+    }
+
+    onDesktop()
+    mediaQuery.addEventListener('change', onDesktop)
+
+    return () => mediaQuery.removeEventListener('change', onDesktop)
+  }, [])
 
   const events = useMemo(() => {
     const placeEvents = userLocation
@@ -250,9 +266,9 @@ function HomePageContent() {
               eventTitle: likedEvent.title,
               eventImageUrl: likedEvent.imageUrl,
               eventAddress: likedEvent.address,
-              eventType: likedEvent.type,
-              eventLat: likedEvent.position?.lat,
-              eventLng: likedEvent.position?.lng,
+              eventType: likedEvent.category,
+              eventLat: likedEvent.lat,
+              eventLng: likedEvent.lng,
               eventDistance: likedEvent.distance,
             }),
           })
@@ -268,7 +284,9 @@ function HomePageContent() {
 
       showToast(`¡Like! ${likedEvent.title}`, 'like')
       setFocusedPlaceId(likedEvent.id)
-      setShowMobileMap(true)
+      if (window.innerWidth < 1024) {
+        setShowMobileMap(true)
+      }
 
       try {
         await updateUser({ likedEvents: Array.from(new Set([...(user.likedEvents ?? []), likedEvent.id])) })
@@ -502,21 +520,32 @@ function HomePageContent() {
 
               {/* Desktop Card View + Mobile Card View (cuando no hay showMobileMap) */}
               {!showMobileMap && (
-                <div className="card-stack mx-auto h-full min-h-[500px] w-full max-w-[380px] lg:min-h-[560px] xl:min-h-[620px]">
-                  {[...visibleEvents].reverse().map((event, reverseIndex) => {
-                    const stackIndex = visibleEvents.length - 1 - reverseIndex
-                    return (
-                      <SwipeCard
-                        key={event.id}
-                        event={event}
-                        stackIndex={stackIndex}
-                        onSwipeRight={handleSwipeRight}
-                        onSwipeLeft={handleSwipeLeft}
-                        onSave={handleSave}
-                        onRefresh={refreshPlaces}
+                <div className="mx-auto flex h-full w-full max-w-[980px] items-start justify-center gap-4 lg:gap-6">
+                  <div className="card-stack h-full min-h-[500px] w-full max-w-[380px] lg:min-h-[560px] xl:min-h-[620px]">
+                    {[...visibleEvents].reverse().map((event, reverseIndex) => {
+                      const stackIndex = visibleEvents.length - 1 - reverseIndex
+                      return (
+                        <SwipeCard
+                          key={event.id}
+                          event={event}
+                          stackIndex={stackIndex}
+                          onSwipeRight={handleSwipeRight}
+                          onSwipeLeft={handleSwipeLeft}
+                          onSave={handleSave}
+                          onRefresh={refreshPlaces}
+                        />
+                      )
+                    })}
+                  </div>
+
+                  {showRecommendations && (
+                    <aside className="hidden h-full min-h-[500px] w-[300px] overflow-y-auto rounded-2xl border border-white/10 bg-card/50 p-3 shadow-xl backdrop-blur-md lg:block lg:min-h-[560px] xl:min-h-[620px]">
+                      <RecommendationsCard
+                        events={events}
+                        onClose={() => setShowRecommendations(false)}
                       />
-                    )
-                  })}
+                    </aside>
+                  )}
                 </div>
               )}
             </>
