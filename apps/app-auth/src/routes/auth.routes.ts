@@ -95,4 +95,59 @@ router.get('/session', async (req, res) => {
   return res.json({ session: data.session })
 })
 
+router.get('/callback', async (req, res) => {
+  const { code, token_hash: tokenHash, type, next } = req.query
+  const frontendUrl = process.env.FRONTEND_ORIGIN || 'http://localhost:3000'
+
+  // Helper para determinar ruta según rol
+  function roleRedirectPath(user: any): string {
+    const role =
+      (user.app_metadata?.role as string | undefined) ??
+      (user.user_metadata?.role as string | undefined) ??
+      'user'
+
+    if (role === 'locatario') return '/locatario'
+    if (role === 'admin') return '/admin'
+    return '/'
+  }
+
+  try {
+    const supabase = createAnonClient()
+
+    // ── Flujo OAuth: Supabase devuelve un `code` PKCE ─────────────────────────
+    if (code) {
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code as string)
+      if (error || !data.user) {
+        return res.redirect(`${frontendUrl}/auth?error=oauth_error`)
+      }
+
+      const redirectPath = roleRedirectPath(data.user)
+      return res.redirect(
+        `${frontendUrl}${redirectPath}?access_token=${encodeURIComponent(data.session?.access_token || '')}&refresh_token=${encodeURIComponent(data.session?.refresh_token || '')}`
+      )
+    }
+
+    // ── Flujo confirmación de email: Supabase envía `token_hash` + `type` ──────
+    if (tokenHash && type) {
+      const { data, error } = await supabase.auth.verifyOtp({
+        token_hash: tokenHash as string,
+        type: type as 'signup' | 'email_change' | 'recovery',
+      })
+      if (error || !data.user) {
+        return res.redirect(`${frontendUrl}/auth?error=verification_failed`)
+      }
+
+      const redirectPath = roleRedirectPath(data.user)
+      return res.redirect(
+        `${frontendUrl}${redirectPath}?access_token=${encodeURIComponent(data.session?.access_token || '')}&refresh_token=${encodeURIComponent(data.session?.refresh_token || '')}`
+      )
+    }
+
+    return res.redirect(`${frontendUrl}/auth?error=missing_params`)
+  } catch (error) {
+    console.error('Auth callback error:', error)
+    return res.redirect(`${frontendUrl}/auth?error=server_error`)
+  }
+})
+
 export default router
