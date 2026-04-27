@@ -8,10 +8,13 @@ import {
   Loader2 as FiLoader,
   MapPin as FiMapPin,
   Navigation as FiNavigation,
+  Video as FiVideo,
   X as FiX,
 } from 'lucide-react'
 import type { CreateLocatarioEventInput } from '../context/LocatarioEventsContext'
 import type { EventCategory } from '../types'
+import { uploadEventMedia } from '../lib/uploadEventMedia'
+import { hasSupabaseEnv } from '../lib/supabase'
 
 const CATEGORIES: { value: EventCategory; label: string; emoji: string }[] = [
   { value: 'fiesta',      label: 'Fiesta',      emoji: '🎉' },
@@ -41,6 +44,7 @@ type InitialValues = {
   price?: number | null
   address?: string
   imageUrl?: string
+  videoUrl?: string
   category?: EventCategory
 }
 
@@ -53,6 +57,7 @@ type Props = {
   organizerAvatar: string
   avatarUrl?: string
   initials: string
+  userId?: string
   mode?: 'create' | 'edit'
   initialValues?: InitialValues
 }
@@ -66,16 +71,20 @@ export function CreateEventModal({
   organizerAvatar,
   avatarUrl,
   initials,
+  userId,
   mode = 'create',
   initialValues,
 }: Props) {
   const [eventForm, setEventForm] = useState({ ...EMPTY_FORM, address: defaultAddress })
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [isFree, setIsFree] = useState(true)
   const [gpsStatus, setGpsStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -94,40 +103,53 @@ export function CreateEventModal({
         category: initialValues.category ?? 'fiesta',
       })
       setIsFree(initialValues.price == null)
-      setImagePreview(initialValues.imageUrl || null)
+      setMediaPreview(initialValues.videoUrl || initialValues.imageUrl || null)
+      setMediaType(initialValues.videoUrl ? 'video' : initialValues.imageUrl ? 'image' : null)
+      setSelectedFile(null)
       setGpsCoords(null)
       setGpsStatus('idle')
       setValidationError(null)
     } else if (!isOpen) {
       setEventForm({ ...EMPTY_FORM, address: defaultAddress })
-      setImagePreview(null)
+      setMediaPreview(null)
+      setSelectedFile(null)
+      setMediaType(null)
       setGpsCoords(null)
       setGpsStatus('idle')
       setIsFree(true)
       setValidationError(null)
+      setUploadProgress(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }, [isOpen, defaultAddress, mode, initialValues])
 
   if (!isOpen) return null
 
-  const handleImageFile = (file: File) => {
-    if (!file.type.startsWith('image/')) return
+  const handleMediaFile = (file: File) => {
+    const isVideo = file.type.startsWith('video/')
+    const isImage = file.type.startsWith('image/')
+    if (!isVideo && !isImage) return
+    setSelectedFile(file)
+    setMediaType(isVideo ? 'video' : 'image')
     const url = URL.createObjectURL(file)
-    setImagePreview(url)
-    setEventForm((prev) => ({ ...prev, imageUrl: url }))
+    setMediaPreview(url)
+    if (isVideo) {
+      setEventForm((prev) => ({ ...prev, imageUrl: '' }))
+    } else {
+      setEventForm((prev) => ({ ...prev, imageUrl: '' }))
+    }
   }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(false)
     const file = e.dataTransfer.files[0]
-    if (file) handleImageFile(file)
+    if (file) handleMediaFile(file)
   }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) handleImageFile(file)
+    if (file) handleMediaFile(file)
   }
 
   const handleGetGPS = () => {
@@ -156,8 +178,10 @@ export function CreateEventModal({
     )
   }
 
-  const clearImage = () => {
-    setImagePreview(null)
+  const clearMedia = () => {
+    setMediaPreview(null)
+    setSelectedFile(null)
+    setMediaType(null)
     setEventForm((prev) => ({ ...prev, imageUrl: '' }))
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
@@ -169,7 +193,22 @@ export function CreateEventModal({
     }
     setValidationError(null)
     setIsSubmitting(true)
+
     try {
+      let finalImageUrl = eventForm.imageUrl
+      let finalVideoUrl: string | undefined
+
+      if (selectedFile && userId && hasSupabaseEnv) {
+        setUploadProgress(mediaType === 'video' ? 'Subiendo video...' : 'Subiendo imagen...')
+        const publicUrl = await uploadEventMedia(selectedFile, userId)
+        if (mediaType === 'video') {
+          finalVideoUrl = publicUrl
+        } else {
+          finalImageUrl = publicUrl
+        }
+        setUploadProgress(null)
+      }
+
       await onSubmit({
         title: eventForm.title,
         description: eventForm.description,
@@ -177,16 +216,25 @@ export function CreateEventModal({
         date: eventForm.date,
         address: eventForm.address || defaultAddress,
         price: isFree ? null : (eventForm.price.trim() === '' ? null : Number(eventForm.price)),
-        imageUrl: eventForm.imageUrl,
+        imageUrl: finalImageUrl,
+        videoUrl: finalVideoUrl,
         organizerName,
         organizerAvatar,
         lat: gpsCoords?.lat,
         lng: gpsCoords?.lng,
       })
+    } catch (err) {
+      setUploadProgress(null)
+      throw err
     } finally {
       setIsSubmitting(false)
     }
   }
+
+  const submitLabel = uploadProgress
+    ?? (isSubmitting
+      ? (mode === 'edit' ? 'Guardando...' : 'Publicando...')
+      : (mode === 'edit' ? 'Guardar' : 'Publicar'))
 
   return (
     <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -207,7 +255,7 @@ export function CreateEventModal({
             className="text-sm font-semibold text-violet-400 hover:text-violet-300 disabled:text-white/25 transition-colors flex items-center gap-1.5 px-1"
           >
             {isSubmitting && <FiLoader className="animate-spin" size={13} />}
-            {isSubmitting ? (mode === 'edit' ? 'Guardando...' : 'Publicando...') : (mode === 'edit' ? 'Guardar' : 'Publicar')}
+            {submitLabel}
           </button>
         </div>
 
@@ -218,17 +266,26 @@ export function CreateEventModal({
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
           >
-            {imagePreview ? (
+            {mediaPreview ? (
               <>
-                <img
-                  src={imagePreview}
-                  alt="preview"
-                  className="w-full h-full object-contain"
-                  style={{ maxHeight: 'calc(92vh - 56px)' }}
-                  onError={clearImage}
-                />
+                {mediaType === 'video' ? (
+                  <video
+                    src={mediaPreview}
+                    controls
+                    className="w-full h-full object-contain"
+                    style={{ maxHeight: 'calc(92vh - 56px)' }}
+                  />
+                ) : (
+                  <img
+                    src={mediaPreview}
+                    alt="preview"
+                    className="w-full h-full object-contain"
+                    style={{ maxHeight: 'calc(92vh - 56px)' }}
+                    onError={clearMedia}
+                  />
+                )}
                 <button
-                  onClick={clearImage}
+                  onClick={clearMedia}
                   className="absolute top-3 right-3 w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center text-white transition-colors"
                 >
                   <FiX size={15} />
@@ -237,7 +294,7 @@ export function CreateEventModal({
                   onClick={() => fileInputRef.current?.click()}
                   className="absolute bottom-3 right-3 bg-black/60 hover:bg-black/80 text-white/80 hover:text-white text-xs px-3 py-1.5 rounded-lg transition-colors"
                 >
-                  Cambiar foto
+                  Cambiar archivo
                 </button>
               </>
             ) : (
@@ -247,16 +304,25 @@ export function CreateEventModal({
                 className="flex flex-col items-center gap-4 p-10 text-center w-full h-full justify-center group"
               >
                 <div className={`w-20 h-20 rounded-2xl flex items-center justify-center transition-all ${isDragging ? 'bg-violet-500/30 scale-110' : 'bg-white/5 group-hover:bg-white/10'}`}>
-                  <FiImage className={`transition-colors ${isDragging ? 'text-violet-300' : 'text-white/30 group-hover:text-white/50'}`} size={34} />
+                  <div className={`flex gap-2 transition-colors ${isDragging ? 'text-violet-300' : 'text-white/30 group-hover:text-white/50'}`}>
+                    <FiImage size={28} />
+                    <FiVideo size={28} />
+                  </div>
                 </div>
                 <div>
-                  <p className="text-white font-medium mb-1">Arrastra una foto aquí</p>
+                  <p className="text-white font-medium mb-1">Arrastra una foto o video aquí</p>
                   <p className="text-white/40 text-sm">o haz clic para seleccionar</p>
                 </div>
-                <span className="text-xs text-white/20">PNG, JPG, WEBP</span>
+                <span className="text-xs text-white/20">PNG, JPG, WEBP · MP4, MOV, WEBM</span>
               </button>
             )}
-            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
           </div>
 
           <div className="w-[320px] flex-shrink-0 flex flex-col border-l border-white/10 overflow-y-auto">
@@ -387,7 +453,7 @@ export function CreateEventModal({
                 )}
               </div>
 
-              {!imagePreview && (
+              {!mediaPreview && (
                 <div>
                   <p className="text-xs text-white/35 mb-1.5 font-medium">O pega una URL de imagen</p>
                   <input
@@ -396,7 +462,10 @@ export function CreateEventModal({
                     value={eventForm.imageUrl}
                     onChange={(e) => {
                       setEventForm((prev) => ({ ...prev, imageUrl: e.target.value }))
-                      if (e.target.value) setImagePreview(e.target.value)
+                      if (e.target.value) {
+                        setMediaPreview(e.target.value)
+                        setMediaType('image')
+                      }
                     }}
                     className="w-full bg-white/5 border border-white/10 focus:border-violet-500/50 outline-none py-2.5 px-3 rounded-xl text-white text-sm placeholder-white/30 transition-colors"
                   />
@@ -415,7 +484,9 @@ export function CreateEventModal({
                 className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold py-2.5 rounded-xl transition-all disabled:opacity-35 disabled:cursor-not-allowed text-sm shadow-lg shadow-violet-900/30"
               >
                 {isSubmitting && <FiLoader className="animate-spin" size={14} />}
-                {isSubmitting ? (mode === 'edit' ? 'Guardando...' : 'Publicando...') : (mode === 'edit' ? 'Guardar cambios' : 'Publicar evento')}
+                {uploadProgress ?? (isSubmitting
+                  ? (mode === 'edit' ? 'Guardando...' : 'Publicando...')
+                  : (mode === 'edit' ? 'Guardar cambios' : 'Publicar evento'))}
               </button>
             </div>
           </div>

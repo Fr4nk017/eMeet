@@ -290,6 +290,7 @@ export default function LocatarioPage() {
         organizerAvatar={user.avatarUrl || 'https://i.pravatar.cc/150?img=32'}
         avatarUrl={user.avatarUrl}
         initials={initials}
+        userId={user.id}
       />
 
       <CreateEventModal
@@ -304,6 +305,7 @@ export default function LocatarioPage() {
           price: editingEvent.price,
           address: editingEvent.address,
           imageUrl: editingEvent.imageUrl,
+          videoUrl: editingEvent.videoUrl ?? undefined,
           category: editingEvent.category,
         } : undefined}
         defaultAddress={user.businessLocation ?? user.location ?? ''}
@@ -311,6 +313,7 @@ export default function LocatarioPage() {
         organizerAvatar={user.avatarUrl || 'https://i.pravatar.cc/150?img=32'}
         avatarUrl={user.avatarUrl}
         initials={initials}
+        userId={user.id}
       />
     </div>
   )

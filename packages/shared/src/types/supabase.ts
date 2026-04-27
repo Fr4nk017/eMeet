@@ -185,6 +185,7 @@ export interface Database {
           address: string
           price: number | null
           image_url: string | null
+          video_url: string | null
           organizer_name: string
           organizer_avatar: string | null
           created_at: string
@@ -199,6 +200,7 @@ export interface Database {
           address?: string
           price?: number | null
           image_url?: string | null
+          video_url?: string | null
           organizer_name?: string
           organizer_avatar?: string | null
           created_at?: string
@@ -213,6 +215,7 @@ export interface Database {
           address?: string
           price?: number | null
           image_url?: string | null
+          video_url?: string | null
           organizer_name?: string
           organizer_avatar?: string | null
           created_at?: string

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { memo } from 'react'
 import Image from 'next/image'
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
@@ -44,6 +44,25 @@ function shouldBypassImageOptimization(url: string) {
   }
 }
 
+function optimizeCardImageUrl(url: string) {
+  try {
+    const parsedUrl = new URL(url)
+
+    // Unsplash acepta params de transformación; pedir menor ancho reduce bytes y tiempo de decode.
+    if (parsedUrl.hostname === 'images.unsplash.com') {
+      parsedUrl.searchParams.set('auto', 'format')
+      parsedUrl.searchParams.set('fit', 'crop')
+      parsedUrl.searchParams.set('w', '900')
+      parsedUrl.searchParams.set('q', '70')
+      return parsedUrl.toString()
+    }
+
+    return url
+  } catch {
+    return url
+  }
+}
+
 function StarRating({ rating }: { rating: number }) {
   const filled = Math.round(rating)
   return (
@@ -72,6 +91,8 @@ function StarRating({ rating }: { rating: number }) {
  *  - stackIndex: determina escala y opacidad de fondo.
  */
 const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=800&q=75'
+const CARD_BLUR_DATA_URL =
+  'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE0MCIgdmlld0JveD0iMCAwIDEwMCAxNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agc3RvcC1jb2xvcj0iIzIxMTIzNCIgb2Zmc2V0PSIwIi8+PHN0b3Agc3RvcC1jb2xvcj0iIzBkMGYxOCIgb2Zmc2V0PSIxIi8+PC9saW5lYXJHcmFkaWVudD48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE0MCIgZmlsbD0idXJsKCNnKSIvPjwvc3ZnPg=='
 
 const SwipeCard = memo(function SwipeCard({
   event,
@@ -85,7 +106,8 @@ const SwipeCard = memo(function SwipeCard({
   const y = useMotionValue(0)
   const [isDragging, setIsDragging] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [imgSrc, setImgSrc] = useState(event.imageUrl || FALLBACK_IMAGE)
+  const [imgSrc, setImgSrc] = useState(optimizeCardImageUrl(event.imageUrl || FALLBACK_IMAGE))
+  const [isImageLoading, setIsImageLoading] = useState(true)
   const isBlob = imgSrc.startsWith('blob:')
 
   // Rotación proporcional al arrastre horizontal
@@ -105,6 +127,14 @@ const SwipeCard = memo(function SwipeCard({
   const cardRef = useRef<HTMLDivElement>(null)
 
   const isActive = stackIndex === 0
+
+  useEffect(() => {
+    setImgSrc(optimizeCardImageUrl(event.imageUrl || FALLBACK_IMAGE))
+  }, [event.imageUrl])
+
+  useEffect(() => {
+    setIsImageLoading(true)
+  }, [imgSrc])
 
   function handleDragEnd(_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) {
     setIsDragging(false)
@@ -185,17 +215,31 @@ const SwipeCard = memo(function SwipeCard({
         )}
 
         {/* Imagen de fondo */}
+        {isImageLoading && (
+          <div className="absolute inset-0 z-[1] animate-pulse bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />
+        )}
+
         <Image
           src={imgSrc}
           alt={event.title}
           fill
-          className="object-cover"
+          className={`object-cover transition-opacity duration-300 ${isImageLoading ? 'opacity-0' : 'opacity-100'}`}
           draggable={false}
-          priority={stackIndex <= 1}
-          sizes="(max-width: 1024px) 100vw, 50vw"
-          quality={82}
-          unoptimized={isBlob}
-          onError={() => setImgSrc(FALLBACK_IMAGE)}
+          priority={isActive}
+          loading={isActive ? 'eager' : 'lazy'}
+          sizes="(max-width: 640px) 92vw, (max-width: 1024px) 78vw, 380px"
+          quality={70}
+          placeholder="blur"
+          blurDataURL={CARD_BLUR_DATA_URL}
+          unoptimized={isBlob || shouldBypassImageOptimization(imgSrc)}
+          onLoadingComplete={() => setIsImageLoading(false)}
+          onError={() => {
+            if (imgSrc !== FALLBACK_IMAGE) {
+              setImgSrc(optimizeCardImageUrl(FALLBACK_IMAGE))
+              return
+            }
+            setIsImageLoading(false)
+          }}
         />
 
         {/* Doble gradiente para elevar contraste en textos y badges */}
