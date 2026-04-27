@@ -1,10 +1,19 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { memo } from 'react'
+import Image from 'next/image'
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
 import type { PanInfo } from 'framer-motion'
-import { HiMapPin, HiClock, HiUsers, HiGlobeAlt } from 'react-icons/hi2'
-import { HiHeart, HiX, HiBookmark } from 'react-icons/hi'
+import {
+  MapPin as HiMapPin,
+  Clock3 as HiClock,
+  Users as HiUsers,
+  Globe as HiGlobeAlt,
+  Heart as HiHeart,
+  X as HiX,
+  Bookmark as HiBookmark,
+} from 'lucide-react'
 import type { Event } from '../types'
 import { formatEventDate, formatPrice, CATEGORY_COLORS, CATEGORY_EMOJI } from '../data/mockEvents'
 
@@ -21,6 +30,19 @@ interface SwipeCardProps {
 // ─── Umbral de px para considerar un swipe válido ────────────────────────────
 const SWIPE_THRESHOLD = 120
 const REFRESH_THRESHOLD = 100
+
+function shouldBypassImageOptimization(url: string) {
+  if (url.startsWith('blob:') || url.startsWith('data:image/svg')) return true
+
+  try {
+    const parsedUrl = new URL(url)
+    const pathname = parsedUrl.pathname.toLowerCase()
+    return pathname.endsWith('.svg') || pathname.endsWith('/svg')
+  } catch {
+    const normalized = url.toLowerCase()
+    return normalized.includes('.svg') || normalized.includes('/svg')
+  }
+}
 
 function StarRating({ rating }: { rating: number }) {
   const filled = Math.round(rating)
@@ -49,7 +71,9 @@ function StarRating({ rating }: { rating: number }) {
  *  - onSwipeRight / onSwipeLeft: callbacks al padre para actualizar el estado.
  *  - stackIndex: determina escala y opacidad de fondo.
  */
-export default function SwipeCard({
+const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=800&q=75'
+
+const SwipeCard = memo(function SwipeCard({
   event,
   onSwipeRight,
   onSwipeLeft,
@@ -61,6 +85,8 @@ export default function SwipeCard({
   const y = useMotionValue(0)
   const [isDragging, setIsDragging] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [imgSrc, setImgSrc] = useState(event.imageUrl || FALLBACK_IMAGE)
+  const isBlob = imgSrc.startsWith('blob:')
 
   // Rotación proporcional al arrastre horizontal
   const rotate = useTransform(x, [-200, 0, 200], [-15, 0, 15])
@@ -159,11 +185,17 @@ export default function SwipeCard({
         )}
 
         {/* Imagen de fondo */}
-        <img
-          src={event.imageUrl}
+        <Image
+          src={imgSrc}
           alt={event.title}
-          className="absolute inset-0 w-full h-full object-cover"
+          fill
+          className="object-cover"
           draggable={false}
+          priority={stackIndex <= 1}
+          sizes="(max-width: 1024px) 100vw, 50vw"
+          quality={82}
+          unoptimized={isBlob}
+          onError={() => setImgSrc(FALLBACK_IMAGE)}
         />
 
         {/* Doble gradiente para elevar contraste en textos y badges */}
@@ -262,11 +294,21 @@ export default function SwipeCard({
           {/* Precio + Organizador */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <img
-                src={event.organizerAvatar}
-                alt={event.organizerName}
-                className="w-6 h-6 rounded-full border border-white/20"
-              />
+              {event.organizerAvatar ? (
+                <Image
+                  src={event.organizerAvatar}
+                  alt={event.organizerName}
+                  width={24}
+                  height={24}
+                  className="rounded-full border border-white/20"
+                  unoptimized={shouldBypassImageOptimization(event.organizerAvatar)}
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                />
+              ) : (
+                <div className="w-6 h-6 rounded-full border border-white/20 bg-primary/40 flex items-center justify-center text-[9px] text-white font-bold">
+                  {event.organizerName.charAt(0).toUpperCase()}
+                </div>
+              )}
               <span className="max-w-[150px] truncate text-[11px] text-white/60 lg:max-w-[190px]">
                 {event.organizerName}
               </span>
@@ -322,4 +364,8 @@ export default function SwipeCard({
       </div>
     </motion.div>
   )
-}
+})
+
+SwipeCard.displayName = 'SwipeCard'
+
+export default SwipeCard

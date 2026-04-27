@@ -2,13 +2,18 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { HiHome, HiBookmark, HiUser } from 'react-icons/hi'
-import { HiMagnifyingGlass, HiChatBubbleLeftRight } from 'react-icons/hi2'
-import { HiBuildingStorefront } from 'react-icons/hi2'
+import {
+  House as HiHome,
+  Bookmark as HiBookmark,
+  User as HiUser,
+  Search as HiMagnifyingGlass,
+  MessageCircle as HiChatBubbleLeftRight,
+  Store as HiBuildingStorefront,
+} from 'lucide-react'
 import { useChatContext } from '../context/ChatContext'
 import { useAuth } from '../context/AuthContext'
 
-const NAV_ITEMS = [
+const USER_NAV_ITEMS = [
   { href: '/', label: 'Feed', icon: HiHome },
   { href: '/search', label: 'Busqueda', icon: HiMagnifyingGlass },
   { href: '/chat', label: 'Chat', icon: HiChatBubbleLeftRight },
@@ -16,10 +21,16 @@ const NAV_ITEMS = [
   { href: '/profile', label: 'Perfil', icon: HiUser },
 ]
 
+const LOCATARIO_NAV_ITEMS = [
+  { href: '/chat', label: 'Chat', icon: HiChatBubbleLeftRight },
+  { href: '/profile', label: 'Perfil', icon: HiUser },
+]
+
 export default function SidebarNav() {
   const { totalUnread } = useChatContext()
   const { user } = useAuth()
   const pathname = usePathname() ?? '/'
+  const navItems = user?.role === 'locatario' ? LOCATARIO_NAV_ITEMS : USER_NAV_ITEMS
 
   const isRouteActive = (href: string) => {
     if (href === '/') return pathname === '/'
@@ -60,7 +71,7 @@ export default function SidebarNav() {
             <span>Mi Panel</span>
           </Link>
         )}
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+        {navItems.map(({ href, label, icon: Icon }) => {
           const active = isRouteActive(href)
           return (
             <Link

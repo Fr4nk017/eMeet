@@ -65,6 +65,16 @@ create table if not exists public.user_events (
   constraint user_events_user_event_action_key unique (user_id, event_id, action)
 );
 
+-- ─── TABLA: profile_followers ───────────────────────────────
+create table if not exists public.profile_followers (
+  id           uuid primary key default uuid_generate_v4(),
+  follower_id  uuid not null references public.profiles(id) on delete cascade,
+  followed_id  uuid not null references public.profiles(id) on delete cascade,
+  created_at   timestamptz not null default now(),
+  constraint profile_followers_unique unique (follower_id, followed_id),
+  constraint profile_followers_no_self_follow check (follower_id <> followed_id)
+);
+
 -- ─── TABLA: locatario_events ─────────────────────────────────
 create table if not exists public.locatario_events (
   id               uuid primary key default uuid_generate_v4(),
@@ -111,6 +121,8 @@ create table if not exists public.chat_messages (
 -- ─── ÍNDICES de rendimiento ──────────────────────────────────
 create index if not exists idx_user_events_user_id    on public.user_events(user_id);
 create index if not exists idx_user_events_action     on public.user_events(action);
+create index if not exists idx_profile_followers_followed on public.profile_followers(followed_id);
+create index if not exists idx_profile_followers_follower on public.profile_followers(follower_id);
 create index if not exists idx_locatario_creator      on public.locatario_events(creator_id);
 create index if not exists idx_chat_messages_room     on public.chat_messages(room_id);
 create index if not exists idx_chat_messages_created  on public.chat_messages(created_at);
@@ -142,6 +154,24 @@ drop policy if exists "user_events: acceso propio" on public.user_events;
 create policy "user_events: acceso propio"
   on public.user_events for all
   using (auth.uid() = user_id);
+
+-- profile_followers
+alter table public.profile_followers enable row level security;
+
+drop policy if exists "profile_followers: lectura publica" on public.profile_followers;
+create policy "profile_followers: lectura publica"
+  on public.profile_followers for select
+  using (true);
+
+drop policy if exists "profile_followers: insertar propio" on public.profile_followers;
+create policy "profile_followers: insertar propio"
+  on public.profile_followers for insert
+  with check (auth.uid() = follower_id);
+
+drop policy if exists "profile_followers: eliminar propio" on public.profile_followers;
+create policy "profile_followers: eliminar propio"
+  on public.profile_followers for delete
+  using (auth.uid() = follower_id);
 
 -- locatario_events
 alter table public.locatario_events enable row level security;

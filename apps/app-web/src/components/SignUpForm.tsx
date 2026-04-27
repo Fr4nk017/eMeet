@@ -3,7 +3,15 @@
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
-import { FiUser, FiUserPlus, FiMail, FiLock, FiEye, FiEyeOff, FiBriefcase } from 'react-icons/fi'
+import {
+  User as FiUser,
+  UserPlus as FiUserPlus,
+  Mail as FiMail,
+  Lock as FiLock,
+  Eye as FiEye,
+  EyeOff as FiEyeOff,
+  Briefcase as FiBriefcase,
+} from 'lucide-react'
 
 export default function SignUpForm() {
   const router = useRouter()

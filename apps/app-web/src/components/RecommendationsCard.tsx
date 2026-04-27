@@ -1,38 +1,46 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { memo } from 'react'
+import Image from 'next/image'
 import { motion } from 'framer-motion'
-import type { Event } from '../types'
+import type { Event, EventCategory } from '../types'
 
 interface RecommendationsCardProps {
   events: Event[]
   onClose: () => void
+  userInterests?: EventCategory[]
 }
 
-export default function RecommendationsCard({
+function computeScore(event: Event, userInterests: EventCategory[]): number {
+  const interestMatch = userInterests.includes(event.category) ? 60 : 0
+  const distanceKm = event.distance ?? 99
+  const distanceScore = Math.max(0, 40 - (distanceKm / 5) * 40)
+  return interestMatch + distanceScore
+}
+
+const RecommendationsCard = memo(function RecommendationsCard({
   events,
   onClose,
+  userInterests = [],
 }: RecommendationsCardProps) {
-  const [recommendations, setRecommendations] = useState<Array<Event & { similarity: number }>>([])
+  const [recommendations, setRecommendations] = useState<Array<Event & { score: number }>>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Simular carga de recomendaciones (en producción viene del backend)
     const timer = setTimeout(() => {
       setRecommendations(
         events
-          .slice(0, 3)
-          .map((e, i) => ({
-            ...e,
-            similarity: Math.random() * 100,
-          }))
-          .sort((a, b) => b.similarity - a.similarity)
+          .slice(0, 10)
+          .map((e) => ({ ...e, score: computeScore(e, userInterests) }))
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 3),
       )
       setLoading(false)
     }, 600)
 
     return () => clearTimeout(timer)
-  }, [events])
+  }, [events, userInterests])
 
   if (loading) {
     return (
@@ -67,7 +75,9 @@ export default function RecommendationsCard({
       className="space-y-3"
     >
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-primary-light">✨ Algo como esto</h3>
+        <h3 className="font-semibold text-primary-light">
+          {userInterests.length > 0 ? '✨ Para ti' : '📍 Popular cerca'}
+        </h3>
         <button
           onClick={onClose}
           className="text-xs text-muted hover:text-primary-light transition-colors"
@@ -87,10 +97,14 @@ export default function RecommendationsCard({
           {/* Thumbnail */}
           {event.imageUrl && (
             <div className="relative h-32 overflow-hidden">
-              <img
+              <Image
                 src={event.imageUrl}
                 alt={event.title}
-                className="h-full w-full object-cover group-hover:scale-105 transition-transform"
+                fill
+                className="object-cover group-hover:scale-105 transition-transform"
+                sizes="(max-width: 768px) 100vw, 300px"
+                unoptimized={event.imageUrl.startsWith('blob:')}
+                onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = 'none' }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
             </div>
@@ -101,12 +115,13 @@ export default function RecommendationsCard({
             <h4 className="font-semibold text-white line-clamp-1">{event.title}</h4>
             <p className="text-xs text-muted line-clamp-1">{event.address}</p>
 
-            {/* Similarity badge */}
             <div className="mt-2 flex items-center justify-between">
               <div className="text-xs text-violet-400">
-                {Math.round(event.similarity)}% compatibilidad
+                {userInterests.includes(event.category)
+                  ? '✓ Coincide con tus intereses'
+                  : `${event.distance.toFixed(1)} km de ti`}
               </div>
-              {event.distance && (
+              {event.distance > 0 && userInterests.includes(event.category) && (
                 <span className="text-xs text-muted">
                   {event.distance.toFixed(1)} km
                 </span>
@@ -117,4 +132,8 @@ export default function RecommendationsCard({
       ))}
     </motion.div>
   )
-}
+})
+
+RecommendationsCard.displayName = 'RecommendationsCard'
+
+export default RecommendationsCard

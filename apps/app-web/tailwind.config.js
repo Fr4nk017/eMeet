@@ -20,7 +20,8 @@ export default {
         muted: '#A5B4FC',       // texto secundario (azul-lavanda)
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        // Usa la variable CSS inyectada por next/font/google en layout.tsx
+        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
       },
       borderRadius: {
         '2xl': '1rem',
