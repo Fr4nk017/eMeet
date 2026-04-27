@@ -4,9 +4,14 @@ import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import Layout from '../../src/components/Layout'
 import SwipeCard from '../../src/components/SwipeCard'
-import { MOCK_EVENTS, CATEGORY_EMOJI, formatEventDate, formatPrice } from '../../src/data/mockEvents'
+import { NearbyPlacesProvider, useNearbyPlacesContext } from '../../src/context/NearbyPlacesContext'
+import { useLocatarioEvents } from '../../src/context/LocatarioEventsContext'
+import { useFeedEvents } from '../../src/hooks/useFeedEvents'
+import { placeToEvent } from '../../src/data/placeFeedAdapter'
+import { haversineKm } from '../../src/utils/geo'
+import { CATEGORY_EMOJI, formatEventDate, formatPrice } from '../../src/data/mockEvents'
 import type { Event, EventCategory } from '../../src/types'
-import { HiXMark } from 'react-icons/hi2'
+import { X as HiXMark } from 'lucide-react'
 
 const CATEGORIES: { key: EventCategory; label: string }[] = [
   { key: 'gastronomia', label: 'Gastronomía' },
@@ -19,22 +24,76 @@ const CATEGORIES: { key: EventCategory; label: string }[] = [
   { key: 'arte', label: 'Arte' },
 ]
 
-export default function SearchRoutePage() {
+function SearchSkeleton() {
+  return (
+    <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
+      {[1, 2, 3, 4, 5, 6].map((i) => (
+        <div key={i} className="overflow-hidden rounded-2xl border border-white/10 bg-card">
+          <div className="shimmer aspect-[16/10] w-full" />
+          <div className="space-y-2 p-3.5">
+            <div className="shimmer h-3 w-1/3 rounded-md" />
+            <div className="shimmer h-4 w-3/4 rounded-md" />
+            <div className="shimmer h-3 w-full rounded-md" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function SearchPageContent() {
+  const {
+    places,
+    userLocation,
+    loading,
+    locating,
+    invalidApiKey,
+    requestUserLocation,
+  } = useNearbyPlacesContext()
+
+  const { locatarioEvents } = useLocatarioEvents()
+  const externalEvents = useFeedEvents(userLocation, 20)
+
   const [isFiltersOpen, setIsFiltersOpen] = useState(false)
   const [activeCategory, setActiveCategory] = useState<EventCategory | null>(null)
   const [maxDistanceKm, setMaxDistanceKm] = useState<number | null>(5)
   const [onlyFree, setOnlyFree] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
 
+  const allEvents = useMemo(() => {
+    const placeEvents = userLocation
+      ? places.map((place) => {
+          const distance = haversineKm(
+            place.position.lat,
+            place.position.lng,
+            userLocation.lat,
+            userLocation.lng,
+          )
+          return placeToEvent(place, distance)
+        })
+      : []
+
+    return placeEvents
+      .concat(
+        locatarioEvents.map((e) => {
+          if (e.lat != null && e.lng != null && userLocation) {
+            return { ...e, distance: haversineKm(e.lat, e.lng, userLocation.lat, userLocation.lng) }
+          }
+          return e
+        }),
+      )
+      .concat(externalEvents)
+      .sort((a, b) => a.distance - b.distance)
+  }, [externalEvents, locatarioEvents, places, userLocation])
+
   const filtered = useMemo(() => {
-    return MOCK_EVENTS.filter((e) => {
+    return allEvents.filter((e) => {
       const matchesCategory = activeCategory === null || e.category === activeCategory
       const matchesDistance = maxDistanceKm === null || e.distance <= maxDistanceKm
       const matchesFree = !onlyFree || e.price === null
-
       return matchesCategory && matchesDistance && matchesFree
     })
-  }, [activeCategory, maxDistanceKm, onlyFree])
+  }, [allEvents, activeCategory, maxDistanceKm, onlyFree])
 
   const activeFilterCount =
     (activeCategory ? 1 : 0) +
@@ -46,6 +105,8 @@ export default function SearchRoutePage() {
     setMaxDistanceKm(5)
     setOnlyFree(false)
   }
+
+  const isLoading = loading || locating || !userLocation
 
   return (
     <Layout headerTitle="Explorar">
@@ -184,39 +245,79 @@ export default function SearchRoutePage() {
           </AnimatePresence>
         </div>
 
-        <p className="mb-3 text-xs text-muted">{filtered.length} eventos encontrados</p>
-
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
-            <span className="text-4xl">🔎</span>
-            <p className="text-sm text-muted">No hay eventos que coincidan con tu búsqueda.</p>
+        {invalidApiKey ? (
+          <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+            <span className="text-5xl">🔑</span>
+            <h2 className="text-lg font-bold text-white">Configura tu API key de Google Maps</h2>
+            <p className="max-w-xs text-sm text-muted">
+              El explorador usa lugares reales según tu ubicación. Agrega la clave en .env.local para activarlo.
+            </p>
           </div>
+        ) : isLoading ? (
+          <>
+            <p className="mb-3 text-xs text-muted">Buscando lugares cercanos...</p>
+            <SearchSkeleton />
+          </>
         ) : (
-          <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
-            {filtered.map((event) => (
-              <motion.button
-                key={event.id}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => setSelectedEvent(event)}
-                className="overflow-hidden rounded-2xl border border-white/10 bg-card text-left transition-colors hover:border-primary/50"
-              >
-                <img src={event.imageUrl} alt={event.title} className="aspect-[16/10] w-full object-cover" />
-                <div className="p-3.5">
-                  <span className="text-xs font-semibold text-primary-light">
-                    {CATEGORY_EMOJI[event.category]} {event.category}
-                  </span>
-                  <h3 className="mt-1 line-clamp-2 text-base font-semibold leading-tight text-white">
-                    {event.title}
-                  </h3>
-                  <p className="mt-1 text-xs text-muted">{event.location}</p>
-                  <div className="mt-2 flex items-center justify-between text-xs">
-                    <span className="text-slate-300">{event.distance} km</span>
-                    <span className="font-semibold text-primary-light">{formatPrice(event.price)}</span>
-                  </div>
-                  <p className="mt-1 text-[11px] text-muted">{formatEventDate(event.date)}</p>
-                </div>
-              </motion.button>
-            ))}
+          <>
+            <p className="mb-3 text-xs text-muted">{filtered.length} eventos encontrados</p>
+
+            {filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
+                <span className="text-4xl">🔎</span>
+                <p className="text-sm text-muted">No hay eventos que coincidan con tu búsqueda.</p>
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-slate-200 hover:border-white/40"
+                >
+                  Limpiar filtros
+                </button>
+              </div>
+            ) : (
+              <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
+                {filtered.map((event) => (
+                  <motion.button
+                    key={event.id}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => setSelectedEvent(event)}
+                    className="overflow-hidden rounded-2xl border border-white/10 bg-card text-left transition-colors hover:border-primary/50"
+                  >
+                    <img
+                      src={event.imageUrl}
+                      alt={event.title}
+                      className="aspect-[16/10] w-full object-cover"
+                    />
+                    <div className="p-3.5">
+                      <span className="text-xs font-semibold text-primary-light">
+                        {CATEGORY_EMOJI[event.category]} {event.category}
+                      </span>
+                      <h3 className="mt-1 line-clamp-2 text-base font-semibold leading-tight text-white">
+                        {event.title}
+                      </h3>
+                      <p className="mt-1 text-xs text-muted">{event.location}</p>
+                      <div className="mt-2 flex items-center justify-between text-xs">
+                        <span className="text-slate-300">{event.distance} km</span>
+                        <span className="font-semibold text-primary-light">{formatPrice(event.price)}</span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted">{formatEventDate(event.date)}</p>
+                    </div>
+                  </motion.button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {!isLoading && !invalidApiKey && (
+          <div className="mt-4 flex justify-center">
+            <button
+              type="button"
+              onClick={() => requestUserLocation(true)}
+              className="text-xs font-medium text-primary-light hover:text-primary"
+            >
+              Actualizar mi ubicación
+            </button>
           </div>
         )}
       </div>
@@ -248,5 +349,13 @@ export default function SearchRoutePage() {
         </motion.div>
       )}
     </Layout>
+  )
+}
+
+export default function SearchRoutePage() {
+  return (
+    <NearbyPlacesProvider>
+      <SearchPageContent />
+    </NearbyPlacesProvider>
   )
 }

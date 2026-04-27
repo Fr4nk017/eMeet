@@ -2,11 +2,19 @@
 
 import { useAuth } from '@/src/context/AuthContext'
 import { useAdmin } from '@/src/context/AdminContext'
+import { AdminProvider } from '@/src/context/AdminContext'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { FiLogOut, FiUsers, FiBarChart, FiAlertCircle, FiTrash2, FiRefreshCw } from 'react-icons/fi'
+import {
+  LogOut as FiLogOut,
+  Users as FiUsers,
+  BarChart3 as FiBarChart,
+  CircleAlert as FiAlertCircle,
+  Trash2 as FiTrash2,
+  RefreshCw as FiRefreshCw,
+} from 'lucide-react'
 
-export default function AdminPage() {
+function AdminPageContent() {
   const { user, logout } = useAuth()
   const { users, events, statistics, isLoadingUsers, isLoadingEvents, isLoadingStats, fetchUsers, fetchEvents, fetchStatistics, deleteUser, deleteEvent, error } = useAdmin()
   const router = useRouter()
@@ -292,5 +300,13 @@ export default function AdminPage() {
         )}
       </main>
     </div>
+  )
+}
+
+export default function AdminPage() {
+  return (
+    <AdminProvider>
+      <AdminPageContent />
+    </AdminProvider>
   )
 }

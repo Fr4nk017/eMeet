@@ -37,7 +37,7 @@
 | **Tailwind CSS** | 3.4 | Utilidades CSS inline — evita escribir CSS custom para estilos repetitivos |
 | **Framer Motion** | 11 | Animaciones declarativas y gestos de arrastre (swipe) |
 | **React Router v6** | 6.27 | Navegación SPA entre pantallas |
-| **react-icons** | 5.3 | Set de iconos SVG (HeroIcons v2) |
+| **lucide-react** | 0.540 | Set de iconos SVG optimizado para tree-shaking |
 | **@react-google-maps/api** | 2.20.8 | Integración de Google Maps con Places API (búsqueda de locales cercanos) |
 
 ### ¿Por qué Vite y no Create React App?

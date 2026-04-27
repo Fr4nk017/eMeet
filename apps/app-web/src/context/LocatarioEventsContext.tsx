@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 import type { Event, EventCategory } from '../types'
 import { getSupabaseBrowserClient, hasSupabaseEnv } from '../lib/supabase'
 
-interface CreateLocatarioEventInput {
+export interface CreateLocatarioEventInput {
   title: string
   description: string
   category: EventCategory
@@ -24,6 +24,7 @@ interface LocatarioEventsContextValue {
   isLoading: boolean
   createLocatarioEvent: (input: CreateLocatarioEventInput) => Promise<Event>
   removeLocatarioEvent: (eventId: string) => Promise<void>
+  updateLocatarioEvent: (eventId: string, input: Partial<CreateLocatarioEventInput>) => Promise<void>
 }
 
 const LocatarioEventsContext = createContext<LocatarioEventsContextValue | undefined>(undefined)
@@ -227,6 +228,46 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
     return newEvent
   }, [])
 
+  const updateLocatarioEvent = useCallback(async (eventId: string, input: Partial<CreateLocatarioEventInput>): Promise<void> => {
+    setLocatarioEvents((prev) => {
+      const next = prev.map((e) => {
+        if (e.id !== eventId) return e
+        return {
+          ...e,
+          title: input.title?.trim() ?? e.title,
+          description: input.description?.trim() ?? e.description,
+          category: input.category ?? e.category,
+          date: input.date ? new Date(input.date).toISOString() : e.date,
+          address: input.address?.trim() ?? e.address,
+          price: input.price !== undefined ? input.price : e.price,
+          imageUrl: input.imageUrl?.trim() || e.imageUrl,
+          lat: input.lat ?? e.lat,
+          lng: input.lng ?? e.lng,
+        }
+      })
+      if (!hasSupabaseEnv) saveEventsToStorage(next)
+      return next
+    })
+
+    if (!hasSupabaseEnv) return
+
+    const { data: sessionData } = await getSupabaseBrowserClient().auth.getSession()
+    if (!sessionData.session) throw new Error('Debes iniciar sesión para editar eventos.')
+
+    await apiFetch<void>(EVENTS_URL, `/events/locatario/${eventId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        title: input.title,
+        description: input.description,
+        category: input.category,
+        event_date: input.date,
+        address: input.address,
+        price: input.price,
+        image_url: input.imageUrl || null,
+      }),
+    })
+  }, [])
+
   const removeLocatarioEvent = useCallback(async (eventId: string): Promise<void> => {
     // Optimistic update
     setLocatarioEvents((prev) => {
@@ -246,8 +287,8 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo(
-    () => ({ locatarioEvents, isLoading, createLocatarioEvent, removeLocatarioEvent }),
-    [locatarioEvents, isLoading, createLocatarioEvent, removeLocatarioEvent],
+    () => ({ locatarioEvents, isLoading, createLocatarioEvent, removeLocatarioEvent, updateLocatarioEvent }),
+    [locatarioEvents, isLoading, createLocatarioEvent, removeLocatarioEvent, updateLocatarioEvent],
   )
 
   return <LocatarioEventsContext.Provider value={value}>{children}</LocatarioEventsContext.Provider>

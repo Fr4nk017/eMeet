@@ -14,7 +14,8 @@ type RegisterOptions = {
 
 interface AuthContextValue extends AuthState {
   isAuthReady: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<User['role']>
+  loginWithOAuth: (provider: 'google' | 'facebook') => Promise<void>
   register: (name: string, email: string, password: string, options?: RegisterOptions) => Promise<void>
   logout: () => Promise<void>
   updateUser: (data: Partial<User>) => Promise<void>
@@ -38,6 +39,10 @@ type ProfilePayload = {
   avatar_url: string | null
   location: string
   interests: User['interests']
+  role?: string | null
+  business_name?: string | null
+  business_location?: string | null
+  created_at?: string
 }
 
 type UserEventPayload = {
@@ -47,6 +52,11 @@ type UserEventPayload = {
 type AuthResponsePayload = {
   user: {
     email?: string | null
+    app_metadata?: {
+      role?: User['role']
+      business_name?: string | null
+      business_location?: string | null
+    }
     user_metadata?: {
       role?: User['role']
       business_name?: string | null
@@ -59,11 +69,11 @@ type AuthResponsePayload = {
   } | null
 }
 
-function resolveRole(email: string, roleHint?: User['role']): User['role'] {
+function resolveRole(_email: string, roleHint?: User['role']): User['role'] {
   if (roleHint === 'admin' || roleHint === 'locatario' || roleHint === 'user') {
     return roleHint
   }
-  return inferLocalRoleByEmail(email)
+  return 'user'
 }
 
 const LOCAL_AUTH_STORAGE_KEY = 'emeet-local-auth-user'
@@ -71,11 +81,17 @@ const AUTH_URL = (process.env.NEXT_PUBLIC_AUTH_URL ?? '').trim().replace(/\/$/, 
 const PROFILE_URL = (process.env.NEXT_PUBLIC_PROFILE_URL ?? '').trim().replace(/\/$/, '')
 const SAVED_URL = (process.env.NEXT_PUBLIC_SAVED_URL ?? '').trim().replace(/\/$/, '')
 
-function inferLocalRoleByEmail(email: string): User['role'] {
-  const normalized = email.toLowerCase()
-  if (normalized.includes('admin')) return 'admin'
-  if (normalized.includes('locatario')) return 'locatario'
-  return 'user'
+function resolveRoleFromClaims(
+  appMetadataRole?: unknown,
+  userMetadataRole?: unknown,
+): User['role'] | undefined {
+  if (appMetadataRole === 'admin' || appMetadataRole === 'locatario' || appMetadataRole === 'user') {
+    return appMetadataRole
+  }
+  if (userMetadataRole === 'admin' || userMetadataRole === 'locatario' || userMetadataRole === 'user') {
+    return userMetadataRole
+  }
+  return undefined
 }
 
 function createLocalUser(
@@ -84,7 +100,7 @@ function createLocalUser(
   previousUser?: User | null,
   options?: RegisterOptions,
 ): User {
-  const role = options?.role ?? previousUser?.role ?? inferLocalRoleByEmail(email)
+  const role = options?.role ?? previousUser?.role ?? 'user'
 
   return {
     id: previousUser?.id ?? `local-${email.toLowerCase()}`,
@@ -175,31 +191,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     roleHint?: User['role'],
     businessMeta?: { businessName?: string | null; businessLocation?: string | null },
   ) => {
-    // liked/saved son opcionales: si el servicio no responde usamos arrays vacíos
-    // para no bloquear la autenticación del usuario.
+    // El perfil y los eventos son opcionales: si los microservicios no responden,
+    // completamos con datos mínimos del token de Supabase para no bloquear el login.
     const [profile, likedEvents, savedEvents] = await Promise.all([
-      fetchApi<ProfilePayload>(PROFILE_URL, '/profile', { method: 'GET' }),
+      fetchApi<ProfilePayload>(PROFILE_URL, '/profile', { method: 'GET' }).catch(() => null),
       fetchApi<UserEventPayload[]>(SAVED_URL, '/events/liked', { method: 'GET' }).catch(() => [] as UserEventPayload[]),
       fetchApi<UserEventPayload[]>(SAVED_URL, '/events/saved', { method: 'GET' }).catch(() => [] as UserEventPayload[]),
     ])
 
+    const profileRole = profile?.role as User['role'] | undefined
     const nextUser: User = {
-      id: profile.id,
-      name: profile.name,
+      id: profile?.id ?? `auth-${email.toLowerCase()}`,
+      name: profile?.name ?? email.split('@')[0],
       email,
-      role: resolveRole(email, roleHint),
-      avatarUrl: profile.avatar_url ?? '',
-      bio: profile.bio ?? '',
-      interests: profile.interests ?? [],
+      role: resolveRole(email, roleHint ?? profileRole),
+      avatarUrl: profile?.avatar_url ?? '',
+      bio: profile?.bio ?? '',
+      interests: profile?.interests ?? [],
       likedEvents: likedEvents.map((row) => row.event_id),
       savedEvents: savedEvents.map((row) => row.event_id),
-      location: profile.location ?? '',
+      location: profile?.location ?? '',
+      createdAt: profile?.created_at,
       isVerified: true,
-      businessName: businessMeta?.businessName ?? undefined,
-      businessLocation: businessMeta?.businessLocation ?? undefined,
+      businessName: businessMeta?.businessName ?? profile?.business_name ?? undefined,
+      businessLocation: businessMeta?.businessLocation ?? profile?.business_location ?? undefined,
     }
 
     setAuthState({ user: nextUser, isAuthenticated: true })
+    saveLocalUser(nextUser)
+    return nextUser.role
   }, [])
 
   // Usada al montar la app: primero verifica si hay sesión activa, luego carga datos.
@@ -227,12 +247,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const { data: userData } = await getSupabaseBrowserClient().auth.getUser()
-    const roleHint = userData.user?.user_metadata?.role as User['role'] | undefined
-    const businessName = userData.user?.user_metadata?.business_name as string | undefined
-    const businessLocation = userData.user?.user_metadata?.business_location as string | undefined
-    await syncUserData(sessionPayload.session.user.email ?? '', roleHint, {
-      businessName,
-      businessLocation,
+    const roleHint = resolveRoleFromClaims(
+      userData.user?.app_metadata?.role,
+      userData.user?.user_metadata?.role,
+    )
+    const businessName =
+      (userData.user?.app_metadata?.business_name as string | undefined) ??
+      (userData.user?.user_metadata?.business_name as string | undefined)
+    const businessLocation =
+      (userData.user?.app_metadata?.business_location as string | undefined) ??
+      (userData.user?.user_metadata?.business_location as string | undefined)
+
+    // Use cached role as last resort so the user's role survives refreshes
+    // even when user_metadata and the profile service don't return it.
+    const sessionEmail = sessionPayload.session.user.email ?? ''
+    const cachedUser = loadLocalUser()
+    const cachedRole = cachedUser?.email?.toLowerCase() === sessionEmail.toLowerCase()
+      ? cachedUser?.role
+      : undefined
+
+    await syncUserData(sessionEmail, roleHint ?? cachedRole, {
+      businessName: businessName ?? cachedUser?.businessName,
+      businessLocation: businessLocation ?? cachedUser?.businessLocation,
     })
   }, [syncUserData])
 
@@ -245,7 +281,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await syncFromApi()
       } catch {
         if (!mounted) return
-        setAuthState({ user: null, isAuthenticated: false })
+        // Network error — fall back to cache instead of kicking the user out
+        const cached = loadLocalUser()
+        setAuthState(cached
+          ? { user: cached, isAuthenticated: true }
+          : { user: null, isAuthenticated: false },
+        )
       } finally {
         if (mounted) setIsAuthReady(true)
       }
@@ -258,30 +299,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [syncFromApi])
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string): Promise<User['role']> => {
     if (!hasSupabaseEnv) {
       const previous = loadLocalUser()
       const localUser = createLocalUser(previous?.name ?? email.split('@')[0], email, previous)
       saveLocalUser(localUser)
       setAuthState({ user: localUser, isAuthenticated: true })
-      return
+      return localUser.role
     }
 
     const { data, error } = await getSupabaseBrowserClient().auth.signInWithPassword({ email, password })
 
     if (error) {
-      if (error.message.toLowerCase().includes('rate limit')) {
+      const msg = error.message.toLowerCase()
+      if (msg.includes('rate limit') || msg.includes('too many requests')) {
         throw new Error('Demasiados intentos. Espera unos minutos e inténtalo de nuevo.')
+      }
+      if (msg.includes('invalid login credentials') || msg.includes('invalid credentials')) {
+        throw new Error('Correo o contraseña incorrectos. Verifica tus datos e inténtalo de nuevo.')
+      }
+      if (msg.includes('email not confirmed')) {
+        throw new Error('Debes confirmar tu correo electrónico antes de iniciar sesión.')
+      }
+      if (msg.includes('user not found')) {
+        throw new Error('No existe una cuenta con ese correo.')
       }
       throw new Error(error.message)
     }
 
-    await syncUserData(
+    return syncUserData(
       data.user?.email ?? email,
-      data.user?.user_metadata?.role as User['role'] | undefined,
+      resolveRoleFromClaims(data.user?.app_metadata?.role, data.user?.user_metadata?.role),
       {
-        businessName: data.user?.user_metadata?.business_name as string | undefined,
-        businessLocation: data.user?.user_metadata?.business_location as string | undefined,
+        businessName:
+          (data.user?.app_metadata?.business_name as string | undefined) ??
+          (data.user?.user_metadata?.business_name as string | undefined),
+        businessLocation:
+          (data.user?.app_metadata?.business_location as string | undefined) ??
+          (data.user?.user_metadata?.business_location as string | undefined),
       },
     )
   }, [syncUserData])
@@ -311,10 +366,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         access_token: payload.session.access_token,
         refresh_token: payload.session.refresh_token,
       })
-      await syncUserData(email, options?.role ?? payload.user?.user_metadata?.role, {
-        businessName: options?.businessName ?? payload.user?.user_metadata?.business_name,
-        businessLocation: options?.businessLocation ?? payload.user?.user_metadata?.business_location,
-      })
+      await syncUserData(
+        email,
+        options?.role ?? resolveRoleFromClaims(payload.user?.app_metadata?.role, payload.user?.user_metadata?.role),
+        {
+        businessName:
+          options?.businessName ??
+          payload.user?.app_metadata?.business_name ??
+          payload.user?.user_metadata?.business_name,
+        businessLocation:
+          options?.businessLocation ??
+          payload.user?.app_metadata?.business_location ??
+          payload.user?.user_metadata?.business_location,
+        },
+      )
       return
     }
 
@@ -322,6 +387,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Evitamos llamar endpoints protegidos sin token y devolvemos un mensaje claro al usuario.
     throw new Error('Registro creado. Revisa tu correo para confirmar la cuenta antes de iniciar sesión.')
   }, [syncUserData])
+
+  const loginWithOAuth = useCallback(async (provider: 'google' | 'facebook') => {
+    if (!hasSupabaseEnv) {
+      throw new Error('OAuth no está disponible en modo local. Usa email y contraseña.')
+    }
+
+    const redirectTo = `${window.location.origin}/auth/callback`
+
+    const { error } = await getSupabaseBrowserClient().auth.signInWithOAuth({
+      provider,
+      options: { redirectTo },
+    })
+
+    if (error) throw new Error(error.message)
+  }, [])
 
   const logout = useCallback(async () => {
     if (!hasSupabaseEnv) {
@@ -337,6 +417,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     await getSupabaseBrowserClient().auth.signOut()
+    saveLocalUser(null)
     setAuthState({ user: null, isAuthenticated: false })
   }, [])
 
@@ -375,7 +456,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [authState.user])
 
   return (
-    <AuthContext.Provider value={{ ...authState, isAuthReady, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ ...authState, isAuthReady, login, loginWithOAuth, register, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   )
