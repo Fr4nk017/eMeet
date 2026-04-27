@@ -30,6 +30,7 @@ router.post('/locatario', async (req, res) => {
     address?: string
     price?: number | null
     image_url?: string | null
+    video_url?: string | null
     organizer_name?: string
     organizer_avatar?: string | null
   }
@@ -49,6 +50,7 @@ router.post('/locatario', async (req, res) => {
       address: body.address?.trim() ?? '',
       price: body.price ?? null,
       image_url: body.image_url?.trim() || null,
+      video_url: body.video_url?.trim() || null,
       organizer_name: body.organizer_name ?? '',
       organizer_avatar: body.organizer_avatar ?? null,
     })
@@ -60,6 +62,65 @@ router.post('/locatario', async (req, res) => {
   }
 
   return res.status(201).json(data)
+})
+
+router.patch('/locatario/:id', async (req, res) => {
+  const { id } = req.params
+  const body = req.body as {
+    title?: string
+    description?: string
+    category?: EventCategory
+    event_date?: string
+    address?: string
+    price?: number | null
+    image_url?: string | null
+    video_url?: string | null
+    organizer_name?: string
+    organizer_avatar?: string | null
+  }
+
+  type LocatarioUpdate = {
+    title?: string
+    description?: string
+    category?: EventCategory
+    event_date?: string
+    address?: string
+    price?: number | null
+    image_url?: string | null
+    video_url?: string | null
+    organizer_name?: string
+    organizer_avatar?: string | null
+  }
+
+  const updates: LocatarioUpdate = {}
+  if (body.title !== undefined) updates.title = body.title.trim()
+  if (body.description !== undefined) updates.description = body.description.trim()
+  if (body.category !== undefined) updates.category = body.category
+  if (body.event_date !== undefined) updates.event_date = new Date(body.event_date).toISOString()
+  if (body.address !== undefined) updates.address = body.address.trim()
+  if (body.price !== undefined) updates.price = body.price
+  if (body.image_url !== undefined) updates.image_url = body.image_url?.trim() || null
+  if (body.video_url !== undefined) updates.video_url = body.video_url?.trim() || null
+  if (body.organizer_name !== undefined) updates.organizer_name = body.organizer_name
+  if (body.organizer_avatar !== undefined) updates.organizer_avatar = body.organizer_avatar
+
+  if (Object.keys(updates).length === 0) {
+    return badRequest(res, 'No se enviaron campos para actualizar.')
+  }
+
+  const { data, error } = await req.supabase!
+    .from('locatario_events')
+    .update(updates)
+    .eq('id', id)
+    .eq('creator_id', req.authUser!.id)
+    .select('*')
+    .single()
+
+  if (error) {
+    return serverError(res, 'No se pudo actualizar el evento.')
+  }
+
+  return res.json(data)
 })
 
 router.delete('/locatario/:id', async (req, res) => {
