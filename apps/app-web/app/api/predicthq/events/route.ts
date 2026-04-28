@@ -82,6 +82,7 @@ function normalizeEvent(raw: PHQEvent, userLat: number, userLng: number): Event 
     title: raw.title,
     description: raw.description ?? '',
     category: mapCategory(raw.category),
+    source: 'predicthq' as const,
     date: raw.start,
     location: venue?.name ?? 'Lugar por confirmar',
     address: venue?.formatted_address ?? 'Santiago, Chile',

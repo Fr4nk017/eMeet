@@ -17,11 +17,14 @@ export type EventCategory =
 /**
  * Representa un evento publicado en la plataforma.
  */
+export type EventSource = 'ticketmaster' | 'predicthq' | 'eventbrite' | 'meetup' | 'places' | 'locatario'
+
 export interface Event {
   id: string
   title: string
   description: string
   category: EventCategory
+  source: EventSource
   date: string           // ISO 8601 — ej: "2026-03-25T21:00:00"
   location: string       // nombre del lugar
   address: string

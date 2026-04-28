@@ -75,6 +75,7 @@ function normalizeEvent(raw: Record<string, unknown>, userLat: number, userLng: 
     title: (name?.text as string) ?? 'Sin nombre',
     description: (description?.text as string) ?? (raw.summary as string) ?? '',
     category: mapCategory(category?.name as string | undefined),
+    source: 'eventbrite' as const,
     date: (start?.local as string) ?? new Date().toISOString(),
     location: (venue?.name as string) ?? 'Santiago',
     address: (venueAddress?.localized_address_display as string) ?? 'Santiago, Chile',

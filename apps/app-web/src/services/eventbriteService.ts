@@ -1,18 +1,18 @@
 import type { Event } from '../types'
+import type { FeedResult } from './ticketmasterService'
 
 export async function fetchEventbriteEvents(
   lat: number,
   lng: number,
   radiusKm: number,
-): Promise<Event[]> {
+): Promise<FeedResult> {
   try {
-    const res = await fetch(
-      `/api/eventbrite/events?lat=${lat}&lng=${lng}&radius=${radiusKm}`,
-    )
-    if (!res.ok) return []
-    const data = await res.json() as { events?: Event[] }
-    return data.events ?? []
+    const res = await fetch(`/api/eventbrite/events?lat=${lat}&lng=${lng}&radius=${radiusKm}`)
+    if (!res.ok) return { events: [], configured: true, error: 'Error al contactar Eventbrite' }
+    const data = await res.json() as { events?: Event[]; configured?: boolean }
+    if (data.configured === false) return { events: [], configured: false }
+    return { events: data.events ?? [], configured: true }
   } catch {
-    return []
+    return { events: [], configured: true, error: 'No se pudo conectar con Eventbrite' }
   }
 }

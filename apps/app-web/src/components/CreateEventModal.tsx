@@ -83,6 +83,7 @@ export function CreateEventModal({
   const [isFree, setIsFree] = useState(true)
   const [gpsStatus, setGpsStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null)
+  const [geocodeStatus, setGeocodeStatus] = useState<'idle' | 'loading' | 'done'>('idle')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
@@ -122,6 +123,37 @@ export function CreateEventModal({
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }, [isOpen, defaultAddress, mode, initialValues])
+
+  // Geocodifica la dirección escrita manualmente (no aplica si se usó GPS)
+  useEffect(() => {
+    if (gpsStatus === 'success') return
+    const address = eventForm.address.trim()
+    if (address.length < 8) {
+      setGpsCoords(null)
+      setGeocodeStatus('idle')
+      return
+    }
+
+    setGeocodeStatus('loading')
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/geocode?address=${encodeURIComponent(address)}`)
+        const data = await res.json() as { lat: number | null; lng: number | null }
+        if (data.lat !== null && data.lng !== null) {
+          setGpsCoords({ lat: data.lat, lng: data.lng })
+          setGeocodeStatus('done')
+        } else {
+          setGpsCoords(null)
+          setGeocodeStatus('idle')
+        }
+      } catch {
+        setGpsCoords(null)
+        setGeocodeStatus('idle')
+      }
+    }, 800)
+
+    return () => clearTimeout(timer)
+  }, [eventForm.address, gpsStatus])
 
   if (!isOpen) return null
 
@@ -399,6 +431,7 @@ export function CreateEventModal({
                       setEventForm((prev) => ({ ...prev, address: e.target.value }))
                       setGpsCoords(null)
                       setGpsStatus('idle')
+                      setGeocodeStatus('idle')
                     }}
                     className="w-full bg-white/5 border border-white/10 focus:border-violet-500/50 outline-none py-2.5 pl-9 pr-[4.5rem] rounded-xl text-white text-sm placeholder-white/30 transition-colors"
                   />
@@ -420,6 +453,17 @@ export function CreateEventModal({
                     GPS
                   </button>
                 </div>
+                {/* Indicador de geocodificación por dirección */}
+                {gpsStatus !== 'success' && (
+                  <p className={`mt-1 text-[11px] transition-opacity ${
+                    geocodeStatus === 'loading' ? 'text-white/30 opacity-100' :
+                    geocodeStatus === 'done' ? 'text-green-400/80 opacity-100' :
+                    'opacity-0'
+                  }`}>
+                    {geocodeStatus === 'loading' && '⏳ Buscando coordenadas...'}
+                    {geocodeStatus === 'done' && '📍 Ubicación detectada — el evento aparecerá en el mapa'}
+                  </p>
+                )}
               </div>
 
               <div>

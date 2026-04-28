@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowRight as FiArrowRight, CircleAlert as FiAlertCircle } from 'lucide-react'
+import { ArrowRight as FiArrowRight, CircleAlert as FiAlertCircle, MapPin, Calendar, Users } from 'lucide-react'
 import LoginForm from '../../src/components/LoginForm'
 import SignUpForm from '../../src/components/SignUpForm'
 import { useAuth } from '../../src/context/AuthContext'
@@ -26,6 +26,30 @@ function FacebookIcon() {
   )
 }
 
+const FEATURES = [
+  {
+    icon: MapPin,
+    title: 'Eventos cerca tuyo',
+    desc: 'Descubre bares, restaurantes y eventos en Santiago con recomendaciones personalizadas.',
+  },
+  {
+    icon: Calendar,
+    title: 'Panel de locatario',
+    desc: 'Crea y gestiona tus eventos, llega a más personas y mide tu impacto.',
+  },
+  {
+    icon: Users,
+    title: 'Comunidad activa',
+    desc: 'Conecta con personas con tus mismos intereses y guarda tus eventos favoritos.',
+  },
+]
+
+const STATS = [
+  { value: '500+', label: 'Eventos activos' },
+  { value: '12', label: 'Categorías' },
+  { value: 'STG', label: 'Santiago' },
+]
+
 export default function AuthPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [oauthLoading, setOauthLoading] = useState<'google' | 'facebook' | null>(null)
@@ -45,29 +69,41 @@ export default function AuthPage() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(124,58,237,0.18),_transparent_30%),_radial-gradient(circle_at_bottom_right,_rgba(245,158,11,0.14),_transparent_25%),_hsl(222,47%,6%)] p-4">
-      {/* Fondo decorativo */}
+      {/* Background blobs */}
       <div className="pointer-events-none absolute inset-0 opacity-50">
         <div className="absolute left-1/2 top-0 h-96 w-96 -translate-x-1/2 rounded-full bg-white/5 blur-3xl" />
-        <div className="absolute right-0 top-1/3 h-64 w-64 rounded-full bg-[hsl(262,80%,60%)]/10 blur-3xl" />
+        <div className="absolute right-0 top-1/3 h-72 w-72 rounded-full bg-[hsl(262,80%,60%)]/10 blur-3xl" />
         <div className="absolute bottom-0 left-0 h-72 w-72 rounded-full bg-[hsl(38,95%,55%)]/10 blur-3xl" />
       </div>
 
       <div className="relative z-10 w-full max-w-6xl">
-        <div className="grid items-stretch gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="grid items-stretch gap-8 lg:grid-cols-[1.1fr_0.9fr]">
 
-          {/* Panel izquierdo - solo desktop */}
+          {/* Left panel — desktop only */}
           <div className="hidden flex-col justify-between rounded-[2rem] border border-white/10 bg-[rgba(15,23,42,0.88)] p-10 text-white shadow-2xl backdrop-blur-xl lg:flex">
-            <div className="space-y-6">
-              <div className="inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-[hsl(262,80%,60%)] to-[hsl(262,80%,45%)] shadow-lg shadow-purple-900/40">
+            <div className="space-y-5">
+              <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[hsl(262,80%,60%)] to-[hsl(262,80%,44%)] shadow-lg shadow-purple-900/40">
                 <span className="text-2xl">🎉</span>
               </div>
               <div>
-                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.35em] text-[hsl(262,80%,60%)]">eMeet</p>
-                <h1 className="text-4xl font-semibold leading-tight">Tu acceso a eventos, bares y experiencias únicas.</h1>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.35em] text-[hsl(262,80%,65%)]">eMeet</p>
+                <h1 className="text-4xl font-semibold leading-tight tracking-tight">
+                  Tu acceso a eventos, bares y experiencias únicas.
+                </h1>
+              </div>
+
+              {/* Stats row */}
+              <div className="flex gap-4 pt-1">
+                {STATS.map((stat) => (
+                  <div key={stat.label} className="flex flex-col rounded-xl border border-white/8 bg-white/4 px-4 py-3">
+                    <span className="text-xl font-bold text-white">{stat.value}</span>
+                    <span className="text-[11px] text-slate-400">{stat.label}</span>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <div className="my-4 flex flex-grow items-center justify-center">
+            <div className="my-6 flex flex-grow items-center justify-center">
               <img
                 src="/auth-map-illustration.svg"
                 alt="Ilustración de mapa de eventos"
@@ -76,41 +112,49 @@ export default function AuthPage() {
             </div>
 
             <div className="space-y-3">
-              {[
-                'Descubre lugares en Santiago con recomendaciones personalizadas.',
-                'Regístrate como usuario o locatario y gestiona eventos desde el panel.',
-                'Accede rápido con cuentas demo para probar la app.',
-              ].map((text) => (
-                <div key={text} className="flex items-start gap-3 rounded-2xl border border-white/8 bg-white/4 p-4">
-                  <span className="mt-0.5 text-[hsl(262,80%,60%)]">✦</span>
-                  <p className="text-sm text-slate-300">{text}</p>
+              {FEATURES.map(({ icon: Icon, title, desc }) => (
+                <div key={title} className="flex items-start gap-3.5 rounded-2xl border border-white/8 bg-white/4 p-4 transition-colors hover:bg-white/6">
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[hsl(262,80%,60%)]/20">
+                    <Icon size={16} className="text-[hsl(262,80%,68%)]" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">{title}</p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-slate-400">{desc}</p>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Panel derecho - formulario */}
+          {/* Right panel — form */}
           <div className="rounded-[2rem] border border-white/10 bg-[rgba(15,23,42,0.92)] p-6 shadow-2xl backdrop-blur-xl">
             <div className="flex flex-col gap-5">
               <div className="text-center lg:text-left">
-                <p className="mb-2 text-sm font-semibold uppercase tracking-[0.35em] text-[hsl(262,80%,60%)]">Accede a eMeet</p>
-                <h2 className="text-3xl font-semibold text-white">Inicia sesión o crea tu cuenta</h2>
-                <p className="mt-2 text-sm text-slate-400">Usa tu cuenta demo o conéctate con Google o Facebook.</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.35em] text-[hsl(262,80%,65%)]">Accede a eMeet</p>
+                <h2 className="text-2xl font-semibold text-white">Inicia sesión o crea tu cuenta</h2>
+                <p className="mt-1.5 text-sm text-slate-400">Conéctate con tu cuenta o usa email y contraseña.</p>
               </div>
 
-              {/* Tabs login/signup */}
-              <div className="flex gap-1 rounded-2xl bg-white/5 p-1.5">
+              {/* Tabs with animated pill */}
+              <div className="relative flex gap-1 rounded-2xl bg-white/5 p-1.5">
                 {(['login', 'signup'] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setMode(tab)}
-                    className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition-all ${
-                      mode === tab
-                        ? 'bg-[hsl(262,80%,60%)] text-white shadow-lg shadow-purple-900/30'
-                        : 'text-slate-400 hover:text-white'
+                    className={`relative flex-1 rounded-xl py-2.5 text-sm font-semibold transition-colors ${
+                      mode === tab ? 'text-white' : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    {tab === 'login' ? 'Inicia Sesión' : 'Registrarse'}
+                    {mode === tab && (
+                      <motion.span
+                        layoutId="tab-pill"
+                        className="absolute inset-0 rounded-xl bg-[hsl(262,80%,60%)] shadow-lg shadow-purple-900/30"
+                        transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+                      />
+                    )}
+                    <span className="relative z-10">
+                      {tab === 'login' ? 'Inicia Sesión' : 'Registrarse'}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -120,38 +164,47 @@ export default function AuthPage() {
                 <button
                   onClick={() => handleOAuth('google')}
                   disabled={oauthLoading !== null}
-                  className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-xl border border-white/12 bg-white/6 py-3 font-medium text-white transition-all hover:border-white/25 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="group flex w-full items-center justify-center gap-3 rounded-xl border border-white/12 bg-white/6 py-3 text-sm font-medium text-white transition-all hover:border-white/25 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {oauthLoading === 'google' ? (
                     <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                   ) : (
                     <GoogleIcon />
                   )}
-                  <span className="text-sm">Continuar con Google</span>
+                  Continuar con Google
                 </button>
 
                 <button
                   onClick={() => handleOAuth('facebook')}
                   disabled={oauthLoading !== null}
-                  className="group flex w-full items-center justify-center gap-3 rounded-xl border border-[#1877F2]/30 bg-[#1877F2]/8 py-3 font-medium text-white transition-all hover:border-[#1877F2]/50 hover:bg-[#1877F2]/15 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex w-full items-center justify-center gap-3 rounded-xl border border-[#1877F2]/30 bg-[#1877F2]/8 py-3 text-sm font-medium text-white transition-all hover:border-[#1877F2]/50 hover:bg-[#1877F2]/15 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {oauthLoading === 'facebook' ? (
                     <span className="h-5 w-5 animate-spin rounded-full border-2 border-[#1877F2]/40 border-t-[#1877F2]" />
                   ) : (
                     <FacebookIcon />
                   )}
-                  <span className="text-sm">Continuar con Facebook</span>
+                  Continuar con Facebook
                 </button>
 
-                {oauthError && (
-                  <div className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                    <FiAlertCircle size={16} className="shrink-0" />
-                    {oauthError}
-                  </div>
-                )}
+                <AnimatePresence>
+                  {oauthError && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                        <FiAlertCircle size={16} className="shrink-0" />
+                        {oauthError}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
-              {/* Divisor */}
+              {/* Divider */}
               <div className="flex items-center gap-3">
                 <div className="h-px flex-1 bg-white/10" />
                 <span className="text-xs font-medium text-slate-500">o continúa con email</span>
@@ -159,15 +212,15 @@ export default function AuthPage() {
               </div>
             </div>
 
-            {/* Formulario */}
+            {/* Form area */}
             <div className="mt-1 rounded-[1.5rem] bg-[rgba(255,255,255,0.03)] p-6 shadow-inner shadow-white/5">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={mode}
-                  initial={{ opacity: 0, y: 20 }}
+                  initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.25, ease: 'easeOut' }}
+                  exit={{ opacity: 0, y: -16 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
                 >
                   {mode === 'login' ? <LoginForm /> : <SignUpForm />}
                 </motion.div>
@@ -177,7 +230,7 @@ export default function AuthPage() {
                 {mode === 'login' ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?'}{' '}
                 <button
                   onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
-                  className="inline-flex items-center gap-1 font-semibold text-[hsl(262,80%,60%)] transition-colors hover:text-[hsl(262,80%,70%)]"
+                  className="inline-flex items-center gap-1 font-semibold text-[hsl(262,80%,65%)] transition-colors hover:text-[hsl(262,80%,75%)]"
                 >
                   {mode === 'login' ? 'Regístrate' : 'Inicia sesión'} <FiArrowRight size={14} />
                 </button>
@@ -186,7 +239,7 @@ export default function AuthPage() {
           </div>
         </div>
 
-        <div className="mt-8 text-center text-xs text-slate-500">
+        <div className="mt-8 text-center text-xs text-slate-600">
           <p>Disponible en Santiago, Chile &nbsp;·&nbsp; Versión demo</p>
         </div>
       </div>

@@ -87,6 +87,7 @@ function normalizeEvent(
     title: raw.name as string,
     description: `${segment}${genre ? ` · ${genre}` : ''} en ${(venue?.name as string) ?? 'Santiago'}`,
     category: mapTMCategory(segment, genre),
+    source: 'ticketmaster' as const,
     date,
     location: (venue?.name as string) ?? 'Santiago',
     address,
