@@ -33,6 +33,8 @@ router.post('/locatario', async (req, res) => {
     video_url?: string | null
     organizer_name?: string
     organizer_avatar?: string | null
+    lat?: number | null
+    lng?: number | null
   }
 
   if (!body.title?.trim() || !body.description?.trim() || !body.event_date || !body.category) {
@@ -53,6 +55,8 @@ router.post('/locatario', async (req, res) => {
       video_url: body.video_url?.trim() || null,
       organizer_name: body.organizer_name ?? '',
       organizer_avatar: body.organizer_avatar ?? null,
+      lat: typeof body.lat === 'number' ? body.lat : null,
+      lng: typeof body.lng === 'number' ? body.lng : null,
     })
     .select('*')
     .single()
@@ -77,6 +81,8 @@ router.patch('/locatario/:id', async (req, res) => {
     video_url?: string | null
     organizer_name?: string
     organizer_avatar?: string | null
+    lat?: number | null
+    lng?: number | null
   }
 
   type LocatarioUpdate = {
@@ -90,6 +96,8 @@ router.patch('/locatario/:id', async (req, res) => {
     video_url?: string | null
     organizer_name?: string
     organizer_avatar?: string | null
+    lat?: number | null
+    lng?: number | null
   }
 
   const updates: LocatarioUpdate = {}
@@ -103,6 +111,8 @@ router.patch('/locatario/:id', async (req, res) => {
   if (body.video_url !== undefined) updates.video_url = body.video_url?.trim() || null
   if (body.organizer_name !== undefined) updates.organizer_name = body.organizer_name
   if (body.organizer_avatar !== undefined) updates.organizer_avatar = body.organizer_avatar
+  if (body.lat !== undefined) updates.lat = typeof body.lat === 'number' ? body.lat : null
+  if (body.lng !== undefined) updates.lng = typeof body.lng === 'number' ? body.lng : null
 
   if (Object.keys(updates).length === 0) {
     return badRequest(res, 'No se enviaron campos para actualizar.')

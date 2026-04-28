@@ -67,6 +67,8 @@ type LocatarioEventRow = {
   video_url: string | null
   organizer_name: string
   organizer_avatar: string | null
+  lat: number | null
+  lng: number | null
 }
 
 function dbRowToEvent(row: LocatarioEventRow): Event {
@@ -75,10 +77,13 @@ function dbRowToEvent(row: LocatarioEventRow): Event {
     title: row.title,
     description: row.description,
     category: row.category as EventCategory,
+    source: 'locatario',
     date: row.event_date,
     location: row.organizer_name,
     address: row.address,
     distance: 0,
+    lat: row.lat ?? undefined,
+    lng: row.lng ?? undefined,
     price: row.price,
     imageUrl: row.image_url || FALLBACK_EVENT_IMAGE,
     videoUrl: row.video_url || null,
@@ -178,6 +183,7 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
         title: input.title.trim(),
         description: input.description.trim(),
         category: input.category,
+        source: 'locatario',
         date: new Date(input.date).toISOString(),
         location: input.organizerName,
         address: input.address.trim(),
@@ -225,6 +231,8 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
         video_url: input.videoUrl || null,
         organizer_name: input.organizerName,
         organizer_avatar: input.organizerAvatar,
+        lat: input.lat ?? null,
+        lng: input.lng ?? null,
       }),
     })
 
@@ -271,6 +279,8 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
         price: input.price,
         image_url: input.imageUrl || null,
         video_url: input.videoUrl || null,
+        lat: input.lat ?? null,
+        lng: input.lng ?? null,
       }),
     })
   }, [])

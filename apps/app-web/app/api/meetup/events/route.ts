@@ -105,6 +105,7 @@ function normalizeEvent(
     title: node.title as string,
     description: (node.description as string) ?? '',
     category,
+    source: 'meetup' as const,
     date: dateTime ?? new Date().toISOString(),
     location: (venue?.name as string) ?? (group?.name as string) ?? 'Santiago',
     address: (venue?.address as string) ?? 'Santiago, Chile',

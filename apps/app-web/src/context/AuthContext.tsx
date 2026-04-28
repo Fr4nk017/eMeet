@@ -19,6 +19,7 @@ interface AuthContextValue extends AuthState {
   register: (name: string, email: string, password: string, options?: RegisterOptions) => Promise<void>
   logout: () => Promise<void>
   updateUser: (data: Partial<User>) => Promise<void>
+  getAccessToken: () => Promise<string | null>
 }
 
 // ─── Creación del contexto ───────────────────────────────────────────────────
@@ -455,8 +456,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
   }, [authState.user])
 
+  const getAccessToken = useCallback(async (): Promise<string | null> => {
+    if (!hasSupabaseEnv) return null
+    const client = getSupabaseBrowserClient()
+    const { data } = await client.auth.getSession()
+    if (data.session?.access_token) return data.session.access_token
+    const { data: refreshed } = await client.auth.refreshSession()
+    return refreshed.session?.access_token ?? null
+  }, [])
+
   return (
-    <AuthContext.Provider value={{ ...authState, isAuthReady, login, loginWithOAuth, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ ...authState, isAuthReady, login, loginWithOAuth, register, logout, updateUser, getAccessToken }}>
       {children}
     </AuthContext.Provider>
   )

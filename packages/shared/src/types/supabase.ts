@@ -188,6 +188,8 @@ export interface Database {
           video_url: string | null
           organizer_name: string
           organizer_avatar: string | null
+          lat: number | null
+          lng: number | null
           created_at: string
         }
         Insert: {
@@ -203,6 +205,8 @@ export interface Database {
           video_url?: string | null
           organizer_name?: string
           organizer_avatar?: string | null
+          lat?: number | null
+          lng?: number | null
           created_at?: string
         }
         Update: {
@@ -218,6 +222,8 @@ export interface Database {
           video_url?: string | null
           organizer_name?: string
           organizer_avatar?: string | null
+          lat?: number | null
+          lng?: number | null
           created_at?: string
         }
         Relationships: [

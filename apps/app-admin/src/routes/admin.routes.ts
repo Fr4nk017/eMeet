@@ -1,59 +1,83 @@
 import { Router } from 'express'
-import { createServiceClient } from '@emeet/shared/lib/supabase'
-import { authMiddleware } from '@emeet/shared/middleware/auth'
-import { badRequest, serverError, unauthorized } from '@emeet/shared/utils/http'
+import { createServiceRoleClient } from '@emeet/shared/lib/supabase'
+import { withAuth } from '@emeet/shared/middleware/auth'
+import { serverError } from '@emeet/shared/utils/http'
 
 const router = Router()
 
-// Middleware para verificar que sea admin
-const adminMiddleware = (req: any, _res: any, next: any) => {
-  if (!req.user || req.user.role !== 'admin') {
-    throw new Error('No autorizado')
+const adminOnly = async (req: any, res: any, next: any) => {
+  if (!req.authUser) return res.status(401).json({ error: 'No autorizado' })
+
+  // Primero revisar el metadata del token (app_metadata > user_metadata)
+  const metaRole =
+    req.authUser.app_metadata?.role ??
+    req.authUser.user_metadata?.role
+
+  console.log('[adminOnly] user:', req.authUser.id, '| app_metadata:', JSON.stringify(req.authUser.app_metadata), '| user_metadata:', JSON.stringify(req.authUser.user_metadata))
+
+  if (metaRole === 'admin') return next()
+
+  // Fallback: consultar la tabla profiles
+  try {
+    const supabase = createServiceRoleClient()
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', req.authUser.id)
+      .single()
+
+    if (profile?.role === 'admin') return next()
+
+    return res.status(403).json({ error: 'Acceso denegado' })
+  } catch {
+    return res.status(403).json({ error: 'Acceso denegado' })
   }
-  next()
 }
 
-// ─── Rutas de Usuarios ────────────────────────────────────────────────────
+// ─── Usuarios ─────────────────────────────────────────────────────────────────
 
-/**
- * GET /admin/users
- * Lista todos los usuarios del sistema
- */
-router.get('/users', authMiddleware, adminMiddleware, async (req, res) => {
+router.get('/users', withAuth, adminOnly, async (_req, res) => {
   try {
-    const supabase = createServiceClient()
-    
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .order('created_at', { ascending: false })
+    const supabase = createServiceRoleClient()
 
-    if (error) return serverError(res, error.message)
+    const [{ data: profiles, error: profilesError }, { data: authData }] = await Promise.all([
+      supabase.from('profiles').select('*').order('created_at', { ascending: false }),
+      supabase.auth.admin.listUsers({ perPage: 1000 }),
+    ])
 
-    return res.json({ users: data })
+    if (profilesError) return serverError(res, profilesError.message)
+
+    const emailMap = new Map<string, string>(
+      (authData?.users ?? []).map((u) => [u.id, u.email ?? ''])
+    )
+
+    const users = (profiles ?? []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      email: emailMap.get(p.id) ?? '',
+      role: p.role ?? 'user',
+      is_banned: (p as any).is_banned ?? false,
+      created_at: p.created_at,
+    }))
+
+    return res.json({ users })
   } catch (err) {
     return serverError(res, (err as Error).message)
   }
 })
 
-/**
- * GET /admin/users/:id
- * Obtener un usuario específico
- */
-router.get('/users/:id', authMiddleware, adminMiddleware, async (req, res) => {
+router.get('/users/:id', withAuth, adminOnly, async (req, res) => {
   try {
     const { id } = req.params
+    const supabase = createServiceRoleClient()
 
-    const supabase = createServiceClient()
-    
     const { data, error } = await supabase
-      .from('users')
+      .from('profiles')
       .select('*')
       .eq('id', id)
       .single()
 
-    if (error) return badRequest(res, 'Usuario no encontrado')
-    if (!data) return badRequest(res, 'Usuario no encontrado')
+    if (error || !data) return res.status(404).json({ error: 'Usuario no encontrado' })
 
     return res.json({ user: data })
   } catch (err) {
@@ -61,24 +85,23 @@ router.get('/users/:id', authMiddleware, adminMiddleware, async (req, res) => {
   }
 })
 
-/**
- * PUT /admin/users/:id
- * Actualizar un usuario
- */
-router.put('/users/:id', authMiddleware, adminMiddleware, async (req, res) => {
+router.put('/users/:id', withAuth, adminOnly, async (req, res) => {
   try {
     const { id } = req.params
     const { role, is_banned } = req.body
+    const supabase = createServiceRoleClient()
 
-    const supabase = createServiceClient()
-    
-    const updates: any = {}
-    if (role) updates.role = role
+    const updates: Record<string, unknown> = {}
+    if (role !== undefined) updates.role = role
     if (is_banned !== undefined) updates.is_banned = is_banned
 
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No hay campos para actualizar' })
+    }
+
     const { data, error } = await supabase
-      .from('users')
-      .update(updates)
+      .from('profiles')
+      .update(updates as any)
       .eq('id', id)
       .select()
       .single()
@@ -91,20 +114,12 @@ router.put('/users/:id', authMiddleware, adminMiddleware, async (req, res) => {
   }
 })
 
-/**
- * DELETE /admin/users/:id
- * Eliminar un usuario
- */
-router.delete('/users/:id', authMiddleware, adminMiddleware, async (req, res) => {
+router.delete('/users/:id', withAuth, adminOnly, async (req, res) => {
   try {
     const { id } = req.params
+    const supabase = createServiceRoleClient()
 
-    const supabase = createServiceClient()
-    
-    const { error } = await supabase
-      .from('users')
-      .delete()
-      .eq('id', id)
+    const { error } = await supabase.from('profiles').delete().eq('id', id)
 
     if (error) return serverError(res, error.message)
 
@@ -114,43 +129,41 @@ router.delete('/users/:id', authMiddleware, adminMiddleware, async (req, res) =>
   }
 })
 
-// ─── Rutas de Eventos ─────────────────────────────────────────────────────
+// ─── Eventos ──────────────────────────────────────────────────────────────────
 
-/**
- * GET /admin/events
- * Lista todos los eventos
- */
-router.get('/events', authMiddleware, adminMiddleware, async (req, res) => {
+router.get('/events', withAuth, adminOnly, async (_req, res) => {
   try {
-    const supabase = createServiceClient()
-    
+    const supabase = createServiceRoleClient()
+
     const { data, error } = await supabase
-      .from('places')
-      .select('*')
+      .from('locatario_events')
+      .select('id, title, description, address, event_date, organizer_name, created_at')
       .order('created_at', { ascending: false })
 
     if (error) return serverError(res, error.message)
 
-    return res.json({ events: data, total: data?.length ?? 0 })
+    const events = (data ?? []).map((e) => ({
+      id: e.id,
+      title: e.title,
+      description: e.description ?? '',
+      location: e.address ?? '',
+      date: e.event_date,
+      created_by: e.organizer_name ?? '',
+      created_at: e.created_at,
+    }))
+
+    return res.json({ events, total: events.length })
   } catch (err) {
     return serverError(res, (err as Error).message)
   }
 })
 
-/**
- * DELETE /admin/events/:id
- * Eliminar un evento
- */
-router.delete('/events/:id', authMiddleware, adminMiddleware, async (req, res) => {
+router.delete('/events/:id', withAuth, adminOnly, async (req, res) => {
   try {
     const { id } = req.params
+    const supabase = createServiceRoleClient()
 
-    const supabase = createServiceClient()
-    
-    const { error } = await supabase
-      .from('places')
-      .delete()
-      .eq('id', id)
+    const { error } = await supabase.from('locatario_events').delete().eq('id', id)
 
     if (error) return serverError(res, error.message)
 
@@ -160,36 +173,23 @@ router.delete('/events/:id', authMiddleware, adminMiddleware, async (req, res) =
   }
 })
 
-// ─── Rutas de Estadísticas ────────────────────────────────────────────────
+// ─── Estadísticas ─────────────────────────────────────────────────────────────
 
-/**
- * GET /admin/statistics
- * Obtener estadísticas del sistema
- */
-router.get('/statistics', authMiddleware, adminMiddleware, async (req, res) => {
+router.get('/statistics', withAuth, adminOnly, async (_req, res) => {
   try {
-    const supabase = createServiceClient()
+    const supabase = createServiceRoleClient()
 
-    // Total de usuarios
-    const { count: totalUsers } = await supabase
-      .from('users')
-      .select('*', { count: 'exact', head: true })
-
-    // Total de eventos
-    const { count: totalEvents } = await supabase
-      .from('places')
-      .select('*', { count: 'exact', head: true })
-
-    // Total de likes
-    const { count: totalLikes } = await supabase
-      .from('likes')
-      .select('*', { count: 'exact', head: true })
-
-    // Usuarios banneados
-    const { count: bannedUsers } = await supabase
-      .from('users')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_banned', true)
+    const [
+      { count: totalUsers },
+      { count: totalEvents },
+      { count: totalLikes },
+      { count: bannedUsers },
+    ] = await Promise.all([
+      supabase.from('profiles').select('*', { count: 'exact', head: true }),
+      supabase.from('locatario_events').select('*', { count: 'exact', head: true }),
+      supabase.from('user_events').select('*', { count: 'exact', head: true }).eq('action', 'like'),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_banned' as any, true),
+    ])
 
     return res.json({
       statistics: {

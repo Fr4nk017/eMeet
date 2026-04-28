@@ -221,7 +221,7 @@ function HomePageContent() {
   const [toast, setToast] = useState<{ message: string; type: 'like' | 'nope' | 'save' } | null>(null)
   const [focusedPlaceId, setFocusedPlaceId] = useState<string | null>(null)
   const [showMobileMap, setShowMobileMap] = useState(false)
-  const externalEvents = useFeedEvents(userLocation, selectedDistanceKm)
+  const { events: externalEvents } = useFeedEvents(userLocation, selectedDistanceKm)
 
   useEffect(() => {
     if (!user) {

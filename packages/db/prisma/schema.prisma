@@ -105,6 +105,8 @@ model LocatarioEvent {
   videoUrl       String?       @map("video_url")
   organizerName  String        @default("") @map("organizer_name")
   organizerAvatar String?      @map("organizer_avatar")
+  lat            Float?
+  lng            Float?
   createdAt      DateTime      @default(now()) @map("created_at")
 
   creator Profile @relation(fields: [creatorId], references: [id], onDelete: Cascade)

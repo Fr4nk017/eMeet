@@ -6,16 +6,73 @@ import type { CreateLocatarioEventInput } from '@/src/context/LocatarioEventsCon
 import { CreateEventModal } from '@/src/components/CreateEventModal'
 import { useRouter } from 'next/navigation'
 import {
-  LogOut as FiLogOut,
-  Plus as FiPlus,
-  Calendar as FiCalendar,
-  Loader2 as FiLoader,
-  Trash2 as FiTrash2,
-  House as FiHome,
-  Pencil as FiEdit2,
+  LogOut,
+  Plus,
+  Calendar,
+  Loader2,
+  Trash2,
+  Home,
+  Pencil,
+  Users,
+  Search,
+  CheckCircle,
+  AlertCircle,
+  X,
 } from 'lucide-react'
 import type { Event } from '@/src/types'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+
+const CATEGORY_LABELS: Record<string, string> = {
+  gastronomia: 'Gastronomía',
+  musica: 'Música',
+  cultura: 'Cultura',
+  networking: 'Networking',
+  deporte: 'Deporte',
+  fiesta: 'Fiesta',
+  teatro: 'Teatro',
+  arte: 'Arte',
+}
+
+const CATEGORY_COLORS: Record<string, string> = {
+  gastronomia: 'bg-orange-500/12 text-orange-300 border-orange-500/20',
+  musica: 'bg-purple-500/12 text-purple-300 border-purple-500/20',
+  cultura: 'bg-blue-500/12 text-blue-300 border-blue-500/20',
+  networking: 'bg-cyan-500/12 text-cyan-300 border-cyan-500/20',
+  deporte: 'bg-green-500/12 text-green-300 border-green-500/20',
+  fiesta: 'bg-pink-500/12 text-pink-300 border-pink-500/20',
+  teatro: 'bg-yellow-500/12 text-yellow-300 border-yellow-500/20',
+  arte: 'bg-rose-500/12 text-rose-300 border-rose-500/20',
+}
+
+function CategoryBadge({ category }: { category: string }) {
+  const cls = CATEGORY_COLORS[category] ?? 'bg-white/8 text-slate-300 border-white/12'
+  return (
+    <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${cls}`}>
+      {CATEGORY_LABELS[category] ?? category}
+    </span>
+  )
+}
+
+function ConfirmDelete({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-slate-400">¿Eliminar?</span>
+      <button
+        onClick={onConfirm}
+        className="rounded-lg bg-red-500/15 px-2.5 py-1 text-xs font-semibold text-red-400 transition-colors hover:bg-red-500/25"
+      >
+        Sí
+      </button>
+      <button
+        onClick={onCancel}
+        className="rounded-lg bg-white/8 px-2.5 py-1 text-xs font-medium text-slate-300 transition-colors hover:bg-white/15"
+      >
+        No
+      </button>
+    </div>
+  )
+}
 
 export default function LocatarioPage() {
   const { user, logout, isAuthReady } = useAuth()
@@ -26,6 +83,8 @@ export default function LocatarioPage() {
   const [editingEvent, setEditingEvent] = useState<Event | null>(null)
   const [feedback, setFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -37,9 +96,17 @@ export default function LocatarioPage() {
   useEffect(() => {
     if (!feedback) return
     if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
-    feedbackTimerRef.current = setTimeout(() => setFeedback(null), 4000)
+    feedbackTimerRef.current = setTimeout(() => setFeedback(null), 4500)
     return () => { if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current) }
   }, [feedback])
+
+  const filteredEvents = useMemo(() =>
+    locatarioEvents.filter((e) =>
+      e.title.toLowerCase().includes(search.toLowerCase()) ||
+      (e.address ?? '').toLowerCase().includes(search.toLowerCase())
+    ),
+    [locatarioEvents, search]
+  )
 
   const handleLogout = () => { logout(); router.push('/auth') }
 
@@ -68,8 +135,10 @@ export default function LocatarioPage() {
 
   const handleDelete = async (eventId: string) => {
     setDeletingId(eventId)
+    setConfirmDeleteId(null)
     try {
       await removeLocatarioEvent(eventId)
+      setFeedback({ message: 'Evento eliminado correctamente.', type: 'success' })
     } catch {
       setFeedback({ message: 'No se pudo eliminar el evento.', type: 'error' })
     } finally {
@@ -81,206 +150,294 @@ export default function LocatarioPage() {
 
   const totalAttendees = locatarioEvents.reduce((sum, e) => sum + e.attendees, 0)
   const initials = ((user.businessName || user.name || '?')[0]).toUpperCase()
+  const displayName = user.businessName || user.name
 
   return (
-    <div className="min-h-screen bg-surface">
-      {/* ── Header ── */}
-      <header className="bg-card border-b border-card sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div className="min-h-screen bg-[hsl(222,47%,6%)] text-white">
+
+      {/* Header */}
+      <header className="sticky top-0 z-50 border-b border-white/8 bg-[rgba(15,23,42,0.94)] backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+          {/* Brand + user */}
           <div className="flex items-center gap-3">
-            {user.avatarUrl ? (
-              <img src={user.avatarUrl} alt="" className="w-9 h-9 rounded-full object-cover ring-2 ring-violet-500/30" />
-            ) : (
-              <div className="w-9 h-9 rounded-full bg-violet-600/30 flex items-center justify-center text-violet-300 font-bold text-sm">
-                {initials}
-              </div>
-            )}
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-[hsl(262,80%,60%)] to-[hsl(262,80%,44%)] shadow-lg shadow-purple-900/30">
+              <span className="text-base">🎉</span>
+            </div>
             <div>
-              <h1 className="text-base font-bold text-white leading-tight">Panel de Locatario</h1>
-              <p className="text-xs text-muted">{user.businessName || user.name}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-[hsl(262,80%,65%)]">eMeet</p>
+              <p className="text-sm font-semibold leading-tight text-white">{displayName}</p>
             </div>
           </div>
 
+          {/* Actions */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => router.push('/')}
-              className="flex items-center gap-2 text-white/60 hover:text-white px-3 py-2 rounded-lg transition-colors text-sm"
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-slate-400 transition-colors hover:bg-white/6 hover:text-white"
             >
-              <FiHome size={16} />
+              <Home size={15} />
               <span className="hidden sm:inline">Ver feed</span>
             </button>
+
             <button
               onClick={() => setShowCreateEvent(true)}
-              className="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold px-4 py-2 rounded-xl text-sm shadow-lg shadow-violet-900/40 transition-all"
+              className="flex items-center gap-2 rounded-xl bg-[hsl(38,95%,55%)] px-4 py-2 text-sm font-semibold text-black shadow-lg shadow-amber-900/20 transition-all hover:-translate-y-0.5 hover:bg-[hsl(38,95%,60%)]"
             >
-              <FiPlus size={16} />
-              <span>Crear Evento</span>
+              <Plus size={15} />
+              <span>Crear evento</span>
             </button>
+
             <button
               onClick={handleLogout}
-              className="flex items-center gap-2 text-red-400/70 hover:text-red-400 px-3 py-2 rounded-lg transition-colors text-sm"
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-red-400/70 transition-colors hover:bg-red-500/10 hover:text-red-400"
             >
-              <FiLogOut size={16} />
+              <LogOut size={15} />
               <span className="hidden sm:inline">Salir</span>
             </button>
           </div>
         </div>
       </header>
 
-      {/* ── Main ── */}
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-white mb-1">Bienvenido, {user.name}</h2>
-          <p className="text-muted">Gestiona tus eventos en {user.businessName || 'tu local'}</p>
-        </div>
-
-        {feedback && (
-          <div className={`mb-6 rounded-xl border px-4 py-3 text-sm flex items-center justify-between gap-4 ${
-            feedback.type === 'success'
-              ? 'border-green-500/20 bg-green-500/10 text-green-300'
-              : 'border-red-500/20 bg-red-500/10 text-red-300'
-          }`}>
-            <span>{feedback.message}</span>
-            {feedback.type === 'success' && (
-              <button
-                onClick={() => router.push('/')}
-                className="flex items-center gap-1 font-semibold underline underline-offset-2 whitespace-nowrap hover:opacity-80"
-              >
-                <FiHome size={14} /> Ir al feed
-              </button>
-            )}
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-4 mb-8">
-          <div className="bg-card border border-card rounded-xl p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-violet-500/15 flex items-center justify-center">
-                <FiCalendar className="text-violet-400" size={15} />
-              </div>
-              <p className="text-muted text-sm">Eventos Activos</p>
-            </div>
-            <div className="text-3xl font-bold text-white">
-              {isLoading ? <FiLoader className="animate-spin" size={26} /> : locatarioEvents.length}
-            </div>
-            <p className="text-xs text-muted mt-1">Publicados desde tu panel</p>
-          </div>
-          <div className="bg-card border border-card rounded-xl p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center">
-                <svg className="text-primary" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              </div>
-              <p className="text-muted text-sm">Asistentes Totales</p>
-            </div>
-            <div className="text-3xl font-bold text-white">{totalAttendees}</div>
-            <p className="text-xs text-muted mt-1">Acumulado de tus eventos</p>
-          </div>
-        </div>
-
-        <div className="bg-card border border-card rounded-xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-card flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <FiCalendar className="text-violet-400" size={17} />
-              <h3 className="text-base font-semibold text-white">Tus Eventos</h3>
-            </div>
-            <button
-              onClick={() => setShowCreateEvent(true)}
-              className="text-xs flex items-center gap-1 text-violet-400 hover:text-violet-300 transition-colors font-medium"
+      {/* Feedback toast */}
+      <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2">
+        <AnimatePresence>
+          {feedback && (
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.96 }}
+              transition={{ duration: 0.22 }}
+              className={`pointer-events-auto flex items-center gap-3 rounded-2xl border px-5 py-3.5 shadow-2xl backdrop-blur-xl ${
+                feedback.type === 'success'
+                  ? 'border-emerald-500/30 bg-[rgba(15,23,42,0.96)] text-emerald-300'
+                  : 'border-red-500/30 bg-[rgba(15,23,42,0.96)] text-red-300'
+              }`}
             >
-              <FiPlus size={13} /> Nuevo evento
-            </button>
+              {feedback.type === 'success' ? (
+                <CheckCircle size={17} className="shrink-0" />
+              ) : (
+                <AlertCircle size={17} className="shrink-0" />
+              )}
+              <span className="text-sm font-medium">{feedback.message}</span>
+              {feedback.type === 'success' && (
+                <button
+                  onClick={() => router.push('/')}
+                  className="ml-2 whitespace-nowrap text-xs font-semibold text-emerald-400 underline underline-offset-2 hover:text-emerald-300"
+                >
+                  Ir al feed
+                </button>
+              )}
+              <button
+                onClick={() => setFeedback(null)}
+                className="ml-1 text-current opacity-50 transition-opacity hover:opacity-100"
+              >
+                <X size={14} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Main */}
+      <main className="mx-auto max-w-7xl px-4 py-8">
+
+        {/* Welcome */}
+        <div className="mb-7">
+          <h1 className="text-2xl font-bold text-white">Bienvenido, {displayName}</h1>
+          <p className="mt-1 text-sm text-slate-400">Gestiona tus eventos desde este panel.</p>
+        </div>
+
+        {/* Stats */}
+        <div className="mb-7 grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-2xl border border-white/10 bg-[rgba(15,23,42,0.75)] p-5">
+            <div className="mb-3 flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[hsl(262,80%,60%)]/15">
+                <Calendar size={15} className="text-[hsl(262,80%,65%)]" />
+              </div>
+              <p className="text-xs text-slate-400">Eventos activos</p>
+            </div>
+            <p className="text-3xl font-bold text-white">
+              {isLoading ? <Loader2 className="animate-spin" size={26} /> : locatarioEvents.length}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">Publicados en tu panel</p>
           </div>
 
+          <div className="rounded-2xl border border-white/10 bg-[rgba(15,23,42,0.75)] p-5">
+            <div className="mb-3 flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[hsl(38,95%,55%)]/15">
+                <Users size={15} className="text-[hsl(38,95%,65%)]" />
+              </div>
+              <p className="text-xs text-slate-400">Asistentes totales</p>
+            </div>
+            <p className="text-3xl font-bold text-white">{totalAttendees}</p>
+            <p className="mt-1 text-xs text-slate-500">Acumulado de todos los eventos</p>
+          </div>
+        </div>
+
+        {/* Events table */}
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(15,23,42,0.75)]">
+          {/* Table header */}
+          <div className="flex flex-col gap-3 border-b border-white/8 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2.5">
+              <Calendar size={16} className="text-[hsl(262,80%,65%)]" />
+              <h2 className="font-semibold text-white">Tus eventos</h2>
+              {locatarioEvents.length > 0 && (
+                <span className="rounded-full bg-white/8 px-2 py-0.5 text-xs text-slate-400">
+                  {locatarioEvents.length}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {locatarioEvents.length > 0 && (
+                <div className="relative">
+                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input
+                    type="text"
+                    placeholder="Buscar evento…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-48 rounded-xl border border-white/10 bg-[hsl(222,30%,13%)] py-1.5 pl-8 pr-3 text-sm text-white placeholder-slate-600 outline-none transition-colors focus:border-[hsl(262,80%,60%)] focus:ring-1 focus:ring-[hsl(262,80%,60%)]/30"
+                  />
+                </div>
+              )}
+              <button
+                onClick={() => setShowCreateEvent(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3.5 py-1.5 text-sm font-medium text-slate-300 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
+              >
+                <Plus size={13} />
+                Nuevo
+              </button>
+            </div>
+          </div>
+
+          {/* Table body */}
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-card">
-                  {['Evento', 'Fecha', 'Asistentes', 'Estado', 'Acciones'].map((col) => (
-                    <th key={col} className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-card/40">
-                {isLoading && (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-sm text-muted">
-                      <FiLoader className="animate-spin inline mr-2" size={15} />Cargando eventos...
-                    </td>
-                  </tr>
-                )}
-                {!isLoading && locatarioEvents.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-16 text-center">
-                      <div className="flex flex-col items-center gap-4">
-                        <div className="w-16 h-16 rounded-2xl bg-violet-500/10 flex items-center justify-center">
-                          <FiCalendar className="text-violet-400" size={26} />
-                        </div>
-                        <div>
-                          <p className="text-white font-medium mb-1">Aún no tienes eventos</p>
-                          <p className="text-sm text-muted">Crea tu primer evento y aparecerá en el feed principal</p>
-                        </div>
-                        <button
-                          onClick={() => setShowCreateEvent(true)}
-                          className="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold px-5 py-2.5 rounded-xl transition-all text-sm shadow-lg shadow-violet-900/30"
-                        >
-                          <FiPlus size={15} /> Crear primer evento
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-                {!isLoading && locatarioEvents.map((event) => (
-                  <tr key={event.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-white/5">
-                          {event.imageUrl && (
-                            <img src={event.imageUrl} alt="" className="w-full h-full object-cover" />
-                          )}
-                        </div>
-                        <span className="text-sm text-white font-medium">{event.title}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-muted whitespace-nowrap">
-                      {new Date(event.date).toLocaleString('es-CL', { dateStyle: 'medium', timeStyle: 'short' })}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-semibold text-violet-400">{event.attendees}</td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-400 ring-1 ring-green-500/20">
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-400" />Activo
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => setEditingEvent(event)}
-                          className="flex items-center gap-1.5 text-xs text-violet-400/60 hover:text-violet-400 transition-colors"
-                        >
-                          <FiEdit2 size={12} />
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => handleDelete(event.id)}
-                          disabled={deletingId === event.id}
-                          className="flex items-center gap-1.5 text-xs text-red-400/60 hover:text-red-400 transition-colors disabled:opacity-40"
-                        >
-                          {deletingId === event.id
-                            ? <FiLoader className="animate-spin" size={12} />
-                            : <FiTrash2 size={12} />}
-                          Eliminar
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+            {isLoading ? (
+              <div className="space-y-4 p-5">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <div className="h-10 w-10 animate-pulse rounded-xl bg-white/10" />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-3 w-44 animate-pulse rounded bg-white/10" />
+                      <div className="h-2.5 w-28 animate-pulse rounded bg-white/7" />
+                    </div>
+                    <div className="h-5 w-20 animate-pulse rounded-full bg-white/8" />
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            ) : locatarioEvents.length === 0 ? (
+              <div className="flex flex-col items-center gap-4 py-20 text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[hsl(262,80%,60%)]/12">
+                  <Calendar size={26} className="text-[hsl(262,80%,65%)]" />
+                </div>
+                <div>
+                  <p className="font-semibold text-white">Aún no tienes eventos</p>
+                  <p className="mt-1 text-sm text-slate-400">Crea tu primer evento y aparecerá en el feed principal</p>
+                </div>
+                <button
+                  onClick={() => setShowCreateEvent(true)}
+                  className="flex items-center gap-2 rounded-xl bg-[hsl(38,95%,55%)] px-5 py-2.5 text-sm font-semibold text-black shadow-lg shadow-amber-900/20 transition-all hover:-translate-y-0.5 hover:bg-[hsl(38,95%,60%)]"
+                >
+                  <Plus size={15} /> Crear primer evento
+                </button>
+              </div>
+            ) : filteredEvents.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-12 text-center">
+                <Search size={24} className="text-slate-600" />
+                <p className="text-sm text-slate-400">Sin resultados para "{search}"</p>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-white/6 text-left">
+                    <th className="px-5 py-3 text-xs font-medium text-slate-500">Evento</th>
+                    <th className="px-5 py-3 text-xs font-medium text-slate-500">Categoría</th>
+                    <th className="px-5 py-3 text-xs font-medium text-slate-500">Fecha</th>
+                    <th className="px-5 py-3 text-xs font-medium text-slate-500">Asistentes</th>
+                    <th className="px-5 py-3 text-xs font-medium text-slate-500">Estado</th>
+                    <th className="px-5 py-3 text-xs font-medium text-slate-500">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {filteredEvents.map((event) => (
+                    <tr key={event.id} className="transition-colors hover:bg-white/3">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-white/6">
+                            {event.imageUrl ? (
+                              <img src={event.imageUrl} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center">
+                                <Calendar size={16} className="text-slate-600" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="max-w-[180px] truncate text-sm font-medium text-white">{event.title}</p>
+                            {event.address && (
+                              <p className="max-w-[180px] truncate text-xs text-slate-500">{event.address}</p>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-3.5">
+                        <CategoryBadge category={event.category} />
+                      </td>
+
+                      <td className="px-5 py-3.5 text-xs text-slate-400 whitespace-nowrap">
+                        {new Date(event.date).toLocaleString('es-CL', { dateStyle: 'medium', timeStyle: 'short' })}
+                      </td>
+
+                      <td className="px-5 py-3.5">
+                        <span className="text-sm font-semibold text-[hsl(262,80%,70%)]">{event.attendees}</span>
+                      </td>
+
+                      <td className="px-5 py-3.5">
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-400">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                          Activo
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-3.5">
+                        {confirmDeleteId === event.id ? (
+                          <ConfirmDelete
+                            onConfirm={() => handleDelete(event.id)}
+                            onCancel={() => setConfirmDeleteId(null)}
+                          />
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setEditingEvent(event)}
+                              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:bg-white/8 hover:text-white"
+                            >
+                              <Pencil size={12} />
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteId(event.id)}
+                              disabled={deletingId === event.id}
+                              className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 disabled:opacity-40"
+                            >
+                              {deletingId === event.id
+                                ? <Loader2 size={14} className="animate-spin" />
+                                : <Trash2 size={14} />}
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       </main>
 
+      {/* Create modal */}
       <CreateEventModal
         isOpen={showCreateEvent}
         onClose={() => setShowCreateEvent(false)}
@@ -293,6 +450,7 @@ export default function LocatarioPage() {
         userId={user.id}
       />
 
+      {/* Edit modal */}
       <CreateEventModal
         isOpen={editingEvent !== null}
         onClose={() => setEditingEvent(null)}
