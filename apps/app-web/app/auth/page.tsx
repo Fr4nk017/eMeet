@@ -2,35 +2,108 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FiArrowRight } from 'react-icons/fi'
+import { ArrowRight as FiArrowRight, CircleAlert as FiAlertCircle, MapPin, Calendar, Users } from 'lucide-react'
 import LoginForm from '../../src/components/LoginForm'
 import SignUpForm from '../../src/components/SignUpForm'
+import { useAuth } from '../../src/context/AuthContext'
+
+function GoogleIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" aria-hidden>
+      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
+      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+    </svg>
+  )
+}
+
+function FacebookIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" aria-hidden>
+      <path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+    </svg>
+  )
+}
+
+const FEATURES = [
+  {
+    icon: MapPin,
+    title: 'Eventos cerca tuyo',
+    desc: 'Descubre bares, restaurantes y eventos en Santiago con recomendaciones personalizadas.',
+  },
+  {
+    icon: Calendar,
+    title: 'Panel de locatario',
+    desc: 'Crea y gestiona tus eventos, llega a más personas y mide tu impacto.',
+  },
+  {
+    icon: Users,
+    title: 'Comunidad activa',
+    desc: 'Conecta con personas con tus mismos intereses y guarda tus eventos favoritos.',
+  },
+]
+
+const STATS = [
+  { value: '500+', label: 'Eventos activos' },
+  { value: '12', label: 'Categorías' },
+  { value: 'STG', label: 'Santiago' },
+]
 
 export default function AuthPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
+  const [oauthLoading, setOauthLoading] = useState<'google' | 'facebook' | null>(null)
+  const [oauthError, setOauthError] = useState('')
+  const { loginWithOAuth } = useAuth()
+
+  const handleOAuth = async (provider: 'google' | 'facebook') => {
+    setOauthError('')
+    setOauthLoading(provider)
+    try {
+      await loginWithOAuth(provider)
+    } catch (err) {
+      setOauthError(err instanceof Error ? err.message : 'Error al iniciar sesión')
+      setOauthLoading(null)
+    }
+  }
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(124,58,237,0.18),_transparent_30%),_radial-gradient(circle_at_bottom_right,_rgba(245,158,11,0.14),_transparent_25%),_hsl(222,47%,6%)] p-4">
+      {/* Background blobs */}
       <div className="pointer-events-none absolute inset-0 opacity-50">
         <div className="absolute left-1/2 top-0 h-96 w-96 -translate-x-1/2 rounded-full bg-white/5 blur-3xl" />
-        <div className="absolute right-0 top-1/3 h-64 w-64 rounded-full bg-[hsl(262,80%,60%)]/10 blur-3xl" />
+        <div className="absolute right-0 top-1/3 h-72 w-72 rounded-full bg-[hsl(262,80%,60%)]/10 blur-3xl" />
         <div className="absolute bottom-0 left-0 h-72 w-72 rounded-full bg-[hsl(38,95%,55%)]/10 blur-3xl" />
       </div>
 
       <div className="relative z-10 w-full max-w-6xl">
-        <div className="grid items-stretch gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="grid items-stretch gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+
+          {/* Left panel — desktop only */}
           <div className="hidden flex-col justify-between rounded-[2rem] border border-white/10 bg-[rgba(15,23,42,0.88)] p-10 text-white shadow-2xl backdrop-blur-xl lg:flex">
-            <div className="space-y-6">
-              <div className="inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-white/10 text-[hsl(262,80%,60%)] shadow-lg">
+            <div className="space-y-5">
+              <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[hsl(262,80%,60%)] to-[hsl(262,80%,44%)] shadow-lg shadow-purple-900/40">
                 <span className="text-2xl">🎉</span>
               </div>
               <div>
-                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.35em] text-[hsl(262,80%,60%)]">eMeet</p>
-                <h1 className="text-4xl font-semibold leading-tight">Tu acceso a eventos, bares y experiencias únicas.</h1>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.35em] text-[hsl(262,80%,65%)]">eMeet</p>
+                <h1 className="text-4xl font-semibold leading-tight tracking-tight">
+                  Tu acceso a eventos, bares y experiencias únicas.
+                </h1>
+              </div>
+
+              {/* Stats row */}
+              <div className="flex gap-4 pt-1">
+                {STATS.map((stat) => (
+                  <div key={stat.label} className="flex flex-col rounded-xl border border-white/8 bg-white/4 px-4 py-3">
+                    <span className="text-xl font-bold text-white">{stat.value}</span>
+                    <span className="text-[11px] text-slate-400">{stat.label}</span>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <div className="my-4 flex flex-grow items-center justify-center">
+            <div className="my-6 flex flex-grow items-center justify-center">
               <img
                 src="/auth-map-illustration.svg"
                 alt="Ilustración de mapa de eventos"
@@ -38,80 +111,126 @@ export default function AuthPage() {
               />
             </div>
 
-            <div className="space-y-4">
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-                <p className="text-sm text-slate-300">• Descubre lugares en Santiago con recomendaciones personalizadas.</p>
-              </div>
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-                <p className="text-sm text-slate-300">• Regístrate como usuario o locatario y gestiona eventos desde el panel.</p>
-              </div>
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-                <p className="text-sm text-slate-300">• Accede rápido con cuentas demo para probar la app.</p>
-              </div>
+            <div className="space-y-3">
+              {FEATURES.map(({ icon: Icon, title, desc }) => (
+                <div key={title} className="flex items-start gap-3.5 rounded-2xl border border-white/8 bg-white/4 p-4 transition-colors hover:bg-white/6">
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[hsl(262,80%,60%)]/20">
+                    <Icon size={16} className="text-[hsl(262,80%,68%)]" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">{title}</p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-slate-400">{desc}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
+          {/* Right panel — form */}
           <div className="rounded-[2rem] border border-white/10 bg-[rgba(15,23,42,0.92)] p-6 shadow-2xl backdrop-blur-xl">
-            <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-5">
               <div className="text-center lg:text-left">
-                <p className="mb-3 text-sm font-semibold uppercase tracking-[0.35em] text-[hsl(262,80%,60%)]">Accede a eMeet</p>
-                <h2 className="text-3xl font-semibold text-white">Inicia sesión o crea tu cuenta</h2>
-                <p className="mt-3 text-slate-400">Usa tu cuenta demo para explorar eventos, salas y paneles según tu rol.</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.35em] text-[hsl(262,80%,65%)]">Accede a eMeet</p>
+                <h2 className="text-2xl font-semibold text-white">Inicia sesión o crea tu cuenta</h2>
+                <p className="mt-1.5 text-sm text-slate-400">Conéctate con tu cuenta o usa email y contraseña.</p>
               </div>
 
-              <div className="flex flex-col gap-2 rounded-3xl bg-white/5 p-2">
+              {/* Tabs with animated pill */}
+              <div className="relative flex gap-1 rounded-2xl bg-white/5 p-1.5">
+                {(['login', 'signup'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setMode(tab)}
+                    className={`relative flex-1 rounded-xl py-2.5 text-sm font-semibold transition-colors ${
+                      mode === tab ? 'text-white' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {mode === tab && (
+                      <motion.span
+                        layoutId="tab-pill"
+                        className="absolute inset-0 rounded-xl bg-[hsl(262,80%,60%)] shadow-lg shadow-purple-900/30"
+                        transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+                      />
+                    )}
+                    <span className="relative z-10">
+                      {tab === 'login' ? 'Inicia Sesión' : 'Registrarse'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* OAuth buttons */}
+              <div className="space-y-2.5">
                 <button
-                  onClick={() => setMode('login')}
-                  className={`rounded-2xl py-3 text-sm font-semibold transition-all ${
-                    mode === 'login' ? 'bg-[hsl(262,80%,60%)] text-white shadow-lg' : 'text-slate-300 hover:text-white'
-                  }`}
+                  onClick={() => handleOAuth('google')}
+                  disabled={oauthLoading !== null}
+                  className="group flex w-full items-center justify-center gap-3 rounded-xl border border-white/12 bg-white/6 py-3 text-sm font-medium text-white transition-all hover:border-white/25 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Inicia Sesión
+                  {oauthLoading === 'google' ? (
+                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  ) : (
+                    <GoogleIcon />
+                  )}
+                  Continuar con Google
                 </button>
+
                 <button
-                  onClick={() => setMode('signup')}
-                  className={`rounded-2xl py-3 text-sm font-semibold transition-all ${
-                    mode === 'signup' ? 'bg-[hsl(262,80%,60%)] text-white shadow-lg' : 'text-slate-300 hover:text-white'
-                  }`}
+                  onClick={() => handleOAuth('facebook')}
+                  disabled={oauthLoading !== null}
+                  className="flex w-full items-center justify-center gap-3 rounded-xl border border-[#1877F2]/30 bg-[#1877F2]/8 py-3 text-sm font-medium text-white transition-all hover:border-[#1877F2]/50 hover:bg-[#1877F2]/15 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Registrarse
+                  {oauthLoading === 'facebook' ? (
+                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-[#1877F2]/40 border-t-[#1877F2]" />
+                  ) : (
+                    <FacebookIcon />
+                  )}
+                  Continuar con Facebook
                 </button>
+
+                <AnimatePresence>
+                  {oauthError && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                        <FiAlertCircle size={16} className="shrink-0" />
+                        {oauthError}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Divider */}
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-white/10" />
+                <span className="text-xs font-medium text-slate-500">o continúa con email</span>
+                <div className="h-px flex-1 bg-white/10" />
               </div>
             </div>
 
-            <div className="mt-8 rounded-[1.5rem] bg-[rgba(255,255,255,0.04)] p-8 shadow-inner shadow-white/5">
+            {/* Form area */}
+            <div className="mt-1 rounded-[1.5rem] bg-[rgba(255,255,255,0.03)] p-6 shadow-inner shadow-white/5">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={mode}
-                  initial={{ opacity: 0, y: 24 }}
+                  initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -24 }}
-                  transition={{ duration: 0.28, ease: 'easeOut' }}
+                  exit={{ opacity: 0, y: -16 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
                 >
                   {mode === 'login' ? <LoginForm /> : <SignUpForm />}
                 </motion.div>
               </AnimatePresence>
 
-              <div className="my-6 flex items-center gap-4">
-                <div className="h-px flex-1 bg-white/10" />
-                <span className="text-xs text-slate-400">o</span>
-                <div className="h-px flex-1 bg-white/10" />
-              </div>
-
-              <div className="space-y-3">
-                <button className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 py-3 font-medium text-white transition-all hover:bg-white/10">
-                  <span className="text-lg">🌐</span> Continuar con Google
-                </button>
-                <button className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 py-3 font-medium text-white transition-all hover:bg-white/10">
-                  <span className="text-lg">🍎</span> Continuar con Apple
-                </button>
-              </div>
-
               <p className="mt-6 text-center text-sm text-slate-400">
                 {mode === 'login' ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?'}{' '}
                 <button
                   onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
-                  className="inline-flex items-center gap-1 font-medium text-[hsl(262,80%,60%)] hover:text-[hsl(262,80%,60%)]/80"
+                  className="inline-flex items-center gap-1 font-semibold text-[hsl(262,80%,65%)] transition-colors hover:text-[hsl(262,80%,75%)]"
                 >
                   {mode === 'login' ? 'Regístrate' : 'Inicia sesión'} <FiArrowRight size={14} />
                 </button>
@@ -120,9 +239,8 @@ export default function AuthPage() {
           </div>
         </div>
 
-        <div className="mt-8 text-center text-xs text-slate-400">
-          <p>Disponible en Santiago, Chile</p>
-          <p>Version demo • No se guardan datos reales</p>
+        <div className="mt-8 text-center text-xs text-slate-600">
+          <p>Disponible en Santiago, Chile &nbsp;·&nbsp; Versión demo</p>
         </div>
       </div>
     </div>

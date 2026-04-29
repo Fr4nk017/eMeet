@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useChatContext } from '../../../src/context/ChatContext'
 import { useAuth } from '../../../src/context/AuthContext'
-import { HiArrowLeft, HiPaperAirplane, HiMapPin } from 'react-icons/hi2'
+import { ArrowLeft as HiArrowLeft, Send as HiPaperAirplane, MapPin as HiMapPin } from 'lucide-react'
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('es-CL', {

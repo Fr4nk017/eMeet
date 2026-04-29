@@ -90,4 +90,23 @@ router.post('/avatar', async (req, res) => {
   return res.json({ avatarUrl: publicData.publicUrl })
 })
 
+router.get('/stats', async (req, res) => {
+  // Endpoint preparado para usar una tabla de followers real cuando exista.
+  // Si la tabla no existe todavia, devolvemos null sin romper la UI.
+  const supabaseAny = req.supabase as any
+
+  const { count, error } = await supabaseAny
+    .from('profile_followers')
+    .select('*', { count: 'exact', head: true })
+    .eq('followed_id', req.authUser!.id)
+
+  if (error && error.code !== '42P01') {
+    return serverError(res, 'No se pudieron obtener las estadisticas del perfil.')
+  }
+
+  return res.json({
+    followersCount: typeof count === 'number' ? count : null,
+  })
+})
+
 export default router

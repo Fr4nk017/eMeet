@@ -7,7 +7,7 @@ import Layout from '../../src/components/Layout'
 import { useChatContext } from '../../src/context/ChatContext'
 import { useAuth } from '../../src/context/AuthContext'
 import type { ChatRoom } from '../../src/types'
-import { HiChatBubbleLeftRight } from 'react-icons/hi2'
+import { MessageCircle as HiChatBubbleLeftRight } from 'lucide-react'
 
 function RoomSkeleton() {
   return (

@@ -1,10 +1,19 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { memo } from 'react'
+import Image from 'next/image'
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
 import type { PanInfo } from 'framer-motion'
-import { HiMapPin, HiClock, HiUsers, HiGlobeAlt } from 'react-icons/hi2'
-import { HiHeart, HiX, HiBookmark } from 'react-icons/hi'
+import {
+  MapPin as HiMapPin,
+  Clock3 as HiClock,
+  Users as HiUsers,
+  Globe as HiGlobeAlt,
+  Heart as HiHeart,
+  X as HiX,
+  Bookmark as HiBookmark,
+} from 'lucide-react'
 import type { Event } from '../types'
 import { formatEventDate, formatPrice, CATEGORY_COLORS, CATEGORY_EMOJI } from '../data/mockEvents'
 
@@ -21,6 +30,38 @@ interface SwipeCardProps {
 // ─── Umbral de px para considerar un swipe válido ────────────────────────────
 const SWIPE_THRESHOLD = 120
 const REFRESH_THRESHOLD = 100
+
+function shouldBypassImageOptimization(url: string) {
+  if (url.startsWith('blob:') || url.startsWith('data:image/svg')) return true
+
+  try {
+    const parsedUrl = new URL(url)
+    const pathname = parsedUrl.pathname.toLowerCase()
+    return pathname.endsWith('.svg') || pathname.endsWith('/svg')
+  } catch {
+    const normalized = url.toLowerCase()
+    return normalized.includes('.svg') || normalized.includes('/svg')
+  }
+}
+
+function optimizeCardImageUrl(url: string) {
+  try {
+    const parsedUrl = new URL(url)
+
+    // Unsplash acepta params de transformación; pedir menor ancho reduce bytes y tiempo de decode.
+    if (parsedUrl.hostname === 'images.unsplash.com') {
+      parsedUrl.searchParams.set('auto', 'format')
+      parsedUrl.searchParams.set('fit', 'crop')
+      parsedUrl.searchParams.set('w', '900')
+      parsedUrl.searchParams.set('q', '70')
+      return parsedUrl.toString()
+    }
+
+    return url
+  } catch {
+    return url
+  }
+}
 
 function StarRating({ rating }: { rating: number }) {
   const filled = Math.round(rating)
@@ -49,7 +90,11 @@ function StarRating({ rating }: { rating: number }) {
  *  - onSwipeRight / onSwipeLeft: callbacks al padre para actualizar el estado.
  *  - stackIndex: determina escala y opacidad de fondo.
  */
-export default function SwipeCard({
+const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=800&q=75'
+const CARD_BLUR_DATA_URL =
+  'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE0MCIgdmlld0JveD0iMCAwIDEwMCAxNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agc3RvcC1jb2xvcj0iIzIxMTIzNCIgb2Zmc2V0PSIwIi8+PHN0b3Agc3RvcC1jb2xvcj0iIzBkMGYxOCIgb2Zmc2V0PSIxIi8+PC9saW5lYXJHcmFkaWVudD48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE0MCIgZmlsbD0idXJsKCNnKSIvPjwvc3ZnPg=='
+
+const SwipeCard = memo(function SwipeCard({
   event,
   onSwipeRight,
   onSwipeLeft,
@@ -61,6 +106,11 @@ export default function SwipeCard({
   const y = useMotionValue(0)
   const [isDragging, setIsDragging] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [imgSrc, setImgSrc] = useState(optimizeCardImageUrl(event.imageUrl || FALLBACK_IMAGE))
+  const [isImageLoading, setIsImageLoading] = useState(true)
+  const [isVideoReady, setIsVideoReady] = useState(false)
+  const isBlob = imgSrc.startsWith('blob:')
+  const hasVideo = Boolean(event.videoUrl)
 
   // Rotación proporcional al arrastre horizontal
   const rotate = useTransform(x, [-200, 0, 200], [-15, 0, 15])
@@ -79,6 +129,14 @@ export default function SwipeCard({
   const cardRef = useRef<HTMLDivElement>(null)
 
   const isActive = stackIndex === 0
+
+  useEffect(() => {
+    setImgSrc(optimizeCardImageUrl(event.imageUrl || FALLBACK_IMAGE))
+  }, [event.imageUrl])
+
+  useEffect(() => {
+    setIsImageLoading(true)
+  }, [imgSrc])
 
   function handleDragEnd(_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) {
     setIsDragging(false)
@@ -158,13 +216,45 @@ export default function SwipeCard({
           </motion.div>
         )}
 
-        {/* Imagen de fondo */}
-        <img
-          src={event.imageUrl}
-          alt={event.title}
-          className="absolute inset-0 w-full h-full object-cover"
-          draggable={false}
-        />
+        {/* Fondo: video o imagen */}
+        {(!hasVideo && isImageLoading) || (hasVideo && !isVideoReady) ? (
+          <div className="absolute inset-0 z-[1] animate-pulse bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />
+        ) : null}
+
+        {hasVideo ? (
+          <video
+            src={event.videoUrl!}
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${isVideoReady ? 'opacity-100' : 'opacity-0'}`}
+            autoPlay
+            muted
+            loop
+            playsInline
+            onCanPlay={() => setIsVideoReady(true)}
+          />
+        ) : (
+          <Image
+            src={imgSrc}
+            alt={event.title}
+            fill
+            className={`object-cover transition-opacity duration-300 ${isImageLoading ? 'opacity-0' : 'opacity-100'}`}
+            draggable={false}
+            priority={isActive}
+            loading={isActive ? 'eager' : 'lazy'}
+            sizes="(max-width: 640px) 92vw, (max-width: 1024px) 78vw, 380px"
+            quality={70}
+            placeholder="blur"
+            blurDataURL={CARD_BLUR_DATA_URL}
+            unoptimized={isBlob || shouldBypassImageOptimization(imgSrc)}
+            onLoadingComplete={() => setIsImageLoading(false)}
+            onError={() => {
+              if (imgSrc !== FALLBACK_IMAGE) {
+                setImgSrc(optimizeCardImageUrl(FALLBACK_IMAGE))
+                return
+              }
+              setIsImageLoading(false)
+            }}
+          />
+        )}
 
         {/* Doble gradiente para elevar contraste en textos y badges */}
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-black/20" />
@@ -262,11 +352,21 @@ export default function SwipeCard({
           {/* Precio + Organizador */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <img
-                src={event.organizerAvatar}
-                alt={event.organizerName}
-                className="w-6 h-6 rounded-full border border-white/20"
-              />
+              {event.organizerAvatar ? (
+                <Image
+                  src={event.organizerAvatar}
+                  alt={event.organizerName}
+                  width={24}
+                  height={24}
+                  className="rounded-full border border-white/20"
+                  unoptimized={shouldBypassImageOptimization(event.organizerAvatar)}
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                />
+              ) : (
+                <div className="w-6 h-6 rounded-full border border-white/20 bg-primary/40 flex items-center justify-center text-[9px] text-white font-bold">
+                  {event.organizerName.charAt(0).toUpperCase()}
+                </div>
+              )}
               <span className="max-w-[150px] truncate text-[11px] text-white/60 lg:max-w-[190px]">
                 {event.organizerName}
               </span>
@@ -322,4 +422,8 @@ export default function SwipeCard({
       </div>
     </motion.div>
   )
-}
+})
+
+SwipeCard.displayName = 'SwipeCard'
+
+export default SwipeCard

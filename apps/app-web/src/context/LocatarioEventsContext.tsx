@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 import type { Event, EventCategory } from '../types'
 import { getSupabaseBrowserClient, hasSupabaseEnv } from '../lib/supabase'
 
-interface CreateLocatarioEventInput {
+export interface CreateLocatarioEventInput {
   title: string
   description: string
   category: EventCategory
@@ -13,6 +13,7 @@ interface CreateLocatarioEventInput {
   address: string
   price: number | null
   imageUrl?: string
+  videoUrl?: string
   organizerName: string
   organizerAvatar: string
   lat?: number
@@ -21,9 +22,11 @@ interface CreateLocatarioEventInput {
 
 interface LocatarioEventsContextValue {
   locatarioEvents: Event[]
+  publicLocatarioEvents: Event[]
   isLoading: boolean
   createLocatarioEvent: (input: CreateLocatarioEventInput) => Promise<Event>
   removeLocatarioEvent: (eventId: string) => Promise<void>
+  updateLocatarioEvent: (eventId: string, input: Partial<CreateLocatarioEventInput>) => Promise<void>
 }
 
 const LocatarioEventsContext = createContext<LocatarioEventsContextValue | undefined>(undefined)
@@ -62,8 +65,11 @@ type LocatarioEventRow = {
   address: string
   price: number | null
   image_url: string | null
+  video_url: string | null
   organizer_name: string
   organizer_avatar: string | null
+  lat: number | null
+  lng: number | null
 }
 
 function dbRowToEvent(row: LocatarioEventRow): Event {
@@ -72,12 +78,16 @@ function dbRowToEvent(row: LocatarioEventRow): Event {
     title: row.title,
     description: row.description,
     category: row.category as EventCategory,
+    source: 'locatario',
     date: row.event_date,
     location: row.organizer_name,
     address: row.address,
     distance: 0,
+    lat: row.lat ?? undefined,
+    lng: row.lng ?? undefined,
     price: row.price,
     imageUrl: row.image_url || FALLBACK_EVENT_IMAGE,
+    videoUrl: row.video_url || null,
     websiteUrl: null,
     organizerName: row.organizer_name,
     organizerAvatar: row.organizer_avatar || 'https://i.pravatar.cc/150?img=32',
@@ -122,7 +132,19 @@ async function apiFetch<T>(baseUrl: string, path: string, init?: RequestInit): P
 
 export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
   const [locatarioEvents, setLocatarioEvents] = useState<Event[]>([])
+  const [publicLocatarioEvents, setPublicLocatarioEvents] = useState<Event[]>([])
   const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    if (!hasSupabaseEnv) return
+    getSupabaseBrowserClient()
+      .from('locatario_events')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (data) setPublicLocatarioEvents((data as unknown as LocatarioEventRow[]).map(dbRowToEvent))
+      })
+  }, [])
 
   // Carga inicial
   useEffect(() => {
@@ -144,19 +166,21 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      apiFetch<LocatarioEventRow[]>(EVENTS_URL, '/events/locatario')
-        .then((rows) => {
-          if (!mounted) return
-          setLocatarioEvents(rows.map(dbRowToEvent))
-        })
-        .catch(() => {
-          if (!mounted) return
-          // Si falla la API, intentar con localStorage como fallback
+      try {
+        const { data: rows, error } = await getSupabaseBrowserClient()
+          .from('locatario_events')
+          .select('*')
+          .eq('creator_id', data.session.user.id)
+          .order('created_at', { ascending: false })
+        if (!mounted) return
+        if (error || !rows) {
           setLocatarioEvents(loadEventsFromStorage())
-        })
-        .finally(() => {
-          if (mounted) setIsLoading(false)
-        })
+        } else {
+          setLocatarioEvents((rows as unknown as LocatarioEventRow[]).map(dbRowToEvent))
+        }
+      } finally {
+        if (mounted) setIsLoading(false)
+      }
     })().catch(() => {
       if (!mounted) return
       setLocatarioEvents(loadEventsFromStorage())
@@ -174,6 +198,7 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
         title: input.title.trim(),
         description: input.description.trim(),
         category: input.category,
+        source: 'locatario',
         date: new Date(input.date).toISOString(),
         location: input.organizerName,
         address: input.address.trim(),
@@ -182,6 +207,7 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
         lng: input.lng,
         price: input.price,
         imageUrl: input.imageUrl?.trim() || FALLBACK_EVENT_IMAGE,
+        videoUrl: input.videoUrl?.trim() || null,
         websiteUrl: null,
         organizerName: input.organizerName,
         organizerAvatar: input.organizerAvatar,
@@ -217,14 +243,61 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
         address: input.address,
         price: input.price,
         image_url: input.imageUrl || null,
+        video_url: input.videoUrl || null,
         organizer_name: input.organizerName,
         organizer_avatar: input.organizerAvatar,
+        lat: input.lat ?? null,
+        lng: input.lng ?? null,
       }),
     })
 
     const newEvent = dbRowToEvent(row)
     setLocatarioEvents((prev) => [newEvent, ...prev])
     return newEvent
+  }, [])
+
+  const updateLocatarioEvent = useCallback(async (eventId: string, input: Partial<CreateLocatarioEventInput>): Promise<void> => {
+    setLocatarioEvents((prev) => {
+      const next = prev.map((e) => {
+        if (e.id !== eventId) return e
+        return {
+          ...e,
+          title: input.title?.trim() ?? e.title,
+          description: input.description?.trim() ?? e.description,
+          category: input.category ?? e.category,
+          date: input.date ? new Date(input.date).toISOString() : e.date,
+          address: input.address?.trim() ?? e.address,
+          price: input.price !== undefined ? input.price : e.price,
+          imageUrl: input.imageUrl?.trim() || e.imageUrl,
+          videoUrl: input.videoUrl?.trim() || e.videoUrl,
+          lat: input.lat ?? e.lat,
+          lng: input.lng ?? e.lng,
+        }
+      })
+      if (!hasSupabaseEnv) saveEventsToStorage(next)
+      return next
+    })
+
+    if (!hasSupabaseEnv) return
+
+    const { data: sessionData } = await getSupabaseBrowserClient().auth.getSession()
+    if (!sessionData.session) throw new Error('Debes iniciar sesión para editar eventos.')
+
+    await apiFetch<void>(EVENTS_URL, `/events/locatario/${eventId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        title: input.title,
+        description: input.description,
+        category: input.category,
+        event_date: input.date,
+        address: input.address,
+        price: input.price,
+        image_url: input.imageUrl || null,
+        video_url: input.videoUrl || null,
+        lat: input.lat ?? null,
+        lng: input.lng ?? null,
+      }),
+    })
   }, [])
 
   const removeLocatarioEvent = useCallback(async (eventId: string): Promise<void> => {
@@ -246,8 +319,8 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo(
-    () => ({ locatarioEvents, isLoading, createLocatarioEvent, removeLocatarioEvent }),
-    [locatarioEvents, isLoading, createLocatarioEvent, removeLocatarioEvent],
+    () => ({ locatarioEvents, publicLocatarioEvents, isLoading, createLocatarioEvent, removeLocatarioEvent, updateLocatarioEvent }),
+    [locatarioEvents, publicLocatarioEvents, isLoading, createLocatarioEvent, removeLocatarioEvent, updateLocatarioEvent],
   )
 
   return <LocatarioEventsContext.Provider value={value}>{children}</LocatarioEventsContext.Provider>

@@ -4,10 +4,10 @@ import { useCallback, useRef, useEffect, useMemo, useState } from 'react'
 import { GoogleMap, OverlayView, DirectionsRenderer } from '@react-google-maps/api'
 import { PLACE_TYPE_CONFIG } from '../services/placesService'
 import { useNearbyPlacesContext } from '../context/NearbyPlacesContext'
+import { useLocatarioEvents } from '../context/LocatarioEventsContext'
 import { useAuth } from '../context/AuthContext'
 
 const CENTER: google.maps.LatLngLiteral = { lat: -33.4364, lng: -70.6358 }
-
 const DARK_STYLE: google.maps.MapTypeStyle[] = [
   { elementType: 'geometry', stylers: [{ color: '#1a1a2e' }] },
   { elementType: 'labels.text.stroke', stylers: [{ color: '#16213e' }] },
@@ -98,6 +98,7 @@ export default function BellavistaMap({ focusedPlaceId }: BellavistaMapProps) {
     selectedDistanceKm,
     requestUserLocation,
   } = useNearbyPlacesContext()
+  const { publicLocatarioEvents } = useLocatarioEvents()
   const mapRef = useRef<google.maps.Map | null>(null)
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null)
   const [travelMode, setTravelMode] = useState<TravelModeOption>('WALKING')
@@ -273,11 +274,48 @@ export default function BellavistaMap({ focusedPlaceId }: BellavistaMapProps) {
     )
   }
 
+  // Hasta que tengamos ubicación o estemos localizando, no mostramos el mapa centrado en Bellavista
+  if (!userLocation && !locating) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-card px-6 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-3xl border border-blue-400/25 bg-blue-500/10">
+          <span className="text-3xl">📍</span>
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-white">
+            {locationError ? 'Permiso de ubicación denegado' : 'Activa tu ubicación'}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-muted max-w-[220px]">
+            {locationError
+              ? locationError
+              : 'Necesitamos tu GPS para centrar el mapa en tu posición y mostrarte lugares cercanos.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={goToMyLocation}
+          className="rounded-full bg-blue-500/20 px-4 py-2 text-xs font-semibold text-blue-200 hover:bg-blue-500/30 transition-colors"
+        >
+          {locationError ? 'Reintentar' : 'Activar ubicación'}
+        </button>
+      </div>
+    )
+  }
+
+  if (locating && !userLocation) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-card">
+        <div className="h-7 w-7 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+        <p className="text-sm text-muted">Obteniendo tu ubicación...</p>
+      </div>
+    )
+  }
+
   return (
     <GoogleMap
       mapContainerStyle={{ width: '100%', height: '100%' }}
       center={userLocation ?? CENTER}
-      zoom={userLocation ? 15 : 14}
+      zoom={15}
       options={MAP_OPTIONS}
       onLoad={onMapLoad}
     >
@@ -485,6 +523,36 @@ export default function BellavistaMap({ focusedPlaceId }: BellavistaMapProps) {
           </OverlayView>
         )
       })}
+
+      {/* ── Marcadores de eventos locatarios ───────────────────────────── */}
+      {publicLocatarioEvents
+        .filter((e) => e.lat != null && e.lng != null)
+        .map((event) => (
+          <OverlayView
+            key={event.id}
+            position={{ lat: event.lat!, lng: event.lng! }}
+            mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+            getPixelPositionOffset={(w, h) => ({ x: -w / 2, y: -h / 2 })}
+          >
+            <button
+              type="button"
+              title={event.title}
+              style={{
+                backgroundColor: 'rgba(109, 40, 217, 0.85)',
+                border: '2px solid #a78bfa',
+                boxShadow: focusedPlaceId === event.id
+                  ? '0 0 0 5px rgba(167,139,250,0.35), 0 8px 24px rgba(0,0,0,0.65)'
+                  : '0 2px 8px rgba(0,0,0,0.5)',
+                width: focusedPlaceId === event.id ? '44px' : '36px',
+                height: focusedPlaceId === event.id ? '44px' : '36px',
+                transform: focusedPlaceId === event.id ? 'scale(1.15)' : 'scale(1)',
+              }}
+              className="flex cursor-pointer items-center justify-center rounded-full text-base transition-all duration-200"
+            >
+              🎉
+            </button>
+          </OverlayView>
+        ))}
 
       {/* ── Marcador de ubicación del usuario ──────────────────────────── */}
       {userLocation && (
