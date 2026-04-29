@@ -2,7 +2,15 @@
 
 import { useAuth } from '@/src/context/AuthContext'
 import { useRouter } from 'next/navigation'
-import { FiLogOut, FiMenu, FiX, FiHome, FiLock, FiBriefcase } from 'react-icons/fi'
+import Image from 'next/image'
+import {
+  LogOut as FiLogOut,
+  Menu as FiMenu,
+  X as FiX,
+  House as FiHome,
+  Lock as FiLock,
+  Briefcase as FiBriefcase,
+} from 'lucide-react'
 import { useState } from 'react'
 
 export default function NavBar() {
@@ -75,11 +83,19 @@ export default function NavBar() {
           <div className="hidden md:flex items-center gap-4">
             {/* Avatar y nombre del usuario */}
             <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-surface">
-              <img 
-                src={user.avatarUrl} 
-                alt={user.name}
-                className="w-8 h-8 rounded-full"
-              />
+              {user.avatarUrl ? (
+                <Image
+                  src={user.avatarUrl}
+                  alt={user.name}
+                  width={32}
+                  height={32}
+                  className="rounded-full"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+              )}
               <div className="text-left">
                 <p className="text-sm font-semibold text-white">{user.name}</p>
                 <p className="text-xs text-muted capitalize">
@@ -128,11 +144,19 @@ export default function NavBar() {
             })}
             <div className="border-t border-card pt-3 mt-3">
               <div className="flex items-center gap-3 px-4 py-2 mb-3">
-                <img 
-                  src={user.avatarUrl} 
-                  alt={user.name}
-                  className="w-8 h-8 rounded-full"
-                />
+                {user.avatarUrl ? (
+                  <Image
+                    src={user.avatarUrl}
+                    alt={user.name}
+                    width={32}
+                    height={32}
+                    className="rounded-full"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                    {user.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div>
                   <p className="text-sm font-semibold text-white">{user.name}</p>
                   <p className="text-xs text-muted capitalize">

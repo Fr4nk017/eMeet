@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { withAuth } from '@emeet/shared/middleware/auth'
 import { createServiceRoleClient } from '@emeet/shared/lib/supabase'
 import { badRequest, serverError } from '@emeet/shared/utils/http'
+import { cacheLikedEvent, generateRecommendations } from '@emeet/redis'
 
 const router = Router()
 
@@ -183,11 +184,15 @@ async function ensureRoomMember(
 }
 
 router.post('/like', async (req, res) => {
-  const { eventId, eventTitle, eventImageUrl, eventAddress } = req.body as {
+  const { eventId, eventTitle, eventImageUrl, eventAddress, eventType, eventLat, eventLng, eventDistance } = req.body as {
     eventId?: string
     eventTitle?: string
     eventImageUrl?: string
     eventAddress?: string
+    eventType?: string
+    eventLat?: number
+    eventLng?: number
+    eventDistance?: number
   }
 
   if (!eventId || !eventTitle) {
@@ -248,6 +253,20 @@ router.post('/like', async (req, res) => {
       logSupabaseError('upsert room_members /like', memberError)
       chatLinked = false
     }
+  }
+
+  // Cache el like en Redis para recomendaciones
+  if (eventLat != null && eventLng != null && eventDistance != null && eventType) {
+    await cacheLikedEvent(req.authUser!.id, {
+      id: eventId,
+      type: eventType,
+      lat: eventLat,
+      lng: eventLng,
+      distance: eventDistance,
+    }).catch(err => {
+      logSupabaseError('cacheLikedEvent', err)
+      // No es crítico, continúa
+    })
   }
 
   return res.status(201).json({ ok: true, chatLinked })
@@ -379,6 +398,39 @@ router.get('/debug/test', async (req, res) => {
   }
 
   return res.json(results)
+})
+
+/**
+ * POST /recommendations
+ * Genera recomendaciones basadas en likes anteriores del usuario
+ * Body: { availableEvents: Array<{ id, type, lat, lng, distance }>, limit?: number }
+ */
+router.post('/recommendations', async (req, res) => {
+  const { availableEvents, limit = 5 } = req.body as {
+    availableEvents?: Array<{ id: string; type: string; lat: number; lng: number; distance: number }>
+    limit?: number
+  }
+
+  if (!availableEvents || !Array.isArray(availableEvents)) {
+    return badRequest(res, 'availableEvents debe ser un array.')
+  }
+
+  try {
+    const userId = req.authUser?.id
+    if (!userId) {
+      return res.status(401).json({ error: 'Usuario no autenticado.' })
+    }
+
+    const recommendations = await generateRecommendations(userId, availableEvents, Math.min(limit, 10))
+
+    return res.json({
+      recommendations,
+      count: recommendations.length,
+    })
+  } catch (err) {
+    logSupabaseError('POST /recommendations', err)
+    return serverError(res, 'Error generando recomendaciones.')
+  }
 })
 
 export default router

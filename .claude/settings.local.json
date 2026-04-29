@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(git -C \"c:/Users/franc/OneDrive/Escritorio/eMeet\" log --oneline -20)",
+      "Bash(npm install *)",
+      "Bash(npm audit *)",
+      "Bash(git -C /c/Users/franc/OneDrive/Escritorio/eMeet show cb63e49 --stat)"
     ]
   }
 }

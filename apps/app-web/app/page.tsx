@@ -2,7 +2,9 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import dynamic from 'next/dynamic'
 import SwipeCard from '../src/components/SwipeCard'
+import RecommendationsCard from '../src/components/RecommendationsCard'
 import Layout from '../src/components/Layout'
 import DistanceFilter from '../src/components/DistanceFilter'
 import PlaceTypeFilters from '../src/components/PlaceTypeFilters'
@@ -12,7 +14,18 @@ import { useChatContext } from '../src/context/ChatContext'
 import { useAuth } from '../src/context/AuthContext'
 import { useLocatarioEvents } from '../src/context/LocatarioEventsContext'
 import { getSupabaseBrowserClient, hasSupabaseEnv } from '../src/lib/supabase'
+import { useFeedEvents } from '../src/hooks/useFeedEvents'
+import { haversineKm } from '../src/utils/geo'
 import type { PlaceType } from '../src/types'
+
+const BellavistaMapMobile = dynamic(() => import('../src/components/BellavistaMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full items-center justify-center bg-card text-sm text-muted">
+      Cargando mapa...
+    </div>
+  ),
+})
 
 const DEFAULT_FEED_TYPES: PlaceType[] = ['restaurant', 'bar', 'night_club', 'cafe']
 const SAVED_URL = (process.env.NEXT_PUBLIC_SAVED_URL ?? '').trim().replace(/\/$/, '')
@@ -63,24 +76,6 @@ async function callSavedApi(path: string, init?: RequestInit) {
   }
 }
 
-function toRad(value: number) {
-  return (value * Math.PI) / 180
-}
-
-function getDistanceKm(
-  lat: number,
-  lng: number,
-  refLat: number,
-  refLng: number,
-): number {
-  const earthRadiusKm = 6371
-  const dLat = toRad(lat - refLat)
-  const dLng = toRad(lng - refLng)
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(refLat)) * Math.cos(toRad(lat)) * Math.sin(dLng / 2) ** 2
-  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
 
 function FeedSkeleton() {
   return (
@@ -139,6 +134,52 @@ function FeedSkeleton() {
   )
 }
 
+function OnboardingModal({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+    >
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+        className="mx-4 w-full max-w-[320px] rounded-3xl border border-white/15 bg-card p-6 shadow-2xl"
+      >
+        <div className="mb-4 text-center text-4xl">👋</div>
+        <h2 className="mb-1 text-center text-xl font-bold text-white">Bienvenido a eMeet</h2>
+        <p className="mb-5 text-center text-sm text-muted">Descubre eventos y lugares cerca tuyo.</p>
+
+        <div className="mb-6 space-y-2.5">
+          {([
+            { icon: '👉', title: 'Swipe derecha', desc: 'Me interesa — te unes a la comunidad del evento' },
+            { icon: '👈', title: 'Swipe izquierda', desc: 'No me interesa — pasa al siguiente' },
+            { icon: '🔖', title: 'Guardar', desc: 'Guarda para verlo después sin dar like' },
+          ] as const).map(({ icon, title, desc }) => (
+            <div key={title} className="flex items-center gap-3 rounded-2xl bg-surface/60 px-3 py-2.5">
+              <span className="text-2xl">{icon}</span>
+              <div>
+                <p className="text-sm font-semibold text-white">{title}</p>
+                <p className="text-xs text-muted">{desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={onDismiss}
+          className="w-full rounded-full bg-primary py-3 font-semibold text-white transition-colors active:scale-95 hover:bg-primary-dark"
+        >
+          ¡Entendido, explorar!
+        </button>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 function HomePageContent() {
   const {
     places,
@@ -147,6 +188,7 @@ function HomePageContent() {
     loading,
     locating,
     invalidApiKey,
+    locationError,
     selectedPlaceTypes,
     selectedDistanceKm,
     requestUserLocation,
@@ -157,15 +199,38 @@ function HomePageContent() {
   } = useNearbyPlacesContext()
   const { joinRoom } = useChatContext()
   const { user, updateUser } = useAuth()
-  const { locatarioEvents } = useLocatarioEvents()
+  const { locatarioEvents, publicLocatarioEvents } = useLocatarioEvents()
+
+  const allLocatarioEvents = useMemo(() => {
+    const seen = new Set<string>()
+    return [...publicLocatarioEvents, ...locatarioEvents].filter((e) => {
+      if (seen.has(e.id)) return false
+      seen.add(e.id)
+      return true
+    })
+  }, [publicLocatarioEvents, locatarioEvents])
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const processingIds = useRef<Set<string>>(new Set())
   const [isFiltersOpen, setIsFiltersOpen] = useState(false)
+  const [showRecommendations, setShowRecommendations] = useState(true)
+  const [showOnboarding, setShowOnboarding] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!window.localStorage.getItem('emeet-onboarding-v1')) setShowOnboarding(true)
+  }, [])
+
+  function dismissOnboarding() {
+    window.localStorage.setItem('emeet-onboarding-v1', '1')
+    setShowOnboarding(false)
+  }
   const [toast, setToast] = useState<{ message: string; type: 'like' | 'nope' | 'save' } | null>(null)
   const [focusedPlaceId, setFocusedPlaceId] = useState<string | null>(null)
+  const [showMobileMap, setShowMobileMap] = useState(false)
+  const { events: externalEvents } = useFeedEvents(userLocation, selectedDistanceKm)
 
   useEffect(() => {
     if (!user) {
@@ -178,34 +243,53 @@ function HomePageContent() {
     setSavedIds(new Set(user.savedEvents))
   }, [user])
 
-  const events = useMemo(() => {
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(min-width: 1024px)')
+    const onDesktop = () => {
+      if (mediaQuery.matches) {
+        setShowMobileMap(false)
+      }
+    }
+
+    onDesktop()
+    mediaQuery.addEventListener('change', onDesktop)
+
+    return () => mediaQuery.removeEventListener('change', onDesktop)
+  }, [])
+
+  const baseEvents = useMemo(() => {
     const placeEvents = userLocation
       ? places
           .filter((place) => selectedPlaceTypes.includes(place.type))
           .map((place) => {
-            const distance = getDistanceKm(place.position.lat, place.position.lng, userLocation.lat, userLocation.lng)
+            const distance = haversineKm(place.position.lat, place.position.lng, userLocation.lat, userLocation.lng)
             return placeToEvent(place, distance)
           })
       : []
 
     return placeEvents
       .concat(
-        locatarioEvents.map((e) => {
+        allLocatarioEvents.map((e) => {
           if (e.lat != null && e.lng != null && userLocation) {
-            return { ...e, distance: getDistanceKm(e.lat, e.lng, userLocation.lat, userLocation.lng) }
+            return { ...e, distance: haversineKm(e.lat, e.lng, userLocation.lat, userLocation.lng) }
           }
           return e
         }),
       )
+      .concat(externalEvents)
       .filter((event) => event.distance <= selectedDistanceKm)
       .sort((a, b) => a.distance - b.distance)
+  }, [externalEvents, allLocatarioEvents, places, selectedDistanceKm, selectedPlaceTypes, userLocation])
+
+  const events = useMemo(() => {
+    return baseEvents
       .filter((event) => !dismissedIds.has(event.id))
       .map((event) => ({
         ...event,
         isLiked: likedIds.has(event.id),
         isSaved: savedIds.has(event.id),
       }))
-  }, [dismissedIds, likedIds, locatarioEvents, places, savedIds, selectedDistanceKm, selectedPlaceTypes, userLocation])
+  }, [baseEvents, dismissedIds, likedIds, savedIds])
 
   function showToast(message: string, type: 'like' | 'nope' | 'save') {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
@@ -225,8 +309,20 @@ function HomePageContent() {
     try {
       const likedEvent = events.find((event) => event.id === id)
 
-      if (!user || !likedEvent) {
-        showToast('Inicia sesión para guardar tus likes.', 'nope')
+      if (!likedEvent) {
+        showToast('No pudimos cargar ese evento.', 'nope')
+        return
+      }
+
+      // Invitado: no persiste like, pero si permite navegar la ruta del evento.
+      if (!user) {
+        setDismissedIds((prev) => new Set(prev).add(id))
+        excludePlace(id)
+        setFocusedPlaceId(likedEvent.id)
+        if (window.innerWidth < 1024) {
+          setShowMobileMap(true)
+        }
+        showToast('Ruta abierta. Inicia sesión para guardar likes.', 'save')
         return
       }
 
@@ -239,6 +335,10 @@ function HomePageContent() {
               eventTitle: likedEvent.title,
               eventImageUrl: likedEvent.imageUrl,
               eventAddress: likedEvent.address,
+              eventType: likedEvent.category,
+              eventLat: likedEvent.lat,
+              eventLng: likedEvent.lng,
+              eventDistance: likedEvent.distance,
             }),
           })
         } catch {
@@ -253,6 +353,9 @@ function HomePageContent() {
 
       showToast(`¡Like! ${likedEvent.title}`, 'like')
       setFocusedPlaceId(likedEvent.id)
+      if (window.innerWidth < 1024) {
+        setShowMobileMap(true)
+      }
 
       try {
         await updateUser({ likedEvents: Array.from(new Set([...(user.likedEvents ?? []), likedEvent.id])) })
@@ -323,7 +426,7 @@ function HomePageContent() {
     showToast('Evento guardado 🔖', 'save')
   }, [events, savedIds, updateUser, user])
 
-  const visibleEvents = events.slice(0, 3)
+  const visibleEvents = useMemo(() => events.slice(0, 3), [events])
 
   const activeFilterCount =
     (selectedDistanceKm !== 3 ? 1 : 0) +
@@ -347,6 +450,12 @@ function HomePageContent() {
   return (
     <Layout showDesktopMap focusedPlaceId={focusedPlaceId}>
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
+        <AnimatePresence>
+          {showOnboarding && (
+            <OnboardingModal onDismiss={dismissOnboarding} />
+          )}
+        </AnimatePresence>
+
         <AnimatePresence>
           {toast && (
             <motion.div
@@ -451,36 +560,149 @@ function HomePageContent() {
                 El feed de eventos cercanos usa lugares reales según tu ubicación.
               </p>
             </div>
-          ) : loading || locating || !userLocation ? (
+          ) : loading || locating ? (
             <FeedSkeleton />
+          ) : !userLocation ? (
+            /* Ubicación no concedida o denegada */
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="flex h-full w-full flex-col items-center justify-center gap-5 px-6 text-center"
+            >
+              <span className="text-6xl">📍</span>
+              <div>
+                <h2 className="text-xl font-bold text-white mb-1">
+                  {locationError ? 'Permiso de ubicación denegado' : 'Activa tu ubicación'}
+                </h2>
+                <p className="text-sm text-muted max-w-[280px]">
+                  {locationError
+                    ? 'Para ver eventos cercanos necesitamos acceso a tu GPS. Actívalo desde la configuración de tu navegador.'
+                    : 'Necesitamos tu ubicación para mostrarte eventos y lugares interesantes cerca tuyo.'}
+                </p>
+              </div>
+              {!locationError && (
+                <button
+                  onClick={() => requestUserLocation(true)}
+                  className="rounded-full bg-primary px-6 py-3 font-semibold text-white transition-colors active:scale-95 hover:bg-primary-dark"
+                >
+                  Activar GPS
+                </button>
+              )}
+              {locationError && (
+                <button
+                  onClick={() => requestUserLocation(true)}
+                  className="rounded-full border border-white/20 px-6 py-3 text-sm font-medium text-slate-300 transition-colors hover:border-white/40 hover:text-white"
+                >
+                  Reintentar
+                </button>
+              )}
+            </motion.div>
           ) : visibleEvents.length > 0 ? (
-            <div className="card-stack mx-auto h-full min-h-[500px] w-full max-w-[380px] lg:min-h-[560px] xl:min-h-[620px]">
-              {[...visibleEvents].reverse().map((event, reverseIndex) => {
-                const stackIndex = visibleEvents.length - 1 - reverseIndex
-                return (
-                  <SwipeCard
-                    key={event.id}
-                    event={event}
-                    stackIndex={stackIndex}
-                    onSwipeRight={handleSwipeRight}
-                    onSwipeLeft={handleSwipeLeft}
-                    onSave={handleSave}
-                    onRefresh={refreshPlaces}
-                  />
-                )
-              })}
-            </div>
+            <>
+              {/* Mobile Map View - solo mostrar en pantallas pequeñas cuando hay like */}
+              <AnimatePresence>
+                {showMobileMap && (
+                  <motion.div
+                    key="mobile-map"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 20 }}
+                    className="absolute inset-0 z-40 flex flex-col overflow-hidden rounded-[24px] lg:hidden"
+                  >
+                    {/* Mapa dinámico */}
+                    <div className="flex-1 overflow-hidden rounded-t-[24px]">
+                      <BellavistaMapMobile focusedPlaceId={focusedPlaceId} />
+                    </div>
+
+                    {/* Botón para cerrar el mapa y volver a la card */}
+                    <motion.button
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 }}
+                      onClick={() => setShowMobileMap(false)}
+                      className="shrink-0 border-t border-white/10 bg-gradient-to-t from-card to-card/80 px-4 py-4 font-semibold text-primary-light transition-colors hover:text-primary"
+                    >
+                      ← Volver a eventos
+                    </motion.button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Desktop Card View + Mobile Card View (cuando no hay showMobileMap) */}
+              {!showMobileMap && (
+                <div className="mx-auto flex h-full w-full max-w-[980px] items-start justify-center gap-4 lg:gap-6">
+                  <div className="card-stack h-full min-h-[500px] w-full max-w-[380px] lg:min-h-[560px] xl:min-h-[620px]">
+                    {[...visibleEvents].reverse().map((event, reverseIndex) => {
+                      const stackIndex = visibleEvents.length - 1 - reverseIndex
+                      return (
+                        <SwipeCard
+                          key={event.id}
+                          event={event}
+                          stackIndex={stackIndex}
+                          onSwipeRight={handleSwipeRight}
+                          onSwipeLeft={handleSwipeLeft}
+                          onSave={handleSave}
+                          onRefresh={refreshPlaces}
+                        />
+                      )
+                    })}
+                  </div>
+
+                  {showRecommendations && (
+                    <aside className="hidden h-full min-h-[500px] w-[300px] overflow-y-auto rounded-2xl border border-white/10 bg-card/50 p-3 shadow-xl backdrop-blur-md lg:block lg:min-h-[560px] xl:min-h-[620px]">
+                      <RecommendationsCard
+                        events={events}
+                        onClose={() => setShowRecommendations(false)}
+                        userInterests={user?.interests ?? []}
+                      />
+                    </aside>
+                  )}
+                </div>
+              )}
+            </>
+          ) : baseEvents.length === 0 ? (
+            /* No hay eventos en esta área */
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="flex h-full flex-col items-center justify-center gap-5 px-6 text-center"
+            >
+              <span className="text-6xl">🗺️</span>
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-1">Sin eventos cerca</h2>
+                <p className="text-sm text-muted max-w-[260px]">
+                  No encontramos lugares ni eventos en un radio de {selectedDistanceKm} km desde tu ubicación.
+                </p>
+              </div>
+              <div className="mt-1 flex flex-col items-center gap-3">
+                <button
+                  onClick={() => setDistanceKm(Math.min(selectedDistanceKm + 2, 20))}
+                  className="rounded-full bg-primary px-6 py-3 font-semibold text-white transition-colors active:scale-95 hover:bg-primary-dark"
+                >
+                  Ampliar radio de búsqueda
+                </button>
+                <button
+                  onClick={() => requestUserLocation(true)}
+                  className="text-sm font-medium text-primary-light"
+                >
+                  Actualizar mi ubicación
+                </button>
+              </div>
+            </motion.div>
           ) : (
+            /* Ya viste todos los eventos */
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               className="flex h-full flex-col items-center justify-center gap-5 px-6 text-center"
             >
               <span className="text-6xl">🎉</span>
-              <h2 className="text-2xl font-bold text-white">No quedan más lugares cercanos</h2>
-              <p className="text-sm text-muted">
-                Ya recorriste los resultados cercanos a tu ubicación actual.
-              </p>
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-1">¡Lo viste todo!</h2>
+                <p className="text-sm text-muted max-w-[260px]">
+                  Ya recorriste todos los lugares cercanos a tu ubicación actual.
+                </p>
+              </div>
               <div className="mt-2 flex flex-col items-center gap-3">
                 <button
                   onClick={() => {

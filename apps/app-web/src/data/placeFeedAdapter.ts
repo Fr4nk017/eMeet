@@ -75,6 +75,7 @@ export function placeToEvent(place: ScrapedPlace, distanceKm: number): Event {
     title: place.name,
     description: formatPlaceDescription(place),
     category: PLACE_CATEGORY_MAP[place.type],
+    source: 'places',
     date: nextRelevantDate(place),
     location: place.name,
     address: place.address,
@@ -91,5 +92,7 @@ export function placeToEvent(place: ScrapedPlace, distanceKm: number): Event {
     isSaved: false,
     rating: place.rating > 0 ? place.rating : undefined,
     isOpen: place.isOpen,
+    lat: place.position.lat,
+    lng: place.position.lng,
   }
 }

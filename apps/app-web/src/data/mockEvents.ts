@@ -12,6 +12,7 @@ export const MOCK_EVENTS: Event[] = [
     description:
       'Una noche íntima con los mejores músicos de jazz de la ciudad. Reserva tu mesa y disfruta de coctelería artesanal mientras el trío en vivo llena el ambiente.',
     category: 'musica',
+    source: 'locatario',
     date: '2026-03-22T21:00:00',
     location: 'La Bodeguita del Medio',
     address: 'Av. Providencia 1234, Santiago',
@@ -32,6 +33,7 @@ export const MOCK_EVENTS: Event[] = [
     description:
       'Conecta con emprendedores, freelancers y creativos de Santiago. Café de especialidad, buen rollo y conversaciones que mueven proyectos. Cupos muy limitados.',
     category: 'networking',
+    source: 'locatario',
     date: '2026-03-23T11:00:00',
     location: 'Café Quínoa',
     address: 'Loreto 56, Providencia',
@@ -52,6 +54,7 @@ export const MOCK_EVENTS: Event[] = [
     description:
       'Cuatro DJs nacionales en una misma noche. Techno, house y electrónica experimental en la pista más oscura de Santiago. Puertas abren a las 23:00.',
     category: 'fiesta',
+    source: 'locatario',
     date: '2026-03-22T23:00:00',
     location: 'Club Baum',
     address: 'Av. Baquedano 0120, Santiago',
@@ -72,6 +75,7 @@ export const MOCK_EVENTS: Event[] = [
     description:
       'Muestra individual de la artista Valentina Rojas. Collage, fotografía intervenida y textil exploran la memoria y el territorio. Entrada libre hasta las 20:00.',
     category: 'arte',
+    source: 'locatario',
     date: '2026-03-21T18:00:00',
     location: 'GAM — Centro Cultural',
     address: 'Av. Libertador Bernardo O\'Higgins 227',
@@ -92,6 +96,7 @@ export const MOCK_EVENTS: Event[] = [
     description:
       'Chef Pablo Concha presenta un menú de 5 tiempos con maridaje de vinos chilenos de viñas boutique. Plazas limitadas, reserva obligatoria.',
     category: 'gastronomia',
+    source: 'locatario',
     date: '2026-03-28T20:00:00',
     location: 'Restaurante Nómada',
     address: 'General del Canto 45, Providencia',
@@ -112,6 +117,7 @@ export const MOCK_EVENTS: Event[] = [
     description:
       'Escenario abierto para poetas, cantautores y músicos folklóricos. Cualquiera puede inscribirse para presentar 5 minutos. Ambiente familiar y relajado.',
     category: 'cultura',
+    source: 'locatario',
     date: '2026-03-24T19:30:00',
     location: 'Casa de la Cultura Ñuñoa',
     address: 'Irarrázaval 3635, Ñuñoa',
@@ -132,6 +138,7 @@ export const MOCK_EVENTS: Event[] = [
     description:
       'Clase de yoga al aire libre en el Parque Bustamante. Nivel principiante-intermedio. Trae tu mat y ropa cómoda. El instructor Paula guía la sesión de 75 min.',
     category: 'deporte',
+    source: 'locatario',
     date: '2026-03-23T09:00:00',
     location: 'Parque Bustamante',
     address: 'Av. Bustamante 964, Providencia',
@@ -152,6 +159,7 @@ export const MOCK_EVENTS: Event[] = [
     description:
       'Adaptación visual del clásico de Saint-Exupéry con títeres gigantes y música en vivo. Para toda la familia. Función única al aire libre en la plaza.',
     category: 'teatro',
+    source: 'locatario',
     date: '2026-03-29T17:00:00',
     location: 'Plaza Ñuñoa',
     address: 'Av. Irarrázaval esq. Carlos Antúnez',
