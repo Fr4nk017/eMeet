@@ -2,14 +2,13 @@
   "name": "emeet-app-auth",
   "version": "1.0.0",
   "private": true,
-  "main": "dist/server.js",
+  "main": "api/index.ts",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/server.js"
+    "start": "tsx src/server.ts"
   },
   "dependencies": {
-    "@emeet/shared": "*",
     "@supabase/supabase-js": "^2.103.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
