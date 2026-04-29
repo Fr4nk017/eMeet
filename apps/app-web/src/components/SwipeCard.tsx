@@ -108,7 +108,9 @@ const SwipeCard = memo(function SwipeCard({
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [imgSrc, setImgSrc] = useState(optimizeCardImageUrl(event.imageUrl || FALLBACK_IMAGE))
   const [isImageLoading, setIsImageLoading] = useState(true)
+  const [isVideoReady, setIsVideoReady] = useState(false)
   const isBlob = imgSrc.startsWith('blob:')
+  const hasVideo = Boolean(event.videoUrl)
 
   // Rotación proporcional al arrastre horizontal
   const rotate = useTransform(x, [-200, 0, 200], [-15, 0, 15])
@@ -214,33 +216,45 @@ const SwipeCard = memo(function SwipeCard({
           </motion.div>
         )}
 
-        {/* Imagen de fondo */}
-        {isImageLoading && (
+        {/* Fondo: video o imagen */}
+        {(!hasVideo && isImageLoading) || (hasVideo && !isVideoReady) ? (
           <div className="absolute inset-0 z-[1] animate-pulse bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />
-        )}
+        ) : null}
 
-        <Image
-          src={imgSrc}
-          alt={event.title}
-          fill
-          className={`object-cover transition-opacity duration-300 ${isImageLoading ? 'opacity-0' : 'opacity-100'}`}
-          draggable={false}
-          priority={isActive}
-          loading={isActive ? 'eager' : 'lazy'}
-          sizes="(max-width: 640px) 92vw, (max-width: 1024px) 78vw, 380px"
-          quality={70}
-          placeholder="blur"
-          blurDataURL={CARD_BLUR_DATA_URL}
-          unoptimized={isBlob || shouldBypassImageOptimization(imgSrc)}
-          onLoadingComplete={() => setIsImageLoading(false)}
-          onError={() => {
-            if (imgSrc !== FALLBACK_IMAGE) {
-              setImgSrc(optimizeCardImageUrl(FALLBACK_IMAGE))
-              return
-            }
-            setIsImageLoading(false)
-          }}
-        />
+        {hasVideo ? (
+          <video
+            src={event.videoUrl!}
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${isVideoReady ? 'opacity-100' : 'opacity-0'}`}
+            autoPlay
+            muted
+            loop
+            playsInline
+            onCanPlay={() => setIsVideoReady(true)}
+          />
+        ) : (
+          <Image
+            src={imgSrc}
+            alt={event.title}
+            fill
+            className={`object-cover transition-opacity duration-300 ${isImageLoading ? 'opacity-0' : 'opacity-100'}`}
+            draggable={false}
+            priority={isActive}
+            loading={isActive ? 'eager' : 'lazy'}
+            sizes="(max-width: 640px) 92vw, (max-width: 1024px) 78vw, 380px"
+            quality={70}
+            placeholder="blur"
+            blurDataURL={CARD_BLUR_DATA_URL}
+            unoptimized={isBlob || shouldBypassImageOptimization(imgSrc)}
+            onLoadingComplete={() => setIsImageLoading(false)}
+            onError={() => {
+              if (imgSrc !== FALLBACK_IMAGE) {
+                setImgSrc(optimizeCardImageUrl(FALLBACK_IMAGE))
+                return
+              }
+              setIsImageLoading(false)
+            }}
+          />
+        )}
 
         {/* Doble gradiente para elevar contraste en textos y badges */}
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-black/20" />

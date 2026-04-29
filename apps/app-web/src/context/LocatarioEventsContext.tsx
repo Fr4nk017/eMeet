@@ -22,6 +22,7 @@ export interface CreateLocatarioEventInput {
 
 interface LocatarioEventsContextValue {
   locatarioEvents: Event[]
+  publicLocatarioEvents: Event[]
   isLoading: boolean
   createLocatarioEvent: (input: CreateLocatarioEventInput) => Promise<Event>
   removeLocatarioEvent: (eventId: string) => Promise<void>
@@ -131,7 +132,19 @@ async function apiFetch<T>(baseUrl: string, path: string, init?: RequestInit): P
 
 export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
   const [locatarioEvents, setLocatarioEvents] = useState<Event[]>([])
+  const [publicLocatarioEvents, setPublicLocatarioEvents] = useState<Event[]>([])
   const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    if (!hasSupabaseEnv) return
+    getSupabaseBrowserClient()
+      .from('locatario_events')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (data) setPublicLocatarioEvents((data as LocatarioEventRow[]).map(dbRowToEvent))
+      })
+  }, [])
 
   // Carga inicial
   useEffect(() => {
@@ -153,15 +166,18 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      apiFetch<LocatarioEventRow[]>(EVENTS_URL, '/events/locatario')
-        .then((rows) => {
+      getSupabaseBrowserClient()
+        .from('locatario_events')
+        .select('*')
+        .eq('creator_id', data.session.user.id)
+        .order('created_at', { ascending: false })
+        .then(({ data: rows, error }) => {
           if (!mounted) return
-          setLocatarioEvents(rows.map(dbRowToEvent))
-        })
-        .catch(() => {
-          if (!mounted) return
-          // Si falla la API, intentar con localStorage como fallback
-          setLocatarioEvents(loadEventsFromStorage())
+          if (error || !rows) {
+            setLocatarioEvents(loadEventsFromStorage())
+          } else {
+            setLocatarioEvents((rows as LocatarioEventRow[]).map(dbRowToEvent))
+          }
         })
         .finally(() => {
           if (mounted) setIsLoading(false)
@@ -304,8 +320,8 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo(
-    () => ({ locatarioEvents, isLoading, createLocatarioEvent, removeLocatarioEvent, updateLocatarioEvent }),
-    [locatarioEvents, isLoading, createLocatarioEvent, removeLocatarioEvent, updateLocatarioEvent],
+    () => ({ locatarioEvents, publicLocatarioEvents, isLoading, createLocatarioEvent, removeLocatarioEvent, updateLocatarioEvent }),
+    [locatarioEvents, publicLocatarioEvents, isLoading, createLocatarioEvent, removeLocatarioEvent, updateLocatarioEvent],
   )
 
   return <LocatarioEventsContext.Provider value={value}>{children}</LocatarioEventsContext.Provider>

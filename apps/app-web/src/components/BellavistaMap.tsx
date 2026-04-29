@@ -4,6 +4,7 @@ import { useCallback, useRef, useEffect, useMemo, useState } from 'react'
 import { GoogleMap, OverlayView, DirectionsRenderer } from '@react-google-maps/api'
 import { PLACE_TYPE_CONFIG } from '../services/placesService'
 import { useNearbyPlacesContext } from '../context/NearbyPlacesContext'
+import { useLocatarioEvents } from '../context/LocatarioEventsContext'
 import { useAuth } from '../context/AuthContext'
 
 const CENTER: google.maps.LatLngLiteral = { lat: -33.4364, lng: -70.6358 }
@@ -97,6 +98,7 @@ export default function BellavistaMap({ focusedPlaceId }: BellavistaMapProps) {
     selectedDistanceKm,
     requestUserLocation,
   } = useNearbyPlacesContext()
+  const { publicLocatarioEvents } = useLocatarioEvents()
   const mapRef = useRef<google.maps.Map | null>(null)
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null)
   const [travelMode, setTravelMode] = useState<TravelModeOption>('WALKING')
@@ -521,6 +523,36 @@ export default function BellavistaMap({ focusedPlaceId }: BellavistaMapProps) {
           </OverlayView>
         )
       })}
+
+      {/* ── Marcadores de eventos locatarios ───────────────────────────── */}
+      {publicLocatarioEvents
+        .filter((e) => e.lat != null && e.lng != null)
+        .map((event) => (
+          <OverlayView
+            key={event.id}
+            position={{ lat: event.lat!, lng: event.lng! }}
+            mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+            getPixelPositionOffset={(w, h) => ({ x: -w / 2, y: -h / 2 })}
+          >
+            <button
+              type="button"
+              title={event.title}
+              style={{
+                backgroundColor: 'rgba(109, 40, 217, 0.85)',
+                border: '2px solid #a78bfa',
+                boxShadow: focusedPlaceId === event.id
+                  ? '0 0 0 5px rgba(167,139,250,0.35), 0 8px 24px rgba(0,0,0,0.65)'
+                  : '0 2px 8px rgba(0,0,0,0.5)',
+                width: focusedPlaceId === event.id ? '44px' : '36px',
+                height: focusedPlaceId === event.id ? '44px' : '36px',
+                transform: focusedPlaceId === event.id ? 'scale(1.15)' : 'scale(1)',
+              }}
+              className="flex cursor-pointer items-center justify-center rounded-full text-base transition-all duration-200"
+            >
+              🎉
+            </button>
+          </OverlayView>
+        ))}
 
       {/* ── Marcador de ubicación del usuario ──────────────────────────── */}
       {userLocation && (

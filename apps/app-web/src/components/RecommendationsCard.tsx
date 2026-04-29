@@ -66,6 +66,8 @@ function RecommendationItem({
 }) {
   const [imgSrc, setImgSrc] = useState(optimizeThumbUrl(event.imageUrl || FALLBACK_THUMB))
   const [isImageLoading, setIsImageLoading] = useState(true)
+  const [isVideoReady, setIsVideoReady] = useState(false)
+  const hasVideo = Boolean(event.videoUrl)
 
   return (
     <motion.div
@@ -75,12 +77,22 @@ function RecommendationItem({
       transition={{ delay: idx * 0.08 }}
       className="group relative cursor-pointer overflow-hidden rounded-lg border border-violet-500/10 bg-card/40 transition-all hover:border-violet-500/30"
     >
-      {imgSrc && (
-        <div className="relative h-32 overflow-hidden">
-          {isImageLoading && (
-            <div className="absolute inset-0 z-[1] animate-pulse bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />
-          )}
+      <div className="relative h-32 overflow-hidden">
+        {(!hasVideo && isImageLoading) || (hasVideo && !isVideoReady) ? (
+          <div className="absolute inset-0 z-[1] animate-pulse bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />
+        ) : null}
 
+        {hasVideo ? (
+          <video
+            src={event.videoUrl!}
+            className={`h-full w-full object-cover transition-all duration-300 group-hover:scale-105 ${isVideoReady ? 'opacity-100' : 'opacity-0'}`}
+            autoPlay
+            muted
+            loop
+            playsInline
+            onCanPlay={() => setIsVideoReady(true)}
+          />
+        ) : (
           <Image
             src={imgSrc}
             alt={event.title}
@@ -101,10 +113,15 @@ function RecommendationItem({
               setIsImageLoading(false)
             }}
           />
+        )}
 
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-        </div>
-      )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+        {hasVideo && (
+          <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
+            ▶ Video
+          </div>
+        )}
+      </div>
 
       <div className="p-3">
         <h4 className="line-clamp-1 font-semibold text-white">{event.title}</h4>
