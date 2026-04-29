@@ -1,9 +1,21 @@
 import { Router } from 'express'
 import { withAuth } from '@emeet/shared/middleware/auth'
 import { badRequest, serverError } from '@emeet/shared/utils/http'
+import { createServiceRoleClient } from '@emeet/shared/lib/supabase'
 import type { EventCategory } from '@emeet/shared/types/supabase'
 
 const router = Router()
+
+router.get('/public', async (_req, res) => {
+  const supabase = createServiceRoleClient()
+  const { data, error } = await supabase
+    .from('locatario_events')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  if (error) return serverError(res, 'No se pudieron obtener los eventos.')
+  return res.json(data ?? [])
+})
 
 router.use(withAuth)
 

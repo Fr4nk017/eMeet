@@ -199,7 +199,16 @@ function HomePageContent() {
   } = useNearbyPlacesContext()
   const { joinRoom } = useChatContext()
   const { user, updateUser } = useAuth()
-  const { locatarioEvents } = useLocatarioEvents()
+  const { locatarioEvents, publicLocatarioEvents } = useLocatarioEvents()
+
+  const allLocatarioEvents = useMemo(() => {
+    const seen = new Set<string>()
+    return [...publicLocatarioEvents, ...locatarioEvents].filter((e) => {
+      if (seen.has(e.id)) return false
+      seen.add(e.id)
+      return true
+    })
+  }, [publicLocatarioEvents, locatarioEvents])
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
@@ -260,7 +269,7 @@ function HomePageContent() {
 
     return placeEvents
       .concat(
-        locatarioEvents.map((e) => {
+        allLocatarioEvents.map((e) => {
           if (e.lat != null && e.lng != null && userLocation) {
             return { ...e, distance: haversineKm(e.lat, e.lng, userLocation.lat, userLocation.lng) }
           }
@@ -270,7 +279,7 @@ function HomePageContent() {
       .concat(externalEvents)
       .filter((event) => event.distance <= selectedDistanceKm)
       .sort((a, b) => a.distance - b.distance)
-  }, [externalEvents, locatarioEvents, places, selectedDistanceKm, selectedPlaceTypes, userLocation])
+  }, [externalEvents, allLocatarioEvents, places, selectedDistanceKm, selectedPlaceTypes, userLocation])
 
   const events = useMemo(() => {
     return baseEvents

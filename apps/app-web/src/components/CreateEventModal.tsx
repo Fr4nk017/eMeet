@@ -161,6 +161,19 @@ export function CreateEventModal({
     const isVideo = file.type.startsWith('video/')
     const isImage = file.type.startsWith('image/')
     if (!isVideo && !isImage) return
+
+    const MAX_IMAGE_MB = 10
+    const MAX_VIDEO_MB = 50
+    const maxMB = isVideo ? MAX_VIDEO_MB : MAX_IMAGE_MB
+    const fileMB = (file.size / (1024 * 1024)).toFixed(1)
+    if (file.size > maxMB * 1024 * 1024) {
+      setValidationError(
+        `El archivo pesa ${fileMB} MB y supera el límite de ${maxMB} MB permitido.`
+      )
+      return
+    }
+
+    setValidationError(null)
     setSelectedFile(file)
     setMediaType(isVideo ? 'video' : 'image')
     const url = URL.createObjectURL(file)
@@ -214,6 +227,7 @@ export function CreateEventModal({
     setMediaPreview(null)
     setSelectedFile(null)
     setMediaType(null)
+    setValidationError(null)
     setEventForm((prev) => ({ ...prev, imageUrl: '' }))
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
