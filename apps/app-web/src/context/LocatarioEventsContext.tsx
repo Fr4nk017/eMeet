@@ -142,7 +142,7 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
       .select('*')
       .order('created_at', { ascending: false })
       .then(({ data }) => {
-        if (data) setPublicLocatarioEvents((data as LocatarioEventRow[]).map(dbRowToEvent))
+        if (data) setPublicLocatarioEvents((data as unknown as LocatarioEventRow[]).map(dbRowToEvent))
       })
   }, [])
 
@@ -166,22 +166,21 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      getSupabaseBrowserClient()
-        .from('locatario_events')
-        .select('*')
-        .eq('creator_id', data.session.user.id)
-        .order('created_at', { ascending: false })
-        .then(({ data: rows, error }) => {
-          if (!mounted) return
-          if (error || !rows) {
-            setLocatarioEvents(loadEventsFromStorage())
-          } else {
-            setLocatarioEvents((rows as LocatarioEventRow[]).map(dbRowToEvent))
-          }
-        })
-        .finally(() => {
-          if (mounted) setIsLoading(false)
-        })
+      try {
+        const { data: rows, error } = await getSupabaseBrowserClient()
+          .from('locatario_events')
+          .select('*')
+          .eq('creator_id', data.session.user.id)
+          .order('created_at', { ascending: false })
+        if (!mounted) return
+        if (error || !rows) {
+          setLocatarioEvents(loadEventsFromStorage())
+        } else {
+          setLocatarioEvents((rows as unknown as LocatarioEventRow[]).map(dbRowToEvent))
+        }
+      } finally {
+        if (mounted) setIsLoading(false)
+      }
     })().catch(() => {
       if (!mounted) return
       setLocatarioEvents(loadEventsFromStorage())
