@@ -1,6 +1,6 @@
 import { Router } from 'express'
-import { createAnonClient } from '@emeet/shared/lib/supabase'
-import { badRequest, serverError } from '@emeet/shared/utils/http'
+import { createAnonClient } from '../lib/supabase'
+import { badRequest, serverError } from '../utils/http'
 
 const router = Router()
 
