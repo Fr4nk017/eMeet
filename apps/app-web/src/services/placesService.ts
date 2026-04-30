@@ -27,6 +27,115 @@ const PLACE_TYPE_MAPPING: Record<PlaceType, string> = {
   food:         'food',
 }
 
+const GOOGLE_TYPE_TO_PLACE_TYPE: Record<string, PlaceType> = {
+  restaurant: 'restaurant',
+  bar: 'bar',
+  night_club: 'night_club',
+  cafe: 'cafe',
+  liquor_store: 'liquor_store',
+  food: 'food',
+}
+
+function hasGooglePlacesBrowserApi() {
+  return (
+    typeof window !== 'undefined' &&
+    typeof google !== 'undefined' &&
+    Boolean(google.maps?.places?.PlacesService)
+  )
+}
+
+function createBrowserPlacesService() {
+  const container = document.createElement('div')
+  return new google.maps.places.PlacesService(container)
+}
+
+function nearbySearchBrowser(
+  service: google.maps.places.PlacesService,
+  request: google.maps.places.PlaceSearchRequest,
+) {
+  return new Promise<google.maps.places.PlaceResult[]>((resolve, reject) => {
+    service.nearbySearch(request, (results, status) => {
+      if (status === google.maps.places.PlacesServiceStatus.OK) {
+        resolve(results ?? [])
+        return
+      }
+      if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+        resolve([])
+        return
+      }
+      reject(new Error(`Google Places nearbySearch failed: ${status}`))
+    })
+  })
+}
+
+function detailsSearchBrowser(
+  service: google.maps.places.PlacesService,
+  request: google.maps.places.PlaceDetailsRequest,
+) {
+  return new Promise<google.maps.places.PlaceResult>((resolve, reject) => {
+    service.getDetails(request, (result, status) => {
+      if (status === google.maps.places.PlacesServiceStatus.OK && result) {
+        resolve(result)
+        return
+      }
+      reject(new Error(`Google Places getDetails failed: ${status}`))
+    })
+  })
+}
+
+async function searchNearbyPlacesWithBrowserApi(
+  bounds: google.maps.LatLngBounds,
+  types: PlaceType[],
+  maxPerType = 8,
+): Promise<ScrapedPlace[]> {
+  const { center, radius } = boundsToCircle(bounds)
+  const service = createBrowserPlacesService()
+  const allPlaces: ScrapedPlace[] = []
+  const seen = new Set<string>()
+
+  const searches = types.map(async (type) => {
+    const googleType = PLACE_TYPE_MAPPING[type]
+    const places = await nearbySearchBrowser(service, {
+      location: center,
+      radius,
+      type: googleType,
+    })
+
+    places.forEach((place) => {
+      const name = place.name || 'Sin nombre'
+      const nameKey = name.toLowerCase()
+      if (seen.has(nameKey)) return
+      seen.add(nameKey)
+
+      const lat = place.geometry?.location?.lat()
+      const lng = place.geometry?.location?.lng()
+      if (typeof lat !== 'number' || typeof lng !== 'number') return
+
+      const mappedType = GOOGLE_TYPE_TO_PLACE_TYPE[googleType] ?? type
+
+      allPlaces.push({
+        placeId: place.place_id || '',
+        name,
+        address: place.vicinity || place.formatted_address || '',
+        type: mappedType,
+        category: PLACE_TYPE_CONFIG[mappedType].category,
+        rating: place.rating || 0,
+        totalRatings: place.user_ratings_total || 0,
+        priceLevel: place.price_level ?? null,
+        isOpen: place.opening_hours?.isOpen?.() ?? null,
+        position: { lat, lng },
+        photoUrl: place.photos?.[0]?.getUrl({ maxWidth: 800 }),
+        website: undefined,
+        phone: undefined,
+        openingHours: undefined,
+      })
+    })
+  })
+
+  await Promise.allSettled(searches)
+  return allPlaces.slice(0, types.length * maxPerType)
+}
+
 async function parseErrorBody(response: Response): Promise<string> {
   const contentType = response.headers.get('content-type') ?? ''
   if (contentType.includes('application/json')) {
@@ -71,7 +180,10 @@ export async function searchNearbyPlaces(
   maxPerType = 8,
 ): Promise<ScrapedPlace[]> {
   if (!PLACES_URL) {
-    throw new Error('NEXT_PUBLIC_PLACES_URL no está configurada')
+    if (!hasGooglePlacesBrowserApi()) {
+      throw new Error('NEXT_PUBLIC_PLACES_URL no está configurada y Google Places no está disponible en el navegador')
+    }
+    return searchNearbyPlacesWithBrowserApi(bounds, types, maxPerType)
   }
 
   try {
@@ -154,7 +266,28 @@ export async function searchNearbyPlaces(
  */
 export async function fetchPlaceDetails(placeId: string): Promise<Partial<ScrapedPlace>> {
   if (!PLACES_URL) {
-    throw new Error('NEXT_PUBLIC_PLACES_URL no está configurada')
+    if (!hasGooglePlacesBrowserApi()) {
+      throw new Error('NEXT_PUBLIC_PLACES_URL no está configurada y Google Places no está disponible en el navegador')
+    }
+
+    try {
+      const service = createBrowserPlacesService()
+      const details = await detailsSearchBrowser(service, {
+        placeId,
+        fields: ['photos', 'website', 'formatted_phone_number', 'international_phone_number', 'opening_hours', 'rating'],
+      })
+
+      return {
+        photoUrl: details.photos?.[0]?.getUrl({ maxWidth: 400 }) ?? null,
+        website: details.website ?? null,
+        phone: details.formatted_phone_number || details.international_phone_number || null,
+        openingHours: details.opening_hours?.weekday_text ?? null,
+        rating: details.rating || undefined,
+      }
+    } catch (error) {
+      console.error('Error in fetchPlaceDetails (browser fallback):', error)
+      return { photoUrl: null, website: null, phone: null, openingHours: null }
+    }
   }
 
   try {
