@@ -3,7 +3,14 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+      "env": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "FRONTEND_ORIGIN",
+        "GOOGLE_MAPS_API_KEY"
+      ]
     },
     "dev": {
       "persistent": true,
@@ -16,15 +23,15 @@
     },
     "test": {
       "outputs": []
-      },
-      "db:generate": {
-        "cache": false
-      },
-      "db:push": {
-        "cache": false
-      },
-      "db:migrate:deploy": {
-        "cache": false
-      }
+    },
+    "db:generate": {
+      "cache": false
+    },
+    "db:push": {
+      "cache": false
+    },
+    "db:migrate:deploy": {
+      "cache": false
+    }
   }
 }
