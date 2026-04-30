@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { env } from '../config/env'
 import { createAnonClient } from '../lib/supabase'
 import { badRequest, serverError } from '../utils/http'
 
@@ -97,7 +98,11 @@ router.get('/session', async (req, res) => {
 
 router.get('/callback', async (req, res) => {
   const { code, token_hash: tokenHash, type, next } = req.query
-  const frontendUrl = process.env.FRONTEND_ORIGIN || 'http://localhost:3000'
+  const requestOrigin = req.get('origin')
+  const frontendUrl =
+    requestOrigin && env.FRONTEND_ORIGINS.includes(requestOrigin)
+      ? requestOrigin
+      : env.FRONTEND_ORIGIN
 
   // Helper para determinar ruta según rol
   function roleRedirectPath(user: any): string {
