@@ -78,7 +78,7 @@ function resolveRole(_email: string, roleHint?: User['role']): User['role'] {
 }
 
 const LOCAL_AUTH_STORAGE_KEY = 'emeet-local-auth-user'
-const AUTH_URL = (process.env.NEXT_PUBLIC_AUTH_URL ?? '').trim().replace(/\/$/, '')
+const AUTH_URL = (process.env.NEXT_PUBLIC_AUTH_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? '').trim().replace(/\/$/, '')
 const PROFILE_URL = (process.env.NEXT_PUBLIC_PROFILE_URL ?? '').trim().replace(/\/$/, '')
 const SAVED_URL = (process.env.NEXT_PUBLIC_SAVED_URL ?? '').trim().replace(/\/$/, '')
 
@@ -348,6 +348,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       saveLocalUser(localUser)
       setAuthState({ user: localUser, isAuthenticated: true })
       return
+    }
+
+    if (!AUTH_URL) {
+      throw new Error('Falta NEXT_PUBLIC_AUTH_URL en Vercel. Configura la URL pública del microservicio auth.')
     }
 
     const payload = await fetchApi<AuthResponsePayload>(AUTH_URL, '/auth/register', {
