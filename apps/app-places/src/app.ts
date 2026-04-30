@@ -7,18 +7,13 @@ import placesRouter from './routes/places.routes'
 
 const app = express()
 
-const allowedOrigins = new Set(
-  [
-    env.FRONTEND_ORIGIN,
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:3001',
-  ]
-    .flatMap((origin) => origin.split(','))
-    .map((origin) => origin.trim())
-    .filter(Boolean),
-)
+const allowedOrigins = new Set([
+  ...env.FRONTEND_ORIGINS,
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3001',
+])
 
 app.use(helmet({
   contentSecurityPolicy: false,
