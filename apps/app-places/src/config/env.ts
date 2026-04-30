@@ -6,8 +6,25 @@ function requireEnv(name: string): string {
   return value
 }
 
+function parseOrigins(raw?: string): string[] {
+  if (!raw) return []
+  return raw.split(',').map((o) => o.trim()).filter(Boolean)
+}
+
+const primaryOrigin =
+  process.env.FRONTEND_ORIGIN?.trim() ??
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}`
+    : undefined) ??
+  'http://localhost:3000'
+
+const previewOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.trim()}` : undefined
+
 export const env = {
   PORT: Number(process.env.PORT ?? 3006),
   GOOGLE_MAPS_API_KEY: requireEnv('GOOGLE_MAPS_API_KEY'),
-  FRONTEND_ORIGIN: process.env.FRONTEND_ORIGIN ?? 'http://localhost:3000',
+  FRONTEND_ORIGIN: primaryOrigin,
+  FRONTEND_ORIGINS: Array.from(
+    new Set([primaryOrigin, previewOrigin, ...parseOrigins(process.env.FRONTEND_ORIGINS)].filter(Boolean) as string[]),
+  ),
 }
