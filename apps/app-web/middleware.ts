@@ -34,7 +34,14 @@ export async function middleware(request: NextRequest) {
   })
 
   // getUser() valida el JWT contra Supabase y refresca la sesión si es necesario.
-  const { data: { user } } = await supabase.auth.getUser()
+  // Si falla por error de red o timeout, dejamos pasar y el cliente maneja el auth.
+  let user = null
+  try {
+    const { data } = await supabase.auth.getUser()
+    user = data.user
+  } catch {
+    return response
+  }
 
   const isProtected = PROTECTED_ROUTES.some((route) => pathname.startsWith(route))
 
