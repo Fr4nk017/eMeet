@@ -22,14 +22,12 @@ interface SwipeCardProps {
   onSwipeRight: (id: string) => void   // like
   onSwipeLeft: (id: string) => void    // descarte
   onSave: (id: string) => void
-  onRefresh?: () => void
   /** Índice en el stack (0 = carta superior/activa) */
   stackIndex: number
 }
 
 // ─── Umbral de px para considerar un swipe válido ────────────────────────────
 const SWIPE_THRESHOLD = 120
-const REFRESH_THRESHOLD = 100
 
 function shouldBypassImageOptimization(url: string) {
   if (url.startsWith('blob:') || url.startsWith('data:image/svg')) return true
@@ -99,13 +97,10 @@ const SwipeCard = memo(function SwipeCard({
   onSwipeRight,
   onSwipeLeft,
   onSave,
-  onRefresh,
   stackIndex,
 }: SwipeCardProps) {
   const x = useMotionValue(0)
-  const y = useMotionValue(0)
   const [isDragging, setIsDragging] = useState(false)
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [imgSrc, setImgSrc] = useState(optimizeCardImageUrl(event.imageUrl || FALLBACK_IMAGE))
   const [isImageLoading, setIsImageLoading] = useState(true)
   const [isVideoReady, setIsVideoReady] = useState(false)
@@ -118,9 +113,6 @@ const SwipeCard = memo(function SwipeCard({
   // Opacidad de los indicadores LIKE / NOPE
   const likeOpacity = useTransform(x, [0, SWIPE_THRESHOLD], [0, 1])
   const nopeOpacity = useTransform(x, [-SWIPE_THRESHOLD, 0], [1, 0])
-
-  const refreshIndicatorOpacity = useTransform(y, [-50, -REFRESH_THRESHOLD], [0, 1])
-  const refreshIndicatorRotate = useTransform(y, [-REFRESH_THRESHOLD, 0], [180, 0])
 
   // Escala de las tarjetas de fondo
   const scale = 1 - stackIndex * 0.04
@@ -140,40 +132,19 @@ const SwipeCard = memo(function SwipeCard({
 
   function handleDragEnd(_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) {
     setIsDragging(false)
-    if (!isActive) {
-      animate(y, 0, { type: 'spring', stiffness: 400, damping: 25 })
-      return
-    }
-
-    // Detección de pull-to-refresh: arrastré hacia arriba (y < -REFRESH_THRESHOLD) sin mover mucho en x
-    if (info.offset.y < -REFRESH_THRESHOLD && Math.abs(info.offset.x) < 50 && onRefresh && !isRefreshing) {
-      setIsRefreshing(true)
-      onRefresh()
-      animate(x, 0, { type: 'spring', stiffness: 400, damping: 25 })
-      animate(y, 0, {
-        type: 'spring',
-        stiffness: 400,
-        damping: 25,
-        onComplete: () => setIsRefreshing(false),
-      })
-      return
-    }
+    if (!isActive) return
 
     if (info.offset.x > SWIPE_THRESHOLD) {
-      // Animar salida por la derecha
       animate(x, 600, {
         duration: 0.3,
         onComplete: () => onSwipeRight(event.id),
       })
     } else if (info.offset.x < -SWIPE_THRESHOLD) {
-      // Animar salida por la izquierda
       animate(x, -600, {
         duration: 0.3,
         onComplete: () => onSwipeLeft(event.id),
       })
     } else {
-      // Volver al centro
-      animate(y, 0, { type: 'spring', stiffness: 400, damping: 25 })
       animate(x, 0, { type: 'spring', stiffness: 400, damping: 25 })
     }
   }
@@ -191,7 +162,7 @@ const SwipeCard = memo(function SwipeCard({
         // Las cartas de fondo no reciben eventos de puntero
         pointerEvents: isActive ? 'auto' : 'none',
       }}
-      drag={isActive}
+      drag={isActive ? 'x' : false}
       dragElastic={0.2}
       onDragStart={() => setIsDragging(true)}
       onDragEnd={handleDragEnd}
@@ -200,21 +171,6 @@ const SwipeCard = memo(function SwipeCard({
     >
       {/* Tarjeta contenido */}
       <div className="relative h-full w-full overflow-hidden rounded-[30px] bg-card shadow-2xl select-none lg:rounded-[36px]">
-
-        {/* Pull-to-refresh indicator (solo en carta activa) */}
-        {isActive && (
-          <motion.div
-            style={{ opacity: refreshIndicatorOpacity }}
-            className="absolute top-2 left-1/2 z-50 -translate-x-1/2"
-          >
-            <motion.div
-              style={{ rotate: refreshIndicatorRotate }}
-              className="text-2xl"
-            >
-              ⬇️
-            </motion.div>
-          </motion.div>
-        )}
 
         {/* Fondo: video o imagen */}
         {(!hasVideo && isImageLoading) || (hasVideo && !isVideoReady) ? (
