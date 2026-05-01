@@ -71,7 +71,8 @@ async function callSavedApi(path: string, init?: RequestInit) {
   })
 
   if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null
+    const body = (await response.json().catch(() => null)) as { error?: string; debug?: unknown } | null
+    console.error('[callSavedApi] error', response.status, path, body)
     throw new Error(body?.error ?? 'Error al comunicarse con el servicio de guardados.')
   }
 }
@@ -341,7 +342,8 @@ function HomePageContent() {
               eventDistance: likedEvent.distance,
             }),
           })
-        } catch {
+        } catch (err) {
+          console.error('[like] callSavedApi failed:', err)
           showToast('No se pudo registrar tu like.', 'nope')
           return
         }
