@@ -14,17 +14,22 @@ function requireEnvAny(names: string[]): string {
   throw new Error(`Falta una variable de entorno requerida. Define una de: ${names.join(', ')}`)
 }
 
-function parseOrigins(raw?: string): string[] {
-  if (!raw) return []
-  return raw.split(',').map((o) => o.trim()).filter(Boolean)
+function normalizeOrigin(o: string): string {
+  return o.trim().replace(/\/$/, '')
 }
 
-const primaryOrigin =
+function parseOrigins(raw?: string): string[] {
+  if (!raw) return []
+  return raw.split(',').map(normalizeOrigin).filter(Boolean)
+}
+
+const primaryOrigin = normalizeOrigin(
   process.env.FRONTEND_ORIGIN?.trim() ??
   (process.env.VERCEL_PROJECT_PRODUCTION_URL
     ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}`
     : undefined) ??
   'http://localhost:3000'
+)
 
 const previewOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.trim()}` : undefined
 
