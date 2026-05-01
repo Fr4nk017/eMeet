@@ -145,6 +145,10 @@ async function parseErrorBody(response: Response): Promise<string> {
   return response.text().catch(() => `HTTP ${response.status}`)
 }
 
+function shouldFallbackToBrowserApi(hadBackendErrors: boolean) {
+  return hadBackendErrors && hasGooglePlacesBrowserApi()
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function boundsToCircle(
@@ -190,6 +194,7 @@ export async function searchNearbyPlaces(
     const { center, radius } = boundsToCircle(bounds)
     const allPlaces: ScrapedPlace[] = []
     const seen = new Set<string>()
+    let hadBackendErrors = false
 
     // Buscar cada tipo en paralelo
     const searches = types.map((type) =>
@@ -211,6 +216,7 @@ export async function searchNearbyPlaces(
         })
         .catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err)
+          hadBackendErrors = true
           console.error(`Error searching ${type}: ${message}`)
           return { places: [] }
         }),
@@ -254,9 +260,16 @@ export async function searchNearbyPlaces(
       })
     })
 
+    if (allPlaces.length === 0 && shouldFallbackToBrowserApi(hadBackendErrors)) {
+      return searchNearbyPlacesWithBrowserApi(bounds, types, maxPerType)
+    }
+
     return allPlaces.slice(0, types.length * maxPerType)
   } catch (error) {
     console.error('Error in searchNearbyPlaces:', error)
+    if (hasGooglePlacesBrowserApi()) {
+      return searchNearbyPlacesWithBrowserApi(bounds, types, maxPerType)
+    }
     return []
   }
 }
@@ -313,6 +326,25 @@ export async function fetchPlaceDetails(placeId: string): Promise<Partial<Scrape
     }
   } catch (error) {
     console.error('Error in fetchPlaceDetails:', error)
+    if (hasGooglePlacesBrowserApi()) {
+      try {
+        const service = createBrowserPlacesService()
+        const details = await detailsSearchBrowser(service, {
+          placeId,
+          fields: ['photos', 'website', 'formatted_phone_number', 'international_phone_number', 'opening_hours', 'rating'],
+        })
+
+        return {
+          photoUrl: details.photos?.[0]?.getUrl({ maxWidth: 400 }) ?? null,
+          website: details.website ?? null,
+          phone: details.formatted_phone_number || details.international_phone_number || null,
+          openingHours: details.opening_hours?.weekday_text ?? null,
+          rating: details.rating || undefined,
+        }
+      } catch (fallbackError) {
+        console.error('Error in fetchPlaceDetails (browser fallback):', fallbackError)
+      }
+    }
     return { photoUrl: null, website: null, phone: null, openingHours: null }
   }
 }

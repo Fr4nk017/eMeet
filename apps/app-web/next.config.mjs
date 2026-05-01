@@ -33,6 +33,7 @@ const nextConfig = {
     minimumCacheTTL: 2592000,
     remotePatterns: [
       { protocol: 'http',  hostname: 'localhost', port: '3006' },
+      { protocol: 'https', hostname: 'e-meet-app-places.vercel.app' },
       { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: 'api.dicebear.com' },
       { protocol: 'https', hostname: 'i.pravatar.cc' },
