@@ -642,7 +642,6 @@ function HomePageContent() {
                           onSwipeRight={handleSwipeRight}
                           onSwipeLeft={handleSwipeLeft}
                           onSave={handleSave}
-                          onRefresh={refreshPlaces}
                         />
                       )
                     })}
