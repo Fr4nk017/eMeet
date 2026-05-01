@@ -25,6 +25,7 @@ app.use(
     },
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
   }),
 )
 app.use(express.json({ limit: '2mb' }))
