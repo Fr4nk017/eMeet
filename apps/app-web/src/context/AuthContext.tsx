@@ -80,7 +80,7 @@ function resolveRole(_email: string, roleHint?: User['role']): User['role'] {
 const LOCAL_AUTH_STORAGE_KEY = 'emeet-local-auth-user'
 const AUTH_URL = (process.env.NEXT_PUBLIC_AUTH_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? '').trim().replace(/\/$/, '')
 const PROFILE_URL = (process.env.NEXT_PUBLIC_PROFILE_URL ?? '').trim().replace(/\/$/, '')
-const SAVED_URL = (process.env.NEXT_PUBLIC_SAVED_URL ?? '').trim().replace(/\/$/, '')
+const SAVED_URL = '/api/saved'
 
 function resolveRoleFromClaims(
   appMetadataRole?: unknown,
