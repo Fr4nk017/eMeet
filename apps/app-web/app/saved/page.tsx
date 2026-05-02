@@ -16,7 +16,7 @@ type SavedEventRow = {
   created_at: string
 }
 
-const SAVED_URL = (process.env.NEXT_PUBLIC_SAVED_URL ?? '').trim().replace(/\/$/, '')
+const SAVED_URL = '/api/saved'
 
 async function getAccessToken(): Promise<string | null> {
   if (!hasSupabaseEnv) return null
