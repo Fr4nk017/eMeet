@@ -2,8 +2,8 @@ import cors from 'cors'
 import express from 'express'
 import helmet from 'helmet'
 import morgan from 'morgan'
-import { env } from './config/env'
-import savedRouter from './routes/saved.routes'
+import { env } from './config/env.js'
+import savedRouter from './routes/saved.routes.js'
 
 const app = express()
 

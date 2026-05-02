@@ -1,7 +1,7 @@
 import { Router } from 'express'
-import { env } from '../config/env'
-import { createAnonClient } from '../lib/supabase'
-import { badRequest, serverError } from '../utils/http'
+import { env } from '../config/env.js'
+import { createAnonClient } from '../lib/supabase.js'
+import { badRequest, serverError } from '../utils/http.js'
 
 const router = Router()
 

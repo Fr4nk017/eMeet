@@ -1,7 +1,7 @@
 import { Router } from 'express'
-import { createServiceRoleClient } from '../../../../packages/shared/src/lib/supabase'
-import { withAuth } from '../../../../packages/shared/src/middleware/auth'
-import { serverError } from '../../../../packages/shared/src/utils/http'
+import { createServiceRoleClient } from '../../../../packages/shared/src/lib/supabase.js'
+import { withAuth } from '../../../../packages/shared/src/middleware/auth.js'
+import { serverError } from '../../../../packages/shared/src/utils/http.js'
 
 const router = Router()
 
