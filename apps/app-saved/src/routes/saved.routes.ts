@@ -1,8 +1,8 @@
 import { Router } from 'express'
 import { createHash } from 'node:crypto'
-import { withAuth } from '../../../../packages/shared/src/middleware/auth'
-import { createServiceRoleClient } from '../../../../packages/shared/src/lib/supabase'
-import { badRequest, serverError } from '../../../../packages/shared/src/utils/http'
+import { withAuth } from '../../../../packages/shared/src/middleware/auth.js'
+import { createServiceRoleClient } from '../../../../packages/shared/src/lib/supabase.js'
+import { badRequest, serverError } from '../../../../packages/shared/src/utils/http.js'
 
 type RedisLikeEvent = {
   id: string
