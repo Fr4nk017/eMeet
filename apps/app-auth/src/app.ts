@@ -7,24 +7,26 @@ import authRouter from './routes/auth.routes.js'
 
 const app = express()
 
+const allowedOrigins = new Set([
+  ...env.FRONTEND_ORIGINS,
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3001',
+])
+
 app.use(helmet())
 app.use(
   cors({
     credentials: true,
     origin: (requestOrigin, callback) => {
       // Permite llamadas server-to-server (sin header Origin) y valida browser origins explícitos.
-      if (!requestOrigin) {
-        callback(null, true)
-        return
-      }
-
-      if (env.FRONTEND_ORIGINS.includes(requestOrigin)) {
-        callback(null, true)
-        return
-      }
-
-      callback(new Error(`Origin no permitido por CORS: ${requestOrigin}`))
+      if (!requestOrigin) return callback(null, true)
+      if (allowedOrigins.has(requestOrigin)) return callback(null, true)
+      return callback(new Error(`Origin no permitido por CORS: ${requestOrigin}`))
     },
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'POST', 'OPTIONS'],
   }),
 )
 app.use(express.json({ limit: '2mb' }))
