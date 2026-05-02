@@ -3,7 +3,41 @@ import { createHash } from 'node:crypto'
 import { withAuth } from '@emeet/shared/middleware/auth'
 import { createServiceRoleClient } from '@emeet/shared/lib/supabase'
 import { badRequest, serverError } from '@emeet/shared/utils/http'
-import { cacheLikedEvent, generateRecommendations } from '@emeet/redis'
+
+type RedisLikeEvent = {
+  id: string
+  type: string
+  lat: number
+  lng: number
+  distance: number
+}
+
+type RedisTools = {
+  cacheLikedEvent: (userId: string, event: RedisLikeEvent) => Promise<void>
+  generateRecommendations: (
+    userId: string,
+    availableEvents: RedisLikeEvent[],
+    limit?: number,
+  ) => Promise<Array<RedisLikeEvent & { similarity: number }>>
+}
+
+let redisToolsPromise: Promise<RedisTools | null> | null = null
+
+async function getRedisTools(): Promise<RedisTools | null> {
+  if (!redisToolsPromise) {
+    redisToolsPromise = import('@emeet/redis')
+      .then((mod) => ({
+        cacheLikedEvent: mod.cacheLikedEvent,
+        generateRecommendations: mod.generateRecommendations,
+      }))
+      .catch((err) => {
+        logSupabaseError('redis module load', err)
+        return null
+      })
+  }
+
+  return redisToolsPromise
+}
 
 const router = Router()
 
@@ -257,16 +291,20 @@ router.post('/like', async (req, res) => {
 
   // Cache el like en Redis para recomendaciones
   if (eventLat != null && eventLng != null && eventDistance != null && eventType) {
-    await cacheLikedEvent(req.authUser!.id, {
-      id: eventId,
-      type: eventType,
-      lat: eventLat,
-      lng: eventLng,
-      distance: eventDistance,
-    }).catch(err => {
-      logSupabaseError('cacheLikedEvent', err)
-      // No es crítico, continúa
-    })
+    const redisTools = await getRedisTools()
+
+    if (redisTools) {
+      await redisTools.cacheLikedEvent(req.authUser!.id, {
+        id: eventId,
+        type: eventType,
+        lat: eventLat,
+        lng: eventLng,
+        distance: eventDistance,
+      }).catch(err => {
+        logSupabaseError('cacheLikedEvent', err)
+        // No es crítico, continúa
+      })
+    }
   }
 
   return res.status(201).json({ ok: true, chatLinked })
@@ -421,7 +459,10 @@ router.post('/recommendations', async (req, res) => {
       return res.status(401).json({ error: 'Usuario no autenticado.' })
     }
 
-    const recommendations = await generateRecommendations(userId, availableEvents, Math.min(limit, 10))
+    const redisTools = await getRedisTools()
+    const recommendations = redisTools
+      ? await redisTools.generateRecommendations(userId, availableEvents, Math.min(limit, 10))
+      : availableEvents.slice(0, Math.min(limit, 10)).map((event) => ({ ...event, similarity: 0 }))
 
     return res.json({
       recommendations,
