@@ -1,7 +1,7 @@
 import { Router } from 'express'
-import { createServiceRoleClient } from '@emeet/shared/lib/supabase'
-import { withAuth } from '@emeet/shared/middleware/auth'
-import { serverError } from '@emeet/shared/utils/http'
+import { createServiceRoleClient } from '../../../../packages/shared/src/lib/supabase'
+import { withAuth } from '../../../../packages/shared/src/middleware/auth'
+import { serverError } from '../../../../packages/shared/src/utils/http'
 
 const router = Router()
 

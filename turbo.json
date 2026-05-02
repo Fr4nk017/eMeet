@@ -9,6 +9,7 @@
         "SUPABASE_ANON_KEY",
         "SUPABASE_SERVICE_ROLE_KEY",
         "FRONTEND_ORIGIN",
+        "FRONTEND_ORIGINS",
         "GOOGLE_MAPS_API_KEY"
       ]
     },
