@@ -2,7 +2,6 @@
   "name": "@emeet/app-admin",
   "version": "0.0.1",
   "description": "Admin API microservice for eMeet",
-  "type": "module",
   "main": "./dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
