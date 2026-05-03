@@ -77,6 +77,7 @@ export default function SidebarNav() {
             <Link
               key={href}
               href={href}
+              prefetch
               className={`group relative flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
                 active
                   ? 'bg-gradient-to-r from-violet-600/25 via-violet-500/15 to-violet-600/20 text-white border border-violet-400/25'
