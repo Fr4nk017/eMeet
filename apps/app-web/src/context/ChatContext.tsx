@@ -401,10 +401,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [user],
   )
 
+  const contextValue = useMemo(
+    () => ({ rooms, messages, totalUnread, loadMessagesForRoom, joinRoom, sendMessage, markRoomRead }),
+    [rooms, messages, totalUnread, loadMessagesForRoom, joinRoom, sendMessage, markRoomRead],
+  )
+
   return (
-    <ChatContext.Provider
-      value={{ rooms, messages, totalUnread, loadMessagesForRoom, joinRoom, sendMessage, markRoomRead }}
-    >
+    <ChatContext.Provider value={contextValue}>
       {children}
     </ChatContext.Provider>
   )
