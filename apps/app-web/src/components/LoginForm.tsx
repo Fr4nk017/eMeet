@@ -14,15 +14,8 @@ import {
   CircleAlert as FiAlertCircle,
   ArrowLeft,
   CheckCircle,
-  ChevronRight,
   Send,
 } from 'lucide-react'
-
-const DEMO_ACCOUNTS = [
-  { label: 'Usuario', email: 'user@emeet.com', password: 'demo1234' },
-  { label: 'Admin', email: 'admin@emeet.com', password: 'demo1234' },
-  { label: 'Locatario', email: 'locatario@emeet.com', password: 'demo1234' },
-]
 
 const INPUT_CLASS =
   'w-full rounded-xl border border-white/10 bg-[hsl(222,30%,13%)] py-3 pl-10 pr-4 text-sm text-white placeholder-slate-600 outline-none transition-colors hover:border-white/20 focus:border-[hsl(262,80%,60%)] focus:ring-1 focus:ring-[hsl(262,80%,60%)]/30'
@@ -76,11 +69,6 @@ export default function LoginForm() {
     }
   }
 
-  const fillDemo = (account: (typeof DEMO_ACCOUNTS)[0]) => {
-    setEmail(account.email)
-    setPassword(account.password)
-  }
-
   const goToForgot = () => {
     setResetEmail(email)
     setError('')
@@ -102,24 +90,6 @@ export default function LoginForm() {
           <div className="space-y-1">
             <h2 className="text-xl font-semibold text-white">Bienvenido de regreso</h2>
             <p className="text-sm text-slate-400">Ingresa tus credenciales para continuar.</p>
-          </div>
-
-          {/* Demo account chips */}
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-slate-500">Cuentas demo — haz clic para autocompletar:</p>
-            <div className="flex flex-wrap gap-2">
-              {DEMO_ACCOUNTS.map((acc) => (
-                <button
-                  key={acc.email}
-                  type="button"
-                  onClick={() => fillDemo(acc)}
-                  className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-300 transition-all hover:border-[hsl(262,80%,60%)]/50 hover:bg-[hsl(262,80%,60%)]/10 hover:text-white"
-                >
-                  <ChevronRight size={10} className="text-[hsl(262,80%,60%)]" />
-                  {acc.label}
-                </button>
-              ))}
-            </div>
           </div>
 
           <AnimatePresence>
@@ -185,22 +155,17 @@ export default function LoginForm() {
             </div>
           </div>
 
-          <label className="flex cursor-pointer items-center gap-2.5">
-            <input type="checkbox" className="h-4 w-4 rounded accent-[hsl(262,80%,60%)]" />
-            <span className="text-sm text-slate-400">Recordarme en este dispositivo</span>
-          </label>
-
           <button
             type="submit"
             disabled={isLoading}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-[hsl(38,95%,55%)] py-3 text-sm font-semibold text-black shadow-lg shadow-amber-900/20 transition-all hover:-translate-y-0.5 hover:bg-[hsl(38,95%,60%)] hover:shadow-amber-900/30 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
+            className="group flex w-full items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-[hsl(262,80%,58%)] to-[hsl(262,80%,48%)] py-3.5 text-sm font-semibold text-white shadow-lg shadow-purple-900/30 transition-all hover:-translate-y-0.5 hover:shadow-purple-900/50 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isLoading ? (
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-black/30 border-t-black" />
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
             ) : (
-              <FiLogIn size={18} />
+              <FiLogIn size={17} className="transition-transform group-hover:translate-x-0.5" />
             )}
-            {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+            {isLoading ? 'Iniciando sesión...' : 'Iniciar sesión'}
           </button>
         </motion.form>
       )}
