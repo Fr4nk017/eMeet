@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowRight as FiArrowRight, CircleAlert as FiAlertCircle, MapPin, Calendar, Users } from 'lucide-react'
 import LoginForm from '../../src/components/LoginForm'
@@ -127,7 +128,15 @@ export default function AuthPage() {
   const [oauthLoading, setOauthLoading] = useState<'google' | 'facebook' | null>(null)
   const [oauthError, setOauthError] = useState('')
   const [showSplash, setShowSplash] = useState(false)
-  const { loginWithOAuth } = useAuth()
+  const { loginWithOAuth, isAuthenticated, isAuthReady, user } = useAuth()
+  const router = useRouter()
+
+  // Redirigir al home si el usuario ya está autenticado (post-login o post-register)
+  useEffect(() => {
+    if (!isAuthReady || !isAuthenticated) return
+    const role = user?.role
+    router.replace(role === 'locatario' ? '/locatario' : role === 'admin' ? '/admin' : '/')
+  }, [isAuthReady, isAuthenticated, router, user?.role])
 
   useEffect(() => {
     if (!sessionStorage.getItem('emeet-splash')) {

@@ -90,11 +90,19 @@ export default function SignUpForm() {
         businessLocation: role === 'locatario' ? formData.location : undefined,
       })
 
+      // Si llegamos aquí con sesión activa, el useEffect en AuthPage redirigirá automáticamente.
+      // Igual hacemos push explícito como respaldo.
       const next = searchParams.get('next')
       if (next && next.startsWith('/')) { router.push(next); return }
       router.push(role === 'locatario' ? '/locatario' : '/')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al registrarte')
+      const message = err instanceof Error ? err.message : 'Error al registrarte'
+      // Supabase requiere confirmación de email — redirigir a la página correspondiente
+      if (message.toLowerCase().includes('revisa tu correo') || message.toLowerCase().includes('registro creado')) {
+        router.push(`/auth/verify-email?email=${encodeURIComponent(formData.email)}`)
+        return
+      }
+      setError(message)
     } finally {
       setIsLoading(false)
     }
