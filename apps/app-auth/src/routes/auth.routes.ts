@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { env } from '../config/env.js'
-import { createAnonClient } from '../lib/supabase.js'
+import { createAnonClient, createServiceRoleClient } from '../lib/supabase.js'
 import { badRequest, serverError } from '../utils/http.js'
 
 const router = Router()
@@ -59,6 +59,29 @@ router.post('/register', async (req, res) => {
 
   if (error) {
     return badRequest(res, error.message)
+  }
+
+  // Create profile row immediately so GET /profile works right after registration.
+  if (data.user) {
+    const effectiveRole = (role ?? 'user') as 'user' | 'locatario' | 'admin'
+    const profilePayload: Record<string, unknown> = {
+      id: data.user.id,
+      name: name.trim(),
+      bio: '',
+      location: effectiveRole === 'locatario' ? (businessLocation?.trim() ?? 'Santiago, Chile') : 'Santiago, Chile',
+      role: effectiveRole,
+      business_name: effectiveRole === 'locatario' ? (businessName?.trim() ?? null) : null,
+      business_location: effectiveRole === 'locatario' ? (businessLocation?.trim() ?? null) : null,
+    }
+
+    const adminClient = createServiceRoleClient()
+    const { error: profileError } = await adminClient
+      .from('profiles')
+      .upsert(profilePayload, { onConflict: 'id' })
+
+    if (profileError) {
+      console.error('[app-auth] profile upsert after register failed:', JSON.stringify(profileError))
+    }
   }
 
   return res.status(201).json({ user: data.user, session: data.session })

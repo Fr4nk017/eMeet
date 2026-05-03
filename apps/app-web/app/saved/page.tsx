@@ -63,7 +63,7 @@ function formatSavedDate(isoDate: string) {
 }
 
 export default function SavedRoutePage() {
-  const { user, isAuthReady } = useAuth()
+  const { user, isAuthReady, updateUser } = useAuth()
   const router = useRouter()
   const [savedEvents, setSavedEvents] = useState<SavedEventRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -95,6 +95,9 @@ export default function SavedRoutePage() {
     setSavedEvents((prev) => prev.filter((e) => e.event_id !== eventId))
     try {
       await callSavedApi(`/events/save/${eventId}`, { method: 'DELETE' })
+      // Keep AuthContext in sync so the feed's bookmark icon reflects the removal
+      const nextSaved = (user?.savedEvents ?? []).filter((id) => id !== eventId)
+      updateUser({ savedEvents: nextSaved }).catch(() => {})
     } catch {
       setSavedEvents(snapshot)
     }

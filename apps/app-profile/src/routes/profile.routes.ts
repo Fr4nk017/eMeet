@@ -12,10 +12,14 @@ router.get('/', async (req, res) => {
     .from('profiles')
     .select('*')
     .eq('id', req.authUser!.id)
-    .single()
+    .maybeSingle()
 
   if (error) {
     return serverError(res, 'No se pudo obtener el perfil.')
+  }
+
+  if (!data) {
+    return res.status(404).json({ error: 'Perfil no encontrado.' })
   }
 
   return res.json(data)
