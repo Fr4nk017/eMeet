@@ -68,6 +68,7 @@ export default function BottomNavBar() {
             <Link
               key={href}
               href={href}
+              prefetch
               className={`flex flex-col items-center gap-1 text-xs font-medium transition-all duration-200 ${
                 isActive ? 'text-white' : 'text-muted hover:text-primary-light'
               }`}
