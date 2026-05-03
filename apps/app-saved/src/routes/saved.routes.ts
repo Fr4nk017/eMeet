@@ -79,6 +79,12 @@ async function ensureProfile(req: Parameters<typeof router.post>[1] extends (...
 
   if (!error) return null
 
+  // Solo reintenta con payload legacy si la columna no existe (schema antiguo).
+  // Otros errores (permisos, FK, red) se propagan directamente.
+  const errorCode = (error as { code?: string }).code ?? ''
+  const isUnknownColumn = errorCode === '42703' || errorCode === 'PGRST204'
+  if (!isUnknownColumn) return error
+
   // Compatibilidad con ambientes donde profiles aun exige columnas legacy.
   const legacyPayload = {
     ...basePayload,
