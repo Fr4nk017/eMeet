@@ -10,7 +10,6 @@
 
     /* Bundler mode */
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "declaration": true,
@@ -27,7 +26,6 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
 
-    "lib": ["ES2020"],
     "outDir": "./dist"
   },
   "include": ["src"],
