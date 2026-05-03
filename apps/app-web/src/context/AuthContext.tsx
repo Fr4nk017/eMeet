@@ -350,12 +350,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    if (!AUTH_URL) {
-      throw new Error('Falta NEXT_PUBLIC_AUTH_URL en Vercel. Configura la URL pública del microservicio auth.')
-    }
-
-    const payload = await fetchApi<AuthResponsePayload>(AUTH_URL, '/auth/register', {
+    // Llamamos a la ruta interna de Next.js para evitar dependencia de que app-auth esté corriendo.
+    const response = await fetch('/api/auth/register', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name,
         email,
@@ -366,6 +364,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }),
     })
 
+    const payload = (await response.json().catch(() => null)) as AuthResponsePayload & { error?: string } | null
+
+    if (!response.ok) {
+      throw new Error(payload?.error ?? 'Error al registrarse.')
+    }
+
+    if (!payload) {
+      throw new Error('Respuesta inesperada del servidor.')
+    }
+
     if (payload.session?.access_token && payload.session?.refresh_token) {
       await getSupabaseBrowserClient().auth.setSession({
         access_token: payload.session.access_token,
@@ -375,21 +383,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email,
         options?.role ?? resolveRoleFromClaims(payload.user?.app_metadata?.role, payload.user?.user_metadata?.role),
         {
-        businessName:
-          options?.businessName ??
-          payload.user?.app_metadata?.business_name ??
-          payload.user?.user_metadata?.business_name,
-        businessLocation:
-          options?.businessLocation ??
-          payload.user?.app_metadata?.business_location ??
-          payload.user?.user_metadata?.business_location,
+          businessName:
+            options?.businessName ??
+            payload.user?.app_metadata?.business_name ??
+            payload.user?.user_metadata?.business_name,
+          businessLocation:
+            options?.businessLocation ??
+            payload.user?.app_metadata?.business_location ??
+            payload.user?.user_metadata?.business_location,
         },
       )
       return
     }
 
-    // Cuando Supabase requiere confirmación por email, signUp puede devolver user pero sin session.
-    // Evitamos llamar endpoints protegidos sin token y devolvemos un mensaje claro al usuario.
+    // Supabase requiere confirmación por email: session es null.
     throw new Error('Registro creado. Revisa tu correo para confirmar la cuenta antes de iniciar sesión.')
   }, [syncUserData])
 
