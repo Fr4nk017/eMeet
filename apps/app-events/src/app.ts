@@ -24,7 +24,7 @@ const corsOptions: cors.CorsOptions = {
   },
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization'],
-  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
 }
 
 app.use(helmet())
