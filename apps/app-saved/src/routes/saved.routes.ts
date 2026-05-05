@@ -1,9 +1,43 @@
 import { Router } from 'express'
 import { createHash } from 'node:crypto'
-import { withAuth } from '@emeet/shared/middleware/auth'
-import { createServiceRoleClient } from '@emeet/shared/lib/supabase'
-import { badRequest, serverError } from '@emeet/shared/utils/http'
-import { cacheLikedEvent, generateRecommendations } from '@emeet/redis'
+import { withAuth } from '../../../../packages/shared/src/middleware/auth.js'
+import { createServiceRoleClient } from '../../../../packages/shared/src/lib/supabase.js'
+import { badRequest, serverError } from '../../../../packages/shared/src/utils/http.js'
+
+type RedisLikeEvent = {
+  id: string
+  type: string
+  lat: number
+  lng: number
+  distance: number
+}
+
+type RedisTools = {
+  cacheLikedEvent: (userId: string, event: RedisLikeEvent) => Promise<void>
+  generateRecommendations: (
+    userId: string,
+    availableEvents: RedisLikeEvent[],
+    limit?: number,
+  ) => Promise<Array<RedisLikeEvent & { similarity: number }>>
+}
+
+let redisToolsPromise: Promise<RedisTools | null> | null = null
+
+async function getRedisTools(): Promise<RedisTools | null> {
+  if (!redisToolsPromise) {
+    redisToolsPromise = import('@emeet/redis')
+      .then((mod) => ({
+        cacheLikedEvent: mod.cacheLikedEvent,
+        generateRecommendations: mod.generateRecommendations,
+      }))
+      .catch((err) => {
+        logSupabaseError('redis module load', err)
+        return null
+      })
+  }
+
+  return redisToolsPromise
+}
 
 const router = Router()
 
@@ -44,6 +78,12 @@ async function ensureProfile(req: Parameters<typeof router.post>[1] extends (...
     .upsert(basePayload, { onConflict: 'id' })
 
   if (!error) return null
+
+  // Solo reintenta con payload legacy si la columna no existe (schema antiguo).
+  // Otros errores (permisos, FK, red) se propagan directamente.
+  const errorCode = (error as { code?: string }).code ?? ''
+  const isUnknownColumn = errorCode === '42703' || errorCode === 'PGRST204'
+  if (!isUnknownColumn) return error
 
   // Compatibilidad con ambientes donde profiles aun exige columnas legacy.
   const legacyPayload = {
@@ -257,16 +297,20 @@ router.post('/like', async (req, res) => {
 
   // Cache el like en Redis para recomendaciones
   if (eventLat != null && eventLng != null && eventDistance != null && eventType) {
-    await cacheLikedEvent(req.authUser!.id, {
-      id: eventId,
-      type: eventType,
-      lat: eventLat,
-      lng: eventLng,
-      distance: eventDistance,
-    }).catch(err => {
-      logSupabaseError('cacheLikedEvent', err)
-      // No es crítico, continúa
-    })
+    const redisTools = await getRedisTools()
+
+    if (redisTools) {
+      await redisTools.cacheLikedEvent(req.authUser!.id, {
+        id: eventId,
+        type: eventType,
+        lat: eventLat,
+        lng: eventLng,
+        distance: eventDistance,
+      }).catch(err => {
+        logSupabaseError('cacheLikedEvent', err)
+        // No es crítico, continúa
+      })
+    }
   }
 
   return res.status(201).json({ ok: true, chatLinked })
@@ -364,42 +408,6 @@ router.get('/saved', async (req, res) => {
   return res.json(data)
 })
 
-// Endpoint de diagnóstico — SOLO desarrollo, remover antes de producción.
-router.get('/debug/test', async (req, res) => {
-  const userId = req.authUser?.id
-  const results: Record<string, unknown> = { userId }
-
-  // 1. Probar upsert de perfil
-  const profilePayload = {
-    id: userId!,
-    name: req.authUser?.email?.split('@')[0] ?? 'test',
-    bio: '',
-    location: 'Santiago, Chile',
-  }
-  const { error: profileErr } = await createServiceRoleClient()
-    .from('profiles')
-    .upsert(profilePayload, { onConflict: 'id' })
-  results.profileUpsert = profileErr
-    ? { code: (profileErr as any).code, message: profileErr.message, details: (profileErr as any).details, hint: (profileErr as any).hint }
-    : 'ok'
-
-  // 2. Probar insert en user_events con un event_id de prueba
-  const testEventId = 'debug-test-' + Date.now()
-  const { error: eventErr } = await createServiceRoleClient()
-    .from('user_events')
-    .insert({ user_id: userId!, event_id: testEventId, event_title: 'Debug Test', action: 'like' })
-  results.userEventInsert = eventErr
-    ? { code: (eventErr as any).code, message: eventErr.message, details: (eventErr as any).details, hint: (eventErr as any).hint }
-    : 'ok'
-
-  // Limpiar la fila de test
-  if (!eventErr) {
-    await createServiceRoleClient().from('user_events').delete().eq('event_id', testEventId).eq('user_id', userId!)
-  }
-
-  return res.json(results)
-})
-
 /**
  * POST /recommendations
  * Genera recomendaciones basadas en likes anteriores del usuario
@@ -421,7 +429,10 @@ router.post('/recommendations', async (req, res) => {
       return res.status(401).json({ error: 'Usuario no autenticado.' })
     }
 
-    const recommendations = await generateRecommendations(userId, availableEvents, Math.min(limit, 10))
+    const redisTools = await getRedisTools()
+    const recommendations = redisTools
+      ? await redisTools.generateRecommendations(userId, availableEvents, Math.min(limit, 10))
+      : availableEvents.slice(0, Math.min(limit, 10)).map((event) => ({ ...event, similarity: 0 }))
 
     return res.json({
       recommendations,

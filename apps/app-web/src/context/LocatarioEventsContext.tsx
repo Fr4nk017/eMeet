@@ -192,7 +192,6 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
 
   const createLocatarioEvent = useCallback(async (input: CreateLocatarioEventInput): Promise<Event> => {
     if (!hasSupabaseEnv) {
-      // Modo local: guardar en localStorage
       const newEvent: Event = {
         id: `loc-event-${Date.now()}`,
         title: input.title.trim(),
@@ -224,7 +223,12 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
         saveEventsToStorage(next)
         return next
       })
+      setPublicLocatarioEvents((prev) => [newEvent, ...prev])
       return newEvent
+    }
+
+    if (!EVENTS_URL) {
+      throw new Error('NEXT_PUBLIC_EVENTS_URL no está configurado. Agrega la variable en Vercel → app-web → Settings → Environment Variables.')
     }
 
     const { data: sessionData } = await getSupabaseBrowserClient().auth.getSession()
@@ -232,7 +236,6 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
       throw new Error('Debes iniciar sesión para crear eventos de locatario.')
     }
 
-    // Modo Supabase: persistir en la base de datos
     const row = await apiFetch<LocatarioEventRow>(EVENTS_URL, '/events/locatario', {
       method: 'POST',
       body: JSON.stringify({
@@ -253,12 +256,43 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
 
     const newEvent = dbRowToEvent(row)
     setLocatarioEvents((prev) => [newEvent, ...prev])
+    setPublicLocatarioEvents((prev) => [newEvent, ...prev])
     return newEvent
   }, [])
 
   const updateLocatarioEvent = useCallback(async (eventId: string, input: Partial<CreateLocatarioEventInput>): Promise<void> => {
+    if (!hasSupabaseEnv) {
+      setLocatarioEvents((prev) => {
+        const next = prev.map((e) => {
+          if (e.id !== eventId) return e
+          return {
+            ...e,
+            title: input.title?.trim() ?? e.title,
+            description: input.description?.trim() ?? e.description,
+            category: input.category ?? e.category,
+            date: input.date ? new Date(input.date).toISOString() : e.date,
+            address: input.address?.trim() ?? e.address,
+            price: input.price !== undefined ? input.price : e.price,
+            imageUrl: input.imageUrl?.trim() || e.imageUrl,
+            videoUrl: input.videoUrl?.trim() || e.videoUrl,
+            lat: input.lat ?? e.lat,
+            lng: input.lng ?? e.lng,
+          }
+        })
+        saveEventsToStorage(next)
+        return next
+      })
+      return
+    }
+
+    const { data: sessionData } = await getSupabaseBrowserClient().auth.getSession()
+    if (!sessionData.session) throw new Error('Debes iniciar sesión para editar eventos.')
+
+    // Snapshot before optimistic update so we can revert on failure
+    let snapshot: Event[] = []
     setLocatarioEvents((prev) => {
-      const next = prev.map((e) => {
+      snapshot = prev
+      return prev.map((e) => {
         if (e.id !== eventId) return e
         return {
           ...e,
@@ -274,30 +308,30 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
           lng: input.lng ?? e.lng,
         }
       })
-      if (!hasSupabaseEnv) saveEventsToStorage(next)
-      return next
     })
 
-    if (!hasSupabaseEnv) return
-
-    const { data: sessionData } = await getSupabaseBrowserClient().auth.getSession()
-    if (!sessionData.session) throw new Error('Debes iniciar sesión para editar eventos.')
-
-    await apiFetch<void>(EVENTS_URL, `/events/locatario/${eventId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        title: input.title,
-        description: input.description,
-        category: input.category,
-        event_date: input.date,
-        address: input.address,
-        price: input.price,
-        image_url: input.imageUrl || null,
-        video_url: input.videoUrl || null,
-        lat: input.lat ?? null,
-        lng: input.lng ?? null,
-      }),
-    })
+    try {
+      await apiFetch<void>(EVENTS_URL, `/events/locatario/${eventId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          title: input.title,
+          description: input.description,
+          category: input.category,
+          event_date: input.date,
+          address: input.address,
+          price: input.price,
+          image_url: input.imageUrl || null,
+          video_url: input.videoUrl || null,
+          organizer_name: input.organizerName,
+          organizer_avatar: input.organizerAvatar,
+          lat: input.lat ?? null,
+          lng: input.lng ?? null,
+        }),
+      })
+    } catch (err) {
+      setLocatarioEvents(snapshot)
+      throw err
+    }
   }, [])
 
   const removeLocatarioEvent = useCallback(async (eventId: string): Promise<void> => {

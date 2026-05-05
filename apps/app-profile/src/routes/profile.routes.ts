@@ -1,7 +1,7 @@
 import { Router } from 'express'
-import { withAuth } from '@emeet/shared/middleware/auth'
-import { badRequest, serverError } from '@emeet/shared/utils/http'
-import type { EventCategory } from '@emeet/shared/types/supabase'
+import { withAuth } from '../../../../packages/shared/src/middleware/auth.js'
+import { badRequest, serverError } from '../../../../packages/shared/src/utils/http.js'
+import type { EventCategory } from '../../../../packages/shared/src/types/supabase.js'
 
 const router = Router()
 
@@ -12,10 +12,14 @@ router.get('/', async (req, res) => {
     .from('profiles')
     .select('*')
     .eq('id', req.authUser!.id)
-    .single()
+    .maybeSingle()
 
   if (error) {
     return serverError(res, 'No se pudo obtener el perfil.')
+  }
+
+  if (!data) {
+    return res.status(404).json({ error: 'Perfil no encontrado.' })
   }
 
   return res.json(data)

@@ -10,3 +10,9 @@ export function createAnonClient(authToken?: string) {
     authToken ? { global: { headers: { Authorization: `Bearer ${authToken}` } } } : undefined,
   )
 }
+
+export function createServiceRoleClient() {
+  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+}

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express'
-import { env } from '../config/env'
+import { env } from '../config/env.js'
 
 const router = Router()
 
