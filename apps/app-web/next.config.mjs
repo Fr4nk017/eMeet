@@ -29,10 +29,11 @@ const nextConfig = {
   },
 
   images: {
-    formats: ['image/webp'],
+    formats: ['image/avif', 'image/webp'],
     minimumCacheTTL: 2592000,
     remotePatterns: [
       { protocol: 'http',  hostname: 'localhost', port: '3006' },
+      { protocol: 'https', hostname: 'e-meet-app-places.vercel.app' },
       { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: 'api.dicebear.com' },
       { protocol: 'https', hostname: 'i.pravatar.cc' },
@@ -44,6 +45,9 @@ const nextConfig = {
     optimizePackageImports: [
       'framer-motion',
       'lucide-react',
+      '@supabase/supabase-js',
+      '@supabase/ssr',
+      '@tanstack/react-query',
     ],
     // Tiempo que Next.js mantiene segmentos de ruta en el router cache del cliente
     staleTimes: {

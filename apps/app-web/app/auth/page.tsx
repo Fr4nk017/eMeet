@@ -1,11 +1,84 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowRight as FiArrowRight, CircleAlert as FiAlertCircle, MapPin, Calendar, Users } from 'lucide-react'
 import LoginForm from '../../src/components/LoginForm'
 import SignUpForm from '../../src/components/SignUpForm'
 import { useAuth } from '../../src/context/AuthContext'
+
+function SplashScreen({ onDone }: { onDone: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 5000)
+    return () => clearTimeout(t)
+  }, [onDone])
+
+  return (
+    <motion.div
+      initial={{ opacity: 1 }}
+      exit={{ opacity: 0, scale: 1.04 }}
+      transition={{ duration: 0.7, ease: 'easeInOut' }}
+      className="fixed inset-0 z-[200] flex flex-col items-center justify-center overflow-hidden"
+      style={{ background: 'radial-gradient(circle at 50% 40%, rgba(124,58,237,0.22), transparent 60%), hsl(222,47%,6%)' }}
+    >
+      {/* Halo de fondo pulsante */}
+      <motion.div
+        animate={{ scale: [1, 1.18, 1], opacity: [0.18, 0.32, 0.18] }}
+        transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+        className="absolute h-[340px] w-[340px] rounded-full bg-[hsl(262,80%,55%)] blur-[90px]"
+      />
+
+      <div className="relative flex flex-col items-center gap-7">
+        {/* Ícono */}
+        <motion.div
+          initial={{ scale: 0.4, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 220, damping: 18, delay: 0.1 }}
+          className="relative flex h-28 w-28 items-center justify-center rounded-[2rem] bg-gradient-to-br from-[hsl(262,80%,62%)] to-[hsl(262,80%,40%)] shadow-2xl shadow-purple-900/70"
+        >
+          <span className="text-6xl select-none">🎉</span>
+          {/* Brillo superior */}
+          <span className="pointer-events-none absolute inset-x-3 top-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent rounded-t-[2rem]" />
+        </motion.div>
+
+        {/* Texto del logo */}
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.45, duration: 0.55, ease: 'easeOut' }}
+          className="flex flex-col items-center gap-2"
+        >
+          <span className="text-6xl font-extrabold tracking-tight">
+            <span className="text-white">e</span>
+            <span className="bg-gradient-to-r from-[hsl(262,80%,78%)] via-white to-[hsl(262,80%,78%)] bg-clip-text text-transparent">
+              Meet
+            </span>
+          </span>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.85, duration: 0.5 }}
+            className="text-sm tracking-widest text-slate-400 uppercase"
+          >
+            Descubre eventos cerca tuyo
+          </motion.p>
+        </motion.div>
+      </div>
+
+      {/* Barra de progreso de 5 s */}
+      <div className="absolute bottom-14 h-[2px] w-52 overflow-hidden rounded-full bg-white/10">
+        <motion.div
+          initial={{ scaleX: 0 }}
+          animate={{ scaleX: 1 }}
+          transition={{ duration: 5, ease: 'linear' }}
+          style={{ transformOrigin: 'left' }}
+          className="h-full w-full rounded-full bg-gradient-to-r from-[hsl(262,80%,60%)] to-[hsl(262,80%,78%)]"
+        />
+      </div>
+    </motion.div>
+  )
+}
 
 function GoogleIcon() {
   return (
@@ -54,7 +127,27 @@ export default function AuthPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [oauthLoading, setOauthLoading] = useState<'google' | 'facebook' | null>(null)
   const [oauthError, setOauthError] = useState('')
-  const { loginWithOAuth } = useAuth()
+  const [showSplash, setShowSplash] = useState(false)
+  const { loginWithOAuth, isAuthenticated, isAuthReady, user } = useAuth()
+  const router = useRouter()
+
+  // Redirigir al home si el usuario ya está autenticado (post-login o post-register)
+  useEffect(() => {
+    if (!isAuthReady || !isAuthenticated) return
+    const role = user?.role
+    router.replace(role === 'locatario' ? '/locatario' : role === 'admin' ? '/admin' : '/')
+  }, [isAuthReady, isAuthenticated, router, user?.role])
+
+  useEffect(() => {
+    if (!sessionStorage.getItem('emeet-splash')) {
+      setShowSplash(true)
+    }
+  }, [])
+
+  const handleSplashDone = useCallback(() => {
+    sessionStorage.setItem('emeet-splash', '1')
+    setShowSplash(false)
+  }, [])
 
   const handleOAuth = async (provider: 'google' | 'facebook') => {
     setOauthError('')
@@ -68,6 +161,11 @@ export default function AuthPage() {
   }
 
   return (
+    <>
+      <AnimatePresence>
+        {showSplash && <SplashScreen onDone={handleSplashDone} />}
+      </AnimatePresence>
+
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(124,58,237,0.18),_transparent_30%),_radial-gradient(circle_at_bottom_right,_rgba(245,158,11,0.14),_transparent_25%),_hsl(222,47%,6%)] p-4">
       {/* Background blobs */}
       <div className="pointer-events-none absolute inset-0 opacity-50">
@@ -130,9 +228,9 @@ export default function AuthPage() {
           <div className="rounded-[2rem] border border-white/10 bg-[rgba(15,23,42,0.92)] p-6 shadow-2xl backdrop-blur-xl">
             <div className="flex flex-col gap-5">
               <div className="text-center lg:text-left">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.35em] text-[hsl(262,80%,65%)]">Accede a eMeet</p>
-                <h2 className="text-2xl font-semibold text-white">Inicia sesión o crea tu cuenta</h2>
-                <p className="mt-1.5 text-sm text-slate-400">Conéctate con tu cuenta o usa email y contraseña.</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.35em] text-[hsl(262,80%,65%)]">eMeet</p>
+                <h2 className="text-2xl font-semibold text-white">Accede a tu cuenta</h2>
+                <p className="mt-1.5 text-sm text-slate-400">Usa tu cuenta de Google o email y contraseña.</p>
               </div>
 
               {/* Tabs with animated pill */}
@@ -240,9 +338,10 @@ export default function AuthPage() {
         </div>
 
         <div className="mt-8 text-center text-xs text-slate-600">
-          <p>Disponible en Santiago, Chile &nbsp;·&nbsp; Versión demo</p>
+          <p>Santiago, Chile &nbsp;·&nbsp; eMeet © 2025</p>
         </div>
       </div>
     </div>
+    </>
   )
 }

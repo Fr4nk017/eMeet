@@ -1,6 +1,6 @@
 import { Router } from 'express'
-import { withAuth } from '@emeet/shared/middleware/auth'
-import { badRequest, serverError } from '@emeet/shared/utils/http'
+import { withAuth } from '../../../../packages/shared/src/middleware/auth.js'
+import { badRequest, serverError } from '../../../../packages/shared/src/utils/http.js'
 
 const router = Router()
 

@@ -1,6 +1,7 @@
 import { Router } from 'express'
-import { createAnonClient } from '../lib/supabase'
-import { badRequest, serverError } from '../utils/http'
+import { env } from '../config/env.js'
+import { createAnonClient, createServiceRoleClient } from '../lib/supabase.js'
+import { badRequest, serverError } from '../utils/http.js'
 
 const router = Router()
 
@@ -60,6 +61,29 @@ router.post('/register', async (req, res) => {
     return badRequest(res, error.message)
   }
 
+  // Create profile row immediately so GET /profile works right after registration.
+  if (data.user) {
+    const effectiveRole = (role ?? 'user') as 'user' | 'locatario' | 'admin'
+    const profilePayload: Record<string, unknown> = {
+      id: data.user.id,
+      name: name.trim(),
+      bio: '',
+      location: effectiveRole === 'locatario' ? (businessLocation?.trim() ?? 'Santiago, Chile') : 'Santiago, Chile',
+      role: effectiveRole,
+      business_name: effectiveRole === 'locatario' ? (businessName?.trim() ?? null) : null,
+      business_location: effectiveRole === 'locatario' ? (businessLocation?.trim() ?? null) : null,
+    }
+
+    const adminClient = createServiceRoleClient()
+    const { error: profileError } = await adminClient
+      .from('profiles')
+      .upsert(profilePayload, { onConflict: 'id' })
+
+    if (profileError) {
+      console.error('[app-auth] profile upsert after register failed:', JSON.stringify(profileError))
+    }
+  }
+
   return res.status(201).json({ user: data.user, session: data.session })
 })
 
@@ -97,7 +121,11 @@ router.get('/session', async (req, res) => {
 
 router.get('/callback', async (req, res) => {
   const { code, token_hash: tokenHash, type, next } = req.query
-  const frontendUrl = process.env.FRONTEND_ORIGIN || 'http://localhost:3000'
+  const requestOrigin = req.get('origin')
+  const frontendUrl =
+    requestOrigin && env.FRONTEND_ORIGINS.includes(requestOrigin)
+      ? requestOrigin
+      : env.FRONTEND_ORIGIN
 
   // Helper para determinar ruta según rol
   function roleRedirectPath(user: any): string {
