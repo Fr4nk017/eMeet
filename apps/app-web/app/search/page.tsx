@@ -29,18 +29,12 @@ const CATEGORIES: { key: EventCategory; label: string }[] = [
 
 const SOURCE_LABELS: Record<EventSource, string> = {
   ticketmaster: 'Ticketmaster',
-  predicthq: 'PredictHQ',
-  eventbrite: 'Eventbrite',
-  meetup: 'Meetup',
   places: 'Lugares',
   locatario: 'Locales',
 }
 
 const SOURCE_ACTIVE_CLASS: Record<EventSource, string> = {
   ticketmaster: 'border-blue-400/60 bg-blue-500/20 text-blue-200',
-  predicthq: 'border-purple-400/60 bg-purple-500/20 text-purple-200',
-  eventbrite: 'border-orange-400/60 bg-orange-500/20 text-orange-200',
-  meetup: 'border-red-400/60 bg-red-500/20 text-red-200',
   places: 'border-emerald-400/60 bg-emerald-500/20 text-emerald-200',
   locatario: 'border-primary/60 bg-primary/20 text-primary-light',
 }

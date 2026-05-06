@@ -17,7 +17,7 @@ export type EventCategory =
 /**
  * Representa un evento publicado en la plataforma.
  */
-export type EventSource = 'ticketmaster' | 'predicthq' | 'eventbrite' | 'meetup' | 'places' | 'locatario'
+export type EventSource = 'ticketmaster' | 'places' | 'locatario'
 
 export interface Event {
   id: string
@@ -32,6 +32,7 @@ export interface Event {
   price: number | null   // null = gratis
   imageUrl: string
   videoUrl?: string | null
+  audioUrl?: string | null
   websiteUrl?: string | null
   organizerName: string
   organizerAvatar: string

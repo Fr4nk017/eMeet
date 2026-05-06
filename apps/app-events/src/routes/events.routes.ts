@@ -43,6 +43,7 @@ router.post('/locatario', async (req, res) => {
     price?: number | null
     image_url?: string | null
     video_url?: string | null
+    audio_url?: string | null
     organizer_name?: string
     organizer_avatar?: string | null
     lat?: number | null
@@ -65,6 +66,7 @@ router.post('/locatario', async (req, res) => {
       price: body.price ?? null,
       image_url: body.image_url?.trim() || null,
       video_url: body.video_url?.trim() || null,
+      audio_url: body.audio_url?.trim() || null,
       organizer_name: body.organizer_name ?? '',
       organizer_avatar: body.organizer_avatar ?? null,
       lat: typeof body.lat === 'number' ? body.lat : null,
@@ -91,6 +93,7 @@ router.patch('/locatario/:id', async (req, res) => {
     price?: number | null
     image_url?: string | null
     video_url?: string | null
+    audio_url?: string | null
     organizer_name?: string
     organizer_avatar?: string | null
     lat?: number | null
@@ -106,6 +109,7 @@ router.patch('/locatario/:id', async (req, res) => {
     price?: number | null
     image_url?: string | null
     video_url?: string | null
+    audio_url?: string | null
     organizer_name?: string
     organizer_avatar?: string | null
     lat?: number | null
@@ -121,6 +125,7 @@ router.patch('/locatario/:id', async (req, res) => {
   if (body.price !== undefined) updates.price = body.price
   if (body.image_url !== undefined) updates.image_url = body.image_url?.trim() || null
   if (body.video_url !== undefined) updates.video_url = body.video_url?.trim() || null
+  if (body.audio_url !== undefined) updates.audio_url = body.audio_url?.trim() || null
   if (body.organizer_name !== undefined) updates.organizer_name = body.organizer_name
   if (body.organizer_avatar !== undefined) updates.organizer_avatar = body.organizer_avatar
   if (body.lat !== undefined) updates.lat = typeof body.lat === 'number' ? body.lat : null
