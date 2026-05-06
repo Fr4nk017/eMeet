@@ -408,42 +408,6 @@ router.get('/saved', async (req, res) => {
   return res.json(data)
 })
 
-// Endpoint de diagnóstico — SOLO desarrollo, remover antes de producción.
-router.get('/debug/test', async (req, res) => {
-  const userId = req.authUser?.id
-  const results: Record<string, unknown> = { userId }
-
-  // 1. Probar upsert de perfil
-  const profilePayload = {
-    id: userId!,
-    name: req.authUser?.email?.split('@')[0] ?? 'test',
-    bio: '',
-    location: 'Santiago, Chile',
-  }
-  const { error: profileErr } = await createServiceRoleClient()
-    .from('profiles')
-    .upsert(profilePayload, { onConflict: 'id' })
-  results.profileUpsert = profileErr
-    ? { code: (profileErr as any).code, message: profileErr.message, details: (profileErr as any).details, hint: (profileErr as any).hint }
-    : 'ok'
-
-  // 2. Probar insert en user_events con un event_id de prueba
-  const testEventId = 'debug-test-' + Date.now()
-  const { error: eventErr } = await createServiceRoleClient()
-    .from('user_events')
-    .insert({ user_id: userId!, event_id: testEventId, event_title: 'Debug Test', action: 'like' })
-  results.userEventInsert = eventErr
-    ? { code: (eventErr as any).code, message: eventErr.message, details: (eventErr as any).details, hint: (eventErr as any).hint }
-    : 'ok'
-
-  // Limpiar la fila de test
-  if (!eventErr) {
-    await createServiceRoleClient().from('user_events').delete().eq('event_id', testEventId).eq('user_id', userId!)
-  }
-
-  return res.json(results)
-})
-
 /**
  * POST /recommendations
  * Genera recomendaciones basadas en likes anteriores del usuario

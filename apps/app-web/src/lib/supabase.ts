@@ -1,6 +1,7 @@
 import { createBrowserClient, createServerClient, type CookieOptions } from '@supabase/ssr'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+
 export type EventCategory =
   | 'gastronomia'
   | 'musica'
@@ -266,30 +267,34 @@ export interface Database {
 }
 
 function isValidSupabaseEnvValue(value: string | undefined) {
-  if (!value) return false
-  const trimmed = value.trim()
-  if (!trimmed) return false
-  const normalized = trimmed.toLowerCase()
-  return !normalized.includes('placeholder') && !normalized.includes('your_')
+  /// Validación básica: que exista y no esté vacía
+  return !!value && value.trim() !== '' && !value.includes('your_');
 }
 
-const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const rawSupabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const rawSupabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-export const hasSupabaseEnv =
-  isValidSupabaseEnvValue(rawSupabaseUrl) &&
-  isValidSupabaseEnvValue(rawSupabaseAnonKey)
+if (typeof window !== 'undefined') {
+  console.log("🛠️ [eMeet Debug] URL:", rawSupabaseUrl || "FALTA URL EN .ENV");
+  console.log("🛠️ [eMeet Debug] Key:", rawSupabaseAnonKey ? "OK (Cargada)" : "ERROR (Undefined)");
+}
 
-const supabaseUrl = hasSupabaseEnv ? rawSupabaseUrl!.trim() : 'https://placeholder.supabase.co'
-const supabaseAnonKey = hasSupabaseEnv ? rawSupabaseAnonKey!.trim() : 'placeholder-anon-key'
+// Exportamos la validación para usarla en el resto de la app
+export const hasSupabaseEnv = isValidSupabaseEnvValue(rawSupabaseUrl) && isValidSupabaseEnvValue(rawSupabaseAnonKey);
 
-let browserClient: SupabaseClient<Database> | null = null
+const supabaseUrl = rawSupabaseUrl?.trim() || '';
+const supabaseAnonKey = rawSupabaseAnonKey?.trim() || '';
+
+let browserClient: SupabaseClient<Database> | null = null;
 
 export function getSupabaseBrowserClient() {
-  if (!browserClient) {
-    browserClient = createBrowserClient<Database>(supabaseUrl, supabaseAnonKey)
+  if (!hasSupabaseEnv && typeof window !== 'undefined') {
+    console.error("Advertencia: Las variables de Supabase no están configuradas correctamente en apps/app-web/.env");
   }
-  return browserClient
+  if (!browserClient) {
+    browserClient = createBrowserClient<Database>(supabaseUrl, supabaseAnonKey);
+  }
+  return browserClient;
 }
 
 type CookieMethods = {

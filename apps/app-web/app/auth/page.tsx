@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowRight as FiArrowRight, CircleAlert as FiAlertCircle, MapPin, Calendar, Users } from 'lucide-react'
 import LoginForm from '../../src/components/LoginForm'
@@ -127,7 +128,15 @@ export default function AuthPage() {
   const [oauthLoading, setOauthLoading] = useState<'google' | 'facebook' | null>(null)
   const [oauthError, setOauthError] = useState('')
   const [showSplash, setShowSplash] = useState(false)
-  const { loginWithOAuth } = useAuth()
+  const { loginWithOAuth, isAuthenticated, isAuthReady, user } = useAuth()
+  const router = useRouter()
+
+  // Redirigir al home si el usuario ya está autenticado (post-login o post-register)
+  useEffect(() => {
+    if (!isAuthReady || !isAuthenticated) return
+    const role = user?.role
+    router.replace(role === 'locatario' ? '/locatario' : role === 'admin' ? '/admin' : '/')
+  }, [isAuthReady, isAuthenticated, router, user?.role])
 
   useEffect(() => {
     if (!sessionStorage.getItem('emeet-splash')) {
@@ -219,9 +228,9 @@ export default function AuthPage() {
           <div className="rounded-[2rem] border border-white/10 bg-[rgba(15,23,42,0.92)] p-6 shadow-2xl backdrop-blur-xl">
             <div className="flex flex-col gap-5">
               <div className="text-center lg:text-left">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.35em] text-[hsl(262,80%,65%)]">Accede a eMeet</p>
-                <h2 className="text-2xl font-semibold text-white">Inicia sesión o crea tu cuenta</h2>
-                <p className="mt-1.5 text-sm text-slate-400">Conéctate con tu cuenta o usa email y contraseña.</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.35em] text-[hsl(262,80%,65%)]">eMeet</p>
+                <h2 className="text-2xl font-semibold text-white">Accede a tu cuenta</h2>
+                <p className="mt-1.5 text-sm text-slate-400">Usa tu cuenta de Google o email y contraseña.</p>
               </div>
 
               {/* Tabs with animated pill */}
@@ -329,7 +338,7 @@ export default function AuthPage() {
         </div>
 
         <div className="mt-8 text-center text-xs text-slate-600">
-          <p>Disponible en Santiago, Chile &nbsp;·&nbsp; Versión demo</p>
+          <p>Santiago, Chile &nbsp;·&nbsp; eMeet © 2025</p>
         </div>
       </div>
     </div>
