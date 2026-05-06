@@ -288,13 +288,25 @@ const supabaseAnonKey = rawSupabaseAnonKey?.trim() || '';
 let browserClient: SupabaseClient<Database> | null = null;
 
 export function getSupabaseBrowserClient() {
-  // para ver el error real de red en la pestaña Network
   if (!hasSupabaseEnv && typeof window !== 'undefined') {
     console.error("Advertencia: Las variables de Supabase no están configuradas correctamente en apps/app-web/.env");
   }
-  
   if (!browserClient) {
     browserClient = createBrowserClient<Database>(supabaseUrl, supabaseAnonKey);
   }
   return browserClient;
+}
+
+type CookieMethods = {
+  getAll: () => { name: string; value: string }[]
+  setAll: (cookies: { name: string; value: string; options: CookieOptions }[]) => void
+}
+
+export function createSupabaseServerClient(cookieMethods: CookieMethods) {
+  return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll: cookieMethods.getAll,
+      setAll: cookieMethods.setAll,
+    },
+  })
 }
