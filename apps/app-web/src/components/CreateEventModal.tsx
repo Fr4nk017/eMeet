@@ -7,6 +7,7 @@ import {
   ImageIcon as FiImage,
   Loader2 as FiLoader,
   MapPin as FiMapPin,
+  Music as FiMusic,
   Navigation as FiNavigation,
   Video as FiVideo,
   X as FiX,
@@ -37,6 +38,14 @@ const EMPTY_FORM = {
   category: 'fiesta' as EventCategory,
 }
 
+type DeezerTrack = {
+  id: number
+  title: string
+  artist: string
+  coverUrl: string
+  previewUrl: string
+}
+
 type InitialValues = {
   title?: string
   description?: string
@@ -45,6 +54,7 @@ type InitialValues = {
   address?: string
   imageUrl?: string
   videoUrl?: string
+  audioUrl?: string
   category?: EventCategory
 }
 
@@ -87,6 +97,13 @@ export function CreateEventModal({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
+
+  const [deezerQuery, setDeezerQuery] = useState('')
+  const [deezerResults, setDeezerResults] = useState<DeezerTrack[]>([])
+  const [deezerTrack, setDeezerTrack] = useState<DeezerTrack | null>(null)
+  const [existingAudioUrl, setExistingAudioUrl] = useState<string | null>(null)
+  const [isSearchingDeezer, setIsSearchingDeezer] = useState(false)
+
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -110,6 +127,10 @@ export function CreateEventModal({
       setGpsCoords(null)
       setGpsStatus('idle')
       setValidationError(null)
+      setDeezerQuery('')
+      setDeezerResults([])
+      setDeezerTrack(null)
+      setExistingAudioUrl(initialValues.audioUrl ?? null)
     } else if (!isOpen) {
       setEventForm({ ...EMPTY_FORM, address: defaultAddress })
       setMediaPreview(null)
@@ -120,11 +141,14 @@ export function CreateEventModal({
       setIsFree(true)
       setValidationError(null)
       setUploadProgress(null)
+      setDeezerQuery('')
+      setDeezerResults([])
+      setDeezerTrack(null)
+      setExistingAudioUrl(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }, [isOpen, defaultAddress, mode, initialValues])
 
-  // Geocodifica la dirección escrita manualmente (no aplica si se usó GPS)
   useEffect(() => {
     if (gpsStatus === 'success') return
     const address = eventForm.address.trim()
@@ -155,6 +179,42 @@ export function CreateEventModal({
     return () => clearTimeout(timer)
   }, [eventForm.address, gpsStatus])
 
+  useEffect(() => {
+    const q = deezerQuery.trim()
+    if (q.length < 2) {
+      setDeezerResults([])
+      setIsSearchingDeezer(false)
+      return
+    }
+    setIsSearchingDeezer(true)
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/deezer/search?q=${encodeURIComponent(q)}`)
+        const json = await res.json() as {
+          data?: Array<{
+            id: number
+            title: string
+            artist: { name: string }
+            album: { cover_medium: string }
+            preview: string
+          }>
+        }
+        setDeezerResults((json.data ?? []).map((t) => ({
+          id: t.id,
+          title: t.title,
+          artist: t.artist.name,
+          coverUrl: t.album.cover_medium,
+          previewUrl: t.preview,
+        })))
+      } catch {
+        setDeezerResults([])
+      } finally {
+        setIsSearchingDeezer(false)
+      }
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [deezerQuery])
+
   if (!isOpen) return null
 
   const handleMediaFile = (file: File) => {
@@ -178,11 +238,7 @@ export function CreateEventModal({
     setMediaType(isVideo ? 'video' : 'image')
     const url = URL.createObjectURL(file)
     setMediaPreview(url)
-    if (isVideo) {
-      setEventForm((prev) => ({ ...prev, imageUrl: '' }))
-    } else {
-      setEventForm((prev) => ({ ...prev, imageUrl: '' }))
-    }
+    setEventForm((prev) => ({ ...prev, imageUrl: '' }))
   }
 
   const handleDrop = (e: React.DragEvent) => {
@@ -232,6 +288,20 @@ export function CreateEventModal({
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  const selectDeezerTrack = (track: DeezerTrack) => {
+    setDeezerTrack(track)
+    setExistingAudioUrl(null)
+    setDeezerResults([])
+    setDeezerQuery('')
+  }
+
+  const clearAudio = () => {
+    setDeezerTrack(null)
+    setExistingAudioUrl(null)
+    setDeezerQuery('')
+    setDeezerResults([])
+  }
+
   const handleSubmit = async () => {
     if (!eventForm.title.trim() || !eventForm.description.trim() || !eventForm.date) {
       setValidationError('Completa al menos título, descripción y fecha.')
@@ -246,14 +316,27 @@ export function CreateEventModal({
 
       if (selectedFile && userId && hasSupabaseEnv) {
         setUploadProgress(mediaType === 'video' ? 'Subiendo video...' : 'Subiendo imagen...')
-        const publicUrl = await uploadEventMedia(selectedFile, userId)
-        if (mediaType === 'video') {
-          finalVideoUrl = publicUrl
-        } else {
-          finalImageUrl = publicUrl
+        try {
+          const publicUrl = await uploadEventMedia(selectedFile, userId)
+          if (mediaType === 'video') {
+            finalVideoUrl = publicUrl
+          } else {
+            finalImageUrl = publicUrl
+          }
+        } catch {
+          setUploadProgress(null)
+          setValidationError(
+            mediaType === 'video'
+              ? 'No se pudo subir el video. Intenta de nuevo o usa una URL.'
+              : 'No se pudo subir la imagen. Intenta de nuevo o usa una URL.'
+          )
+          setIsSubmitting(false)
+          return
         }
         setUploadProgress(null)
       }
+
+      const finalAudioUrl = deezerTrack?.previewUrl ?? existingAudioUrl ?? undefined
 
       await onSubmit({
         title: eventForm.title,
@@ -264,6 +347,7 @@ export function CreateEventModal({
         price: isFree ? null : (eventForm.price.trim() === '' ? null : Number(eventForm.price)),
         imageUrl: finalImageUrl,
         videoUrl: finalVideoUrl,
+        audioUrl: finalAudioUrl,
         organizerName,
         organizerAvatar,
         lat: gpsCoords?.lat,
@@ -281,6 +365,8 @@ export function CreateEventModal({
     ?? (isSubmitting
       ? (mode === 'edit' ? 'Guardando...' : 'Publicando...')
       : (mode === 'edit' ? 'Guardar' : 'Publicar'))
+
+  const hasAudio = deezerTrack || existingAudioUrl
 
   return (
     <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -359,13 +445,13 @@ export function CreateEventModal({
                   <p className="text-white font-medium mb-1">Arrastra una foto o video aquí</p>
                   <p className="text-white/40 text-sm">o haz clic para seleccionar</p>
                 </div>
-                <span className="text-xs text-white/20">PNG, JPG, WEBP · MP4, MOV, WEBM</span>
+                <span className="text-xs text-white/20">PNG, JPG, GIF, WEBP, AVIF, BMP, TIFF, HEIC · MP4, MOV, WEBM</span>
               </button>
             )}
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*,video/*"
+              accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/bmp,image/tiff,image/svg+xml,image/heic,image/heif,video/mp4,video/quicktime,video/webm,video/x-msvideo"
               className="hidden"
               onChange={handleFileSelect}
             />
@@ -467,7 +553,6 @@ export function CreateEventModal({
                     GPS
                   </button>
                 </div>
-                {/* Indicador de geocodificación por dirección */}
                 {gpsStatus !== 'success' && (
                   <p className={`mt-1 text-[11px] transition-opacity ${
                     geocodeStatus === 'loading' ? 'text-white/30 opacity-100' :
@@ -511,6 +596,90 @@ export function CreateEventModal({
                 )}
               </div>
 
+              {/* Música del evento — Deezer */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-xs text-white/35 font-medium">Música del evento</p>
+                  {hasAudio && (
+                    <button
+                      type="button"
+                      onClick={clearAudio}
+                      className="text-xs text-white/30 hover:text-white/60 transition-colors"
+                    >
+                      Quitar
+                    </button>
+                  )}
+                </div>
+
+                {deezerTrack ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-xl p-2.5">
+                      <img
+                        src={deezerTrack.coverUrl}
+                        alt=""
+                        className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-white truncate">{deezerTrack.title}</p>
+                        <p className="text-xs text-white/40 truncate">{deezerTrack.artist}</p>
+                      </div>
+                    </div>
+                    <audio
+                      src={deezerTrack.previewUrl}
+                      controls
+                      className="w-full h-8 rounded-lg [color-scheme:dark]"
+                    />
+                    <p className="text-[10px] text-white/20 text-center">Preview de 30 seg · Deezer</p>
+                  </div>
+                ) : existingAudioUrl ? (
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] text-white/30">Audio guardado:</p>
+                    <audio
+                      src={existingAudioUrl}
+                      controls
+                      className="w-full h-8 rounded-lg [color-scheme:dark]"
+                    />
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <FiMusic className="absolute left-3 top-1/2 -translate-y-1/2 text-white/25 pointer-events-none" size={13} />
+                    <input
+                      type="text"
+                      placeholder="Buscar canción o artista..."
+                      value={deezerQuery}
+                      onChange={(e) => setDeezerQuery(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 focus:border-violet-500/50 outline-none py-2.5 pl-9 pr-8 rounded-xl text-white text-sm placeholder-white/30 transition-colors"
+                    />
+                    {isSearchingDeezer && (
+                      <FiLoader className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-white/30" size={13} />
+                    )}
+                  </div>
+                )}
+
+                {deezerResults.length > 0 && !deezerTrack && (
+                  <div className="mt-1.5 bg-[#12122a] border border-white/10 rounded-xl overflow-hidden">
+                    {deezerResults.map((track) => (
+                      <button
+                        key={track.id}
+                        type="button"
+                        onClick={() => selectDeezerTrack(track)}
+                        className="flex items-center gap-2.5 w-full px-3 py-2 hover:bg-white/5 transition-colors text-left border-b border-white/5 last:border-0"
+                      >
+                        <img
+                          src={track.coverUrl}
+                          alt=""
+                          className="w-8 h-8 rounded-md object-cover flex-shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium text-white truncate">{track.title}</p>
+                          <p className="text-xs text-white/40 truncate">{track.artist}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {!mediaPreview && (
                 <div>
                   <p className="text-xs text-white/35 mb-1.5 font-medium">O pega una URL de imagen</p>
@@ -531,7 +700,7 @@ export function CreateEventModal({
               )}
 
               {validationError && (
-                <p className="text-xs text-red-300">{validationError}</p>
+                <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{validationError}</p>
               )}
             </div>
 

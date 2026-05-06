@@ -14,6 +14,7 @@ export interface CreateLocatarioEventInput {
   price: number | null
   imageUrl?: string
   videoUrl?: string
+  audioUrl?: string
   organizerName: string
   organizerAvatar: string
   lat?: number
@@ -66,6 +67,7 @@ type LocatarioEventRow = {
   price: number | null
   image_url: string | null
   video_url: string | null
+  audio_url: string | null
   organizer_name: string
   organizer_avatar: string | null
   lat: number | null
@@ -88,6 +90,7 @@ function dbRowToEvent(row: LocatarioEventRow): Event {
     price: row.price,
     imageUrl: row.image_url || FALLBACK_EVENT_IMAGE,
     videoUrl: row.video_url || null,
+    audioUrl: row.audio_url || null,
     websiteUrl: null,
     organizerName: row.organizer_name,
     organizerAvatar: row.organizer_avatar || 'https://i.pravatar.cc/150?img=32',
@@ -207,6 +210,7 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
         price: input.price,
         imageUrl: input.imageUrl?.trim() || FALLBACK_EVENT_IMAGE,
         videoUrl: input.videoUrl?.trim() || null,
+        audioUrl: input.audioUrl?.trim() || null,
         websiteUrl: null,
         organizerName: input.organizerName,
         organizerAvatar: input.organizerAvatar,
@@ -247,6 +251,7 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
         price: input.price,
         image_url: input.imageUrl || null,
         video_url: input.videoUrl || null,
+        audio_url: input.audioUrl || null,
         organizer_name: input.organizerName,
         organizer_avatar: input.organizerAvatar,
         lat: input.lat ?? null,
@@ -275,6 +280,7 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
             price: input.price !== undefined ? input.price : e.price,
             imageUrl: input.imageUrl?.trim() || e.imageUrl,
             videoUrl: input.videoUrl?.trim() || e.videoUrl,
+            audioUrl: input.audioUrl?.trim() || e.audioUrl,
             lat: input.lat ?? e.lat,
             lng: input.lng ?? e.lng,
           }
@@ -304,6 +310,7 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
           price: input.price !== undefined ? input.price : e.price,
           imageUrl: input.imageUrl?.trim() || e.imageUrl,
           videoUrl: input.videoUrl?.trim() || e.videoUrl,
+          audioUrl: input.audioUrl?.trim() || e.audioUrl,
           lat: input.lat ?? e.lat,
           lng: input.lng ?? e.lng,
         }
@@ -322,6 +329,7 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
           price: input.price,
           image_url: input.imageUrl || null,
           video_url: input.videoUrl || null,
+          audio_url: input.audioUrl || null,
           organizer_name: input.organizerName,
           organizer_avatar: input.organizerAvatar,
           lat: input.lat ?? null,
