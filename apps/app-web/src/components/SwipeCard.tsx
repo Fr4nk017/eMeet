@@ -28,23 +28,28 @@ interface SwipeCardProps {
 }
 
 const SWIPE_THRESHOLD = 120
+const FALLBACK_ID = '1511795409834-ef04bbd61622'
+const FALLBACK_IMAGE = `https://images.unsplash.com/photo-${FALLBACK_ID}?w=800&q=75`
+
+function isFallbackUrl(url: string) {
+  return url.includes(FALLBACK_ID)
+}
 
 function shouldBypassImageOptimization(url: string) {
   if (url.startsWith('blob:') || url.startsWith('data:image/svg')) return true
-  // Supabase Storage — servir directamente sin optimización de Next.js
+  if (url.startsWith('/api/')) return true
   if (url.includes('/storage/v1/object/')) return true
-
   try {
-    const parsedUrl = new URL(url)
-    const pathname = parsedUrl.pathname.toLowerCase()
-    return pathname.endsWith('.svg') || pathname.endsWith('/svg')
+    const p = new URL(url).pathname.toLowerCase()
+    return p.endsWith('.svg') || p.endsWith('/svg')
   } catch {
-    const normalized = url.toLowerCase()
-    return normalized.includes('.svg') || normalized.includes('/svg')
+    const n = url.toLowerCase()
+    return n.includes('.svg') || n.includes('/svg')
   }
 }
 
 function optimizeCardImageUrl(url: string) {
+  if (url.startsWith('/')) return url
   try {
     const parsedUrl = new URL(url)
     if (parsedUrl.hostname === 'images.unsplash.com') {
@@ -72,7 +77,6 @@ function StarRating({ rating }: { rating: number }) {
   )
 }
 
-const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=800&q=75'
 const CARD_BLUR_DATA_URL =
   'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE0MCIgdmlld0JveD0iMCAwIDEwMCAxNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agc3RvcC1jb2xvcj0iIzIxMTIzNCIgb2Zmc2V0PSIwIi8+PHN0b3Agc3RvcC1jb2xvcj0iIzBkMGYxOCIgb2Zmc2V0PSIxIi8+PC9saW5lYXJHcmFkaWVudD48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE0MCIgZmlsbD0idXJsKCNnKSIvPjwvc3ZnPg=='
 
@@ -93,18 +97,17 @@ const SwipeCard = memo(function SwipeCard({
   const isBlob = imgSrc.startsWith('blob:')
   const hasVideo = Boolean(event.videoUrl)
   const hasAudio = Boolean(event.audioUrl)
-
   const audioRef = useRef<HTMLAudioElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
 
   const rotate = useTransform(x, [-200, 0, 200], [-15, 0, 15])
   const likeOpacity = useTransform(x, [0, SWIPE_THRESHOLD], [0, 1])
   const nopeOpacity = useTransform(x, [-SWIPE_THRESHOLD, 0], [1, 0])
-
   const scale = 1 - stackIndex * 0.04
   const yOffset = stackIndex * 10
   const isActive = stackIndex === 0
 
+  // Actualizar imagen al cambiar de evento
   useEffect(() => {
     setImgSrc(optimizeCardImageUrl(event.imageUrl || FALLBACK_IMAGE))
   }, [event.imageUrl])
@@ -112,6 +115,24 @@ const SwipeCard = memo(function SwipeCard({
   useEffect(() => {
     setIsImageLoading(true)
   }, [imgSrc])
+
+  // Buscar foto en Google Maps si el evento usa la imagen de fallback
+  useEffect(() => {
+    const url = event.imageUrl || ''
+    if (!isFallbackUrl(url) && url !== '') return
+    const query = event.address || event.location || event.title
+    if (!query) return
+
+    const controller = new AbortController()
+    const apiUrl = `/api/place-photo?q=${encodeURIComponent(query)}`
+    fetch(apiUrl, { signal: controller.signal })
+      .then((res) => {
+        if (res.ok) setImgSrc(apiUrl)
+      })
+      .catch(() => {})
+
+    return () => controller.abort()
+  }, [event.id, event.imageUrl, event.address, event.location, event.title])
 
   // Pausar audio al cambiar de evento
   useEffect(() => {
@@ -121,6 +142,20 @@ const SwipeCard = memo(function SwipeCard({
       audioRef.current.currentTime = 0
     }
   }, [event.id])
+
+  // Auto-play audio cuando la card se vuelve activa
+  useEffect(() => {
+    if (!audioRef.current || !hasAudio) return
+    if (isActive) {
+      audioRef.current.play()
+        .then(() => setIsPlayingAudio(true))
+        .catch(() => {})
+    } else {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+      setIsPlayingAudio(false)
+    }
+  }, [isActive, hasAudio])
 
   function toggleAudio(e: React.MouseEvent) {
     e.stopPropagation()
@@ -136,7 +171,6 @@ const SwipeCard = memo(function SwipeCard({
   function handleDragEnd(_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) {
     setIsDragging(false)
     if (!isActive) return
-
     if (info.offset.x > SWIPE_THRESHOLD) {
       animate(x, 600, { duration: 0.3, onComplete: () => onSwipeRight(event.id) })
     } else if (info.offset.x < -SWIPE_THRESHOLD) {
@@ -169,7 +203,7 @@ const SwipeCard = memo(function SwipeCard({
     >
       <div className="relative h-full w-full overflow-hidden rounded-[30px] bg-card shadow-2xl select-none lg:rounded-[36px]">
 
-        {/* Fondo: loading shimmer */}
+        {/* Loading shimmer */}
         {(!hasVideo && isImageLoading) || (hasVideo && !isVideoReady) ? (
           <div className="absolute inset-0 z-[1] animate-pulse bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />
         ) : null}
@@ -210,55 +244,46 @@ const SwipeCard = memo(function SwipeCard({
           />
         )}
 
-        {/* Gradientes para contraste */}
+        {/* Gradientes */}
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-black/20" />
         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-transparent" />
 
         {/* Badges top-left */}
         <div className="absolute left-4 top-4 z-10 flex flex-col gap-1.5 lg:left-5 lg:top-5">
-          <span
-            className={`${CATEGORY_COLORS[event.category] ?? 'bg-purple-600'} rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white lg:px-4 lg:py-1.5`}
-          >
+          <span className={`${CATEGORY_COLORS[event.category] ?? 'bg-purple-600'} rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white lg:px-4 lg:py-1.5`}>
             {CATEGORY_EMOJI[event.category]} {event.category}
           </span>
           {event.isOpen !== null && event.isOpen !== undefined && (
-            <span
-              className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold shadow-lg backdrop-blur-md ${
-                event.isOpen
-                  ? 'border-green-300/50 bg-green-500/30 text-green-100 shadow-green-900/40'
-                  : 'border-red-300/50 bg-red-500/30 text-red-100 shadow-red-900/40'
-              }`}
-            >
+            <span className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold shadow-lg backdrop-blur-md ${event.isOpen ? 'border-green-300/50 bg-green-500/30 text-green-100' : 'border-red-300/50 bg-red-500/30 text-red-100'}`}>
               <span className={`h-2 w-2 rounded-full ${event.isOpen ? 'bg-green-200' : 'bg-red-200'}`} />
               {event.isOpen ? 'Abierto' : 'Cerrado'}
             </span>
           )}
         </div>
 
-        {/* Botón guardar */}
+        {/* Bookmark */}
         {isActive && (
           <button
             onClick={() => onSave(event.id)}
-            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm transition-colors hover:bg-black/60 lg:right-5 lg:top-5 lg:h-11 lg:w-11"
+            className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm transition-colors hover:bg-black/60 lg:right-5 lg:top-5 lg:h-11 lg:w-11"
             aria-label="Guardar evento"
           >
             <HiBookmark className={`w-5 h-5 ${event.isSaved ? 'text-primary fill-current' : ''}`} />
           </button>
         )}
 
-        {/* Botón audio — circular con rueda giratoria */}
-        {hasAudio && isActive && (
+        {/* Botón de audio con rueda giratoria */}
+        {hasAudio && (
           <>
             <button
-              onClick={toggleAudio}
-              className={`absolute right-4 top-[64px] z-10 flex h-10 w-10 items-center justify-center rounded-full backdrop-blur-sm border transition-all lg:right-5 lg:top-[72px] ${
+              onClick={isActive ? toggleAudio : undefined}
+              className={`absolute right-4 top-[60px] z-10 flex h-10 w-10 items-center justify-center rounded-full backdrop-blur-sm border transition-all lg:right-5 lg:top-[68px] ${
                 isPlayingAudio
-                  ? 'bg-violet-600/80 border-violet-400/60 shadow-lg shadow-violet-900/50'
-                  : 'bg-black/45 border-white/20 hover:bg-black/65'
+                  ? 'bg-violet-600/80 border-violet-400/60 shadow-lg shadow-violet-900/40'
+                  : 'bg-black/45 border-white/20'
               }`}
               aria-label={isPlayingAudio ? 'Pausar música' : 'Reproducir música'}
             >
-              {/* Rueda giratoria cuando suena */}
               {isPlayingAudio && (
                 <span
                   className="absolute inset-0 rounded-full border-2 border-t-violet-300 border-r-transparent border-b-transparent border-l-transparent animate-spin pointer-events-none"
@@ -267,7 +292,7 @@ const SwipeCard = memo(function SwipeCard({
               )}
               {isPlayingAudio
                 ? <HiPause size={15} className="text-white" />
-                : <HiMusic size={15} className="text-white/75" />
+                : <HiMusic size={15} className="text-white/70" />
               }
             </button>
             <audio
@@ -278,19 +303,13 @@ const SwipeCard = memo(function SwipeCard({
           </>
         )}
 
-        {/* Indicadores de swipe */}
+        {/* Indicadores swipe */}
         {isActive && (
           <>
-            <motion.div
-              style={{ opacity: likeOpacity }}
-              className="absolute left-5 top-1/4 rounded-xl border-4 border-green-400 px-4 py-2 -rotate-12 lg:left-6"
-            >
+            <motion.div style={{ opacity: likeOpacity }} className="absolute left-5 top-1/4 rounded-xl border-4 border-green-400 px-4 py-2 -rotate-12 lg:left-6">
               <span className="text-2xl font-extrabold tracking-widest text-green-400 lg:text-3xl">LIKE</span>
             </motion.div>
-            <motion.div
-              style={{ opacity: nopeOpacity }}
-              className="absolute right-5 top-1/4 rounded-xl border-4 border-red-400 px-4 py-2 rotate-12 lg:right-6"
-            >
+            <motion.div style={{ opacity: nopeOpacity }} className="absolute right-5 top-1/4 rounded-xl border-4 border-red-400 px-4 py-2 rotate-12 lg:right-6">
               <span className="text-2xl font-extrabold tracking-widest text-red-400 lg:text-3xl">NOPE</span>
             </motion.div>
           </>
@@ -298,11 +317,8 @@ const SwipeCard = memo(function SwipeCard({
 
         {/* Info del evento */}
         <div className={`absolute bottom-0 left-0 right-0 p-4 pb-20 transition-all duration-200 lg:p-5 lg:pb-24 ${isDragging ? 'opacity-80' : 'opacity-100'}`}>
-
           {event.rating && event.rating > 0 && (
-            <div className="mb-1.5">
-              <StarRating rating={event.rating} />
-            </div>
+            <div className="mb-1.5"><StarRating rating={event.rating} /></div>
           )}
 
           <h2 className="mb-1 line-clamp-2 text-lg font-bold leading-tight text-white lg:text-[1.55rem]">
@@ -352,13 +368,7 @@ const SwipeCard = memo(function SwipeCard({
                 {event.organizerName}
               </span>
             </div>
-            <span
-              className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                event.price === null
-                  ? 'bg-green-500/20 text-green-400'
-                  : 'bg-primary/20 text-primary-light'
-              }`}
-            >
+            <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${event.price === null ? 'bg-green-500/20 text-green-400' : 'bg-primary/20 text-primary-light'}`}>
               {formatPrice(event.price)}
             </span>
           </div>
@@ -379,7 +389,7 @@ const SwipeCard = memo(function SwipeCard({
           )}
         </div>
 
-        {/* Botones de acción */}
+        {/* Botones NOPE / LIKE */}
         {isActive && (
           <div className="absolute inset-x-0 bottom-4 z-20 flex items-center justify-center gap-4 px-4 lg:bottom-5">
             <button
@@ -389,7 +399,6 @@ const SwipeCard = memo(function SwipeCard({
             >
               <HiX className="h-7 w-7" />
             </button>
-
             <button
               onClick={() => onSwipeRight(event.id)}
               className="flex h-14 w-14 items-center justify-center rounded-full border border-green-300/55 bg-green-500/30 text-green-100 shadow-lg shadow-green-900/35 backdrop-blur-md transition-all duration-200 hover:border-green-300/80 hover:bg-green-500/40 active:scale-90"
