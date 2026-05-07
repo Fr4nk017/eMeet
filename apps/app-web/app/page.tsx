@@ -47,10 +47,6 @@ async function getAccessToken() {
 }
 
 async function callSavedApi(path: string, init?: RequestInit) {
-  if (!SAVED_URL) {
-    throw new Error('Falta NEXT_PUBLIC_SAVED_URL en .env.local')
-  }
-
   const headers = new Headers({
     'Content-Type': 'application/json',
     ...(init?.headers ?? {}),
@@ -64,7 +60,7 @@ async function callSavedApi(path: string, init?: RequestInit) {
     headers.set('Authorization', `Bearer ${token}`)
   }
 
-  const response = await fetch(`${SAVED_URL}${path}`, {
+  const response = await fetch(`/api/saved${path}`, {
     credentials: 'include',
     ...init,
     headers,

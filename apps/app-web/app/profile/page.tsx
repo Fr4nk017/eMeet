@@ -99,14 +99,13 @@ async function getAccessToken(): Promise<string | null> {
 }
 
 async function callSavedApi<T>(path: string, init?: RequestInit): Promise<T> {
-  if (!SAVED_URL) throw new Error('Falta NEXT_PUBLIC_SAVED_URL en .env.local')
   const headers = new Headers({ 'Content-Type': 'application/json' })
   if (hasSupabaseEnv) {
     const token = await getAccessToken()
     if (!token) throw new Error('Sesión expirada. Vuelve a iniciar sesión.')
     headers.set('Authorization', `Bearer ${token}`)
   }
-  const res = await fetch(`${SAVED_URL}${path}`, { credentials: 'include', ...init, headers })
+  const res = await fetch(`/api/saved${path}`, { credentials: 'include', ...init, headers })
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: string } | null
     throw new Error(body?.error ?? 'Error al comunicarse con el servicio de guardados.')
