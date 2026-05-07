@@ -464,6 +464,7 @@ export default function LocatarioPage() {
           address: editingEvent.address,
           imageUrl: editingEvent.imageUrl,
           videoUrl: editingEvent.videoUrl ?? undefined,
+          audioUrl: editingEvent.audioUrl ?? undefined,
           category: editingEvent.category,
         } : undefined}
         defaultAddress={user.businessLocation ?? user.location ?? ''}
