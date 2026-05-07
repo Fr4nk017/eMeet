@@ -195,9 +195,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // El perfil y los eventos son opcionales: si los microservicios no responden,
     // completamos con datos mínimos del token de Supabase para no bloquear el login.
     const [profile, likedEvents, savedEvents] = await Promise.all([
-      fetchApi<ProfilePayload>(PROFILE_URL, '/profile', { method: 'GET' }).catch(() => null),
-      fetchApi<UserEventPayload[]>(SAVED_URL, '/events/liked', { method: 'GET' }).catch(() => [] as UserEventPayload[]),
-      fetchApi<UserEventPayload[]>(SAVED_URL, '/events/saved', { method: 'GET' }).catch(() => [] as UserEventPayload[]),
+      PROFILE_URL
+        ? fetchApi<ProfilePayload>(PROFILE_URL, '/profile', { method: 'GET' }).catch(() => null)
+        : Promise.resolve(null),
+      SAVED_URL
+        ? fetchApi<UserEventPayload[]>(SAVED_URL, '/events/liked', { method: 'GET' }).catch(() => [] as UserEventPayload[])
+        : Promise.resolve([] as UserEventPayload[]),
+      SAVED_URL
+        ? fetchApi<UserEventPayload[]>(SAVED_URL, '/events/saved', { method: 'GET' }).catch(() => [] as UserEventPayload[])
+        : Promise.resolve([] as UserEventPayload[]),
     ])
 
     const profileRole = profile?.role as User['role'] | undefined

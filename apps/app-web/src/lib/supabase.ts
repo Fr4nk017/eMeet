@@ -274,9 +274,9 @@ function isValidSupabaseEnvValue(value: string | undefined) {
 const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const rawSupabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (typeof window !== 'undefined') {
-  console.log("🛠️ [eMeet Debug] URL:", rawSupabaseUrl || "FALTA URL EN .ENV");
-  console.log("🛠️ [eMeet Debug] Key:", rawSupabaseAnonKey ? "OK (Cargada)" : "ERROR (Undefined)");
+if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
+  console.log("[eMeet Debug] Supabase URL:", rawSupabaseUrl || "FALTA URL EN .ENV");
+  console.log("[eMeet Debug] Supabase Key:", rawSupabaseAnonKey ? "OK (Cargada)" : "ERROR (Undefined)");
 }
 
 // Exportamos la validación para usarla en el resto de la app

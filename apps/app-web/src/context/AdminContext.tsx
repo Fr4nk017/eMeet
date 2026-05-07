@@ -54,7 +54,7 @@ interface AdminContextValue {
 
 const AdminContext = createContext<AdminContextValue | undefined>(undefined)
 
-const ADMIN_API_URL = (process.env.NEXT_PUBLIC_ADMIN_API_URL ?? 'http://localhost:3007').replace(/\/$/, '')
+const ADMIN_API_URL = (process.env.NEXT_PUBLIC_ADMIN_API_URL ?? '').replace(/\/$/, '')
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 export function AdminProvider({ children }: { children: ReactNode }) {
@@ -80,6 +80,9 @@ export function AdminProvider({ children }: { children: ReactNode }) {
 
   const adminFetch = useCallback(
     async (path: string, init?: RequestInit): Promise<Response> => {
+      if (!ADMIN_API_URL) {
+        throw new Error('NEXT_PUBLIC_ADMIN_API_URL no está configurada. El panel admin no puede funcionar.')
+      }
       const token = await getAccessToken()
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (token) headers['Authorization'] = `Bearer ${token}`
