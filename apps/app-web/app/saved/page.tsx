@@ -29,8 +29,6 @@ async function getAccessToken(): Promise<string | null> {
 }
 
 async function callSavedApi<T>(path: string, init?: RequestInit): Promise<T> {
-  if (!SAVED_URL) throw new Error('Falta NEXT_PUBLIC_SAVED_URL en .env.local')
-
   const headers = new Headers({ 'Content-Type': 'application/json' })
 
   if (hasSupabaseEnv) {
@@ -39,7 +37,7 @@ async function callSavedApi<T>(path: string, init?: RequestInit): Promise<T> {
     headers.set('Authorization', `Bearer ${token}`)
   }
 
-  const res = await fetch(`${SAVED_URL}${path}`, {
+  const res = await fetch(`/api/saved${path}`, {
     credentials: 'include',
     ...init,
     headers,
