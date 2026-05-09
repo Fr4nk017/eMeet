@@ -11,7 +11,7 @@ import { useLocatarioEvents } from '../../src/context/LocatarioEventsContext'
 import { useFeedEvents } from '../../src/hooks/useFeedEvents'
 import { placeToEvent } from '../../src/data/placeFeedAdapter'
 import { haversineKm } from '../../src/utils/geo'
-import { CATEGORY_EMOJI, formatEventDate, formatPrice } from '../../src/data/mockEvents'
+import { CATEGORY_EMOJI, formatEventDate, formatPrice } from '../../src/utils/eventUtils'
 import type { Event, EventCategory, EventSource } from '../../src/types'
 
 // ─── Constantes de UI ─────────────────────────────────────────────────────────
