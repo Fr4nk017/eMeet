@@ -9,6 +9,7 @@ import {
   Search as HiMagnifyingGlass,
   MessageCircle as HiChatBubbleLeftRight,
   Store as HiBuildingStorefront,
+  ShieldCheck,
 } from 'lucide-react'
 import { useChatContext } from '../context/ChatContext'
 import { useAuth } from '../context/AuthContext'
@@ -47,6 +48,21 @@ export default function BottomNavBar() {
       <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary-light/40 to-transparent" />
 
       <div className="mx-auto flex h-16 w-full items-center justify-around">
+        {user?.role === 'admin' && (
+          <Link
+            href="/admin"
+            className={`flex flex-col items-center gap-1 text-xs font-medium transition-all duration-200 ${
+              pathname === '/admin' ? 'text-white' : 'text-muted hover:text-primary-light'
+            }`}
+          >
+            <ShieldCheck className={`h-6 w-6 transition-all duration-200 ${
+              pathname === '/admin'
+                ? 'scale-110 text-primary-light drop-shadow-[0_0_8px_rgba(196,181,253,0.7)]'
+                : ''
+            }`} />
+            <span className={pathname === '/admin' ? 'text-primary-light' : ''}>Admin</span>
+          </Link>
+        )}
         {user?.role === 'locatario' && (
           <Link
             href="/locatario"
