@@ -17,7 +17,7 @@ import {
   Pause as HiPause,
 } from 'lucide-react'
 import type { Event } from '../types'
-import { formatEventDate, formatPrice, CATEGORY_COLORS, CATEGORY_EMOJI } from '../data/mockEvents'
+import { formatEventDate, formatPrice, CATEGORY_COLORS, CATEGORY_EMOJI } from '../utils/eventUtils'
 
 interface SwipeCardProps {
   event: Event

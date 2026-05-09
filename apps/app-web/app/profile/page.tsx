@@ -7,7 +7,7 @@ import { motion } from 'framer-motion'
 import Layout from '../../src/components/Layout'
 import { useAuth } from '../../src/context/AuthContext'
 import { useFollowersCount } from '../../src/hooks/useFollowersCount'
-import { CATEGORY_EMOJI } from '../../src/data/mockEvents'
+import { CATEGORY_EMOJI } from '../../src/utils/eventUtils'
 import { getSupabaseBrowserClient, hasSupabaseEnv } from '../../src/lib/supabase'
 import type { EventCategory } from '../../src/types'
 import {
