@@ -9,6 +9,7 @@ import {
   Search as HiMagnifyingGlass,
   MessageCircle as HiChatBubbleLeftRight,
   Store as HiBuildingStorefront,
+  ShieldCheck,
 } from 'lucide-react'
 import { useChatContext } from '../context/ChatContext'
 import { useAuth } from '../context/AuthContext'
@@ -54,6 +55,23 @@ export default function SidebarNav() {
       </Link>
 
       <nav className="flex flex-1 flex-col gap-1">
+        {user?.role === 'admin' && (
+          <Link
+            href="/admin"
+            className={`group relative flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 border ${
+              pathname === '/admin'
+                ? 'bg-gradient-to-r from-violet-600/25 via-violet-500/15 to-violet-600/20 text-white border-violet-400/25'
+                : 'text-muted hover:bg-violet-500/10 hover:text-white border-transparent'
+            }`}
+          >
+            <ShieldCheck className={`h-5 w-5 ${
+              pathname === '/admin'
+                ? 'text-primary-light drop-shadow-[0_0_6px_rgba(196,181,253,0.6)]'
+                : 'text-muted group-hover:text-primary-light'
+            }`} />
+            <span>Panel Admin</span>
+          </Link>
+        )}
         {user?.role === 'locatario' && (
           <Link
             href="/locatario"

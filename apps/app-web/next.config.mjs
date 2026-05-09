@@ -37,6 +37,7 @@ const nextConfig = {
       { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: 'api.dicebear.com' },
       { protocol: 'https', hostname: 'i.pravatar.cc' },
+      { protocol: 'https', hostname: 'maps.googleapis.com' },
       ...(supabaseImageHost ? [{ protocol: 'https', hostname: supabaseImageHost }] : []),
     ],
   },

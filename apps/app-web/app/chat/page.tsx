@@ -4,39 +4,8 @@ import { HiPaperAirplane, HiChatBubbleLeftRight, HiInformationCircle, HiXMark } 
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '../../src/components/Layout';
 import { useAuth } from '../../src/context/AuthContext';
-// --- MOCK DATA INICIAL ---
-const CHATS_COMUNIDAD = [
-  {
-    id: 'group-fiesta-01',
-    name: 'Fiesta Bellavista 2026',
-    image: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30',
-    category: 'fiesta',
-    description: 'La fiesta oficial del semestre para informática. Música urbana y electrónica.',
-    participants: ['Papi micky', 'Bryan', 'Tony Stark', 'Marco Polo'],
-    initialMsg: { user: 'Papi micky', text: 'me saco uno kbros que saen, nos vemo PAH' }
-  },
-  {
-    id: 'group-networking-03',
-    name: 'Networking Informática Duoc',
-    image: 'https://images.unsplash.com/photo-1515187029135-18ee286d815b',
-    category: 'networking',
-    description: 'Espacio para compartir repositorios, ofertas laborales y dudas de Spring Boot.',
-    participants: ['Marco Polo', 'Francisco', 'Bryan', 'Cristofer'],
-    initialMsg: { user: 'Marco Polo', text: 'sus pubg??' }
-  }
-];
-
-const MIS_EVENTOS_MOCK = [
-  {
-    id: 'group-musica-02',
-    name: 'Concierto Jazz Live',
-    image: 'https://images.unsplash.com/photo-1511192336575-5a79af67a629',
-    category: 'musica',
-    description: 'Sesión de Jazz en vivo, Cal y Canto.',
-    participants: ['Tony Stark', 'Francisco', 'Camiroagua'],
-    initialMsg: { user: 'Tony Stark de rancagua', text: 'consigan mano ijos de la jarvis' }
-  }
-];
+const CHATS_COMUNIDAD: any[] = [];
+const MIS_EVENTOS_MOCK: any[] = [];
 
 export default function ChatPage() {
   const [tab, setTab] = useState<'comunidad' | 'eventos'>('comunidad');
@@ -45,11 +14,7 @@ export default function ChatPage() {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   
-  const [historialMensajes, setHistorialMensajes] = useState<Record<string, any[]>>({
-    'group-fiesta-01': [{ user: 'Papi micky', text: 'me saco uno kbros que saen PAH', isMe: false }],
-    'group-networking-03': [{ user: 'Marco Polo', text: 'sus pubg??', isMe: false }],
-    'group-musica-02': [{ user: 'Tony Stark de rancagua', text: 'consigan mano ijos de la jarvis', isMe: false }]
-  });
+  const [historialMensajes, setHistorialMensajes] = useState<Record<string, any[]>>({});
 
 const { user } = useAuth(); /// Obtenemos el usuario activo del contexto
 
