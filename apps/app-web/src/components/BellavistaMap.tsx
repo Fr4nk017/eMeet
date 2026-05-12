@@ -161,6 +161,22 @@ export default function BellavistaMap({ focusedPlaceId }: BellavistaMapProps) {
     [places, selectedPlaceId],
   )
 
+  const selectedLocatarioEvent = useMemo(
+    () =>
+      !selectedPlace && selectedPlaceId
+        ? publicLocatarioEvents.find((e) => e.id === selectedPlaceId && e.lat != null && e.lng != null) ?? null
+        : null,
+    [publicLocatarioEvents, selectedPlace, selectedPlaceId],
+  )
+
+  const selectedTarget = useMemo(() => {
+    if (selectedPlace) return { position: selectedPlace.position, name: selectedPlace.name }
+    if (selectedLocatarioEvent?.lat != null && selectedLocatarioEvent?.lng != null) {
+      return { position: { lat: selectedLocatarioEvent.lat, lng: selectedLocatarioEvent.lng }, name: selectedLocatarioEvent.title }
+    }
+    return null
+  }, [selectedPlace, selectedLocatarioEvent])
+
   const routeSummary = useMemo(() => {
     if (!directions) return null
     const firstRoute = directions.routes[0]
@@ -183,13 +199,13 @@ export default function BellavistaMap({ focusedPlaceId }: BellavistaMapProps) {
   }, [directions])
 
   useEffect(() => {
-    if (!selectedPlace || !mapRef.current) return
-    mapRef.current.panTo(selectedPlace.position)
+    if (!selectedTarget || !mapRef.current) return
+    mapRef.current.panTo(selectedTarget.position)
     mapRef.current.setZoom(16)
-  }, [selectedPlace])
+  }, [selectedTarget])
 
   useEffect(() => {
-    if (!userLocation || !selectedPlace || !window.google?.maps) {
+    if (!userLocation || !selectedTarget || !window.google?.maps) {
       setDirections(null)
       return
     }
@@ -198,7 +214,7 @@ export default function BellavistaMap({ focusedPlaceId }: BellavistaMapProps) {
     service.route(
       {
         origin: userLocation,
-        destination: selectedPlace.position,
+        destination: selectedTarget.position,
         travelMode: window.google.maps.TravelMode[travelMode],
       },
       (result, status) => {
@@ -212,7 +228,7 @@ export default function BellavistaMap({ focusedPlaceId }: BellavistaMapProps) {
         }
       },
     )
-  }, [selectedPlace, travelMode, userLocation])
+  }, [selectedTarget, travelMode, userLocation])
 
   // Memoizado: sin esto, se crea un nuevo array en cada render
   // y nearestPlaceIds (que depende de visiblePlaces) recalcula constantemente
@@ -385,10 +401,10 @@ export default function BellavistaMap({ focusedPlaceId }: BellavistaMapProps) {
         </div>
       )}
 
-      {selectedPlace && (
+      {selectedTarget && (
         <div className="absolute top-20 left-4 z-30 max-w-[240px] rounded-xl border border-blue-400/25 bg-slate-950/90 px-3 py-2 backdrop-blur-md">
           <p className="text-[11px] font-semibold text-blue-200">Ruta activa</p>
-          <p className="text-[11px] leading-5 text-slate-300">Cómo llegar a {selectedPlace.name}</p>
+          <p className="text-[11px] leading-5 text-slate-300">Cómo llegar a {selectedTarget.name}</p>
           <div className="mt-2 flex items-center gap-1.5">
             <button
               type="button"
