@@ -6,12 +6,30 @@ import type { EventCategory } from '../../../../packages/shared/src/types/supaba
 
 const router = Router()
 
+// Limpieza programada — llamado diariamente por Vercel Cron
+router.get('/cleanup', async (req, res) => {
+  const secret = process.env.CRON_SECRET
+  if (secret && req.headers.authorization !== `Bearer ${secret}`) {
+    return res.status(401).json({ error: 'No autorizado.' })
+  }
+
+  const supabase = createServiceRoleClient()
+  const { error, count } = await supabase
+    .from('locatario_events')
+    .delete({ count: 'exact' })
+    .lt('event_date', new Date().toISOString())
+
+  if (error) return serverError(res, 'Error al limpiar eventos expirados.')
+  return res.json({ deleted: count ?? 0, timestamp: new Date().toISOString() })
+})
+
 router.get('/public', async (_req, res) => {
   const supabase = createServiceRoleClient()
   const { data, error } = await supabase
     .from('locatario_events')
     .select('*')
-    .order('created_at', { ascending: false })
+    .gte('event_date', new Date().toISOString())
+    .order('event_date', { ascending: true })
 
   if (error) return serverError(res, 'No se pudieron obtener los eventos.')
   return res.json(data ?? [])
