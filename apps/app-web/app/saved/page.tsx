@@ -150,13 +150,14 @@ export default function SavedRoutePage() {
             <AnimatePresence>
               <div className="flex flex-col gap-3">
                 {savedEvents.map((event) => (
-                  <motion.div
+                  <motion.button
                     key={event.event_id}
                     layout
                     initial={{ opacity: 0, y: 16 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="flex overflow-hidden rounded-2xl border border-white/5 bg-card"
+                    onClick={() => router.push(`/event/${encodeURIComponent(event.event_id)}`)}
+                    className="flex w-full overflow-hidden rounded-2xl border border-white/5 bg-card text-left transition-colors hover:border-white/10 hover:bg-card/90"
                   >
                     {event.event_image_url ? (
                       <img
@@ -190,7 +191,10 @@ export default function SavedRoutePage() {
 
                       <div className="mt-2 flex items-center justify-end">
                         <button
-                          onClick={() => handleRemove(event.event_id)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleRemove(event.event_id)
+                          }}
                           className="flex h-8 w-8 items-center justify-center rounded-full bg-surface text-primary transition-colors hover:bg-red-500/20 hover:text-red-400"
                           aria-label="Quitar guardado"
                         >
@@ -198,7 +202,7 @@ export default function SavedRoutePage() {
                         </button>
                       </div>
                     </div>
-                  </motion.div>
+                  </motion.button>
                 ))}
               </div>
             </AnimatePresence>
