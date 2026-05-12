@@ -104,6 +104,7 @@ export default function BellavistaMap({ focusedPlaceId }: BellavistaMapProps) {
   const [travelMode, setTravelMode] = useState<TravelModeOption>('WALKING')
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null)
   const [directionsError, setDirectionsError] = useState<string | null>(null)
+  const [geocodedTarget, setGeocodedTarget] = useState<{ lat: number; lng: number; name: string } | null>(null)
   // Ref para userLocation: onMapLoad es estable y no se recrea en cada cambio de ubicación
   const userLocationRef = useRef(userLocation)
   useEffect(() => { userLocationRef.current = userLocation }, [userLocation])
@@ -164,18 +165,43 @@ export default function BellavistaMap({ focusedPlaceId }: BellavistaMapProps) {
   const selectedLocatarioEvent = useMemo(
     () =>
       !selectedPlace && selectedPlaceId
-        ? publicLocatarioEvents.find((e) => e.id === selectedPlaceId && e.lat != null && e.lng != null) ?? null
+        ? publicLocatarioEvents.find((e) => e.id === selectedPlaceId) ?? null
         : null,
     [publicLocatarioEvents, selectedPlace, selectedPlaceId],
   )
+
+  // Geocodifica el address del evento locatario cuando no tiene lat/lng
+  useEffect(() => {
+    if (!selectedLocatarioEvent || (selectedLocatarioEvent.lat != null && selectedLocatarioEvent.lng != null)) {
+      setGeocodedTarget(null)
+      return
+    }
+    const address = selectedLocatarioEvent.address
+    if (!address) {
+      setGeocodedTarget(null)
+      return
+    }
+    let cancelled = false
+    fetch(`/api/geocode?address=${encodeURIComponent(address)}`)
+      .then((res) => res.json())
+      .then((data: { lat: number | null; lng: number | null }) => {
+        if (cancelled || !data.lat || !data.lng) return
+        setGeocodedTarget({ lat: data.lat, lng: data.lng, name: selectedLocatarioEvent.title })
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [selectedLocatarioEvent])
 
   const selectedTarget = useMemo(() => {
     if (selectedPlace) return { position: selectedPlace.position, name: selectedPlace.name }
     if (selectedLocatarioEvent?.lat != null && selectedLocatarioEvent?.lng != null) {
       return { position: { lat: selectedLocatarioEvent.lat, lng: selectedLocatarioEvent.lng }, name: selectedLocatarioEvent.title }
     }
+    if (geocodedTarget) {
+      return { position: { lat: geocodedTarget.lat, lng: geocodedTarget.lng }, name: geocodedTarget.name }
+    }
     return null
-  }, [selectedPlace, selectedLocatarioEvent])
+  }, [selectedPlace, selectedLocatarioEvent, geocodedTarget])
 
   const routeSummary = useMemo(() => {
     if (!directions) return null

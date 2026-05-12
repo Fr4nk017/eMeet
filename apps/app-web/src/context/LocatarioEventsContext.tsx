@@ -175,7 +175,8 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
           .from('locatario_events')
           .select('*')
           .eq('creator_id', data.session.user.id)
-          .order('created_at', { ascending: false })
+          .gte('event_date', new Date().toISOString())
+          .order('event_date', { ascending: true })
         if (!mounted) return
         if (error || !rows) {
           setLocatarioEvents(loadEventsFromStorage())

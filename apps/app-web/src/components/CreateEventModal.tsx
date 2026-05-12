@@ -311,6 +311,20 @@ export function CreateEventModal({
     setIsSubmitting(true)
 
     try {
+      // Si no hay coordenadas aún (debounce no completó), geocodificar ahora
+      let finalCoords = gpsCoords
+      if (!finalCoords && gpsStatus !== 'success' && eventForm.address.trim().length >= 8) {
+        try {
+          const res = await fetch(`/api/geocode?address=${encodeURIComponent(eventForm.address.trim())}`)
+          const data = await res.json() as { lat: number | null; lng: number | null }
+          if (data.lat !== null && data.lng !== null) {
+            finalCoords = { lat: data.lat, lng: data.lng }
+          }
+        } catch {
+          // best-effort: si falla, el evento se guarda sin coordenadas
+        }
+      }
+
       let finalImageUrl = eventForm.imageUrl
       let finalVideoUrl: string | undefined
 
@@ -323,12 +337,13 @@ export function CreateEventModal({
           } else {
             finalImageUrl = publicUrl
           }
-        } catch {
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : ''
           setUploadProgress(null)
           setValidationError(
             mediaType === 'video'
-              ? 'No se pudo subir el video. Intenta de nuevo o usa una URL.'
-              : 'No se pudo subir la imagen. Intenta de nuevo o usa una URL.'
+              ? `No se pudo subir el video. ${errorMessage || 'Intenta de nuevo o usa una URL.'}`
+              : `No se pudo subir la imagen. ${errorMessage || 'Intenta de nuevo o usa una URL.'}`
           )
           setIsSubmitting(false)
           return
@@ -350,8 +365,8 @@ export function CreateEventModal({
         audioUrl: finalAudioUrl,
         organizerName,
         organizerAvatar,
-        lat: gpsCoords?.lat,
-        lng: gpsCoords?.lng,
+        lat: finalCoords?.lat,
+        lng: finalCoords?.lng,
       })
     } catch (err) {
       setUploadProgress(null)
