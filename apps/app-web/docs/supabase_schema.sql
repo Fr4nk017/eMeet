@@ -244,6 +244,20 @@ create policy "chat_messages: insertar en sala propia"
     )
   );
 
+-- ─── AUTO-EXPIRACIÓN DE EVENTOS ─────────────────────────────
+-- Requiere la extensión pg_cron (habilitarla en Supabase Dashboard → Extensions).
+-- Borra diariamente los eventos cuya fecha ya pasó.
+create extension if not exists pg_cron;
+
+select cron.schedule(
+  'delete-expired-locatario-events',
+  '0 3 * * *',
+  $$
+    delete from public.locatario_events
+    where event_date < now();
+  $$
+);
+
 -- ─── REALTIME ────────────────────────────────────────────────
 -- Habilitar publicaciones para chat en tiempo real
 do $$

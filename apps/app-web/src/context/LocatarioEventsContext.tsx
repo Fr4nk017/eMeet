@@ -143,7 +143,8 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
     getSupabaseBrowserClient()
       .from('locatario_events')
       .select('*')
-      .order('created_at', { ascending: false })
+      .gte('event_date', new Date().toISOString())
+      .order('event_date', { ascending: true })
       .then(({ data }) => {
         if (data) setPublicLocatarioEvents((data as unknown as LocatarioEventRow[]).map(dbRowToEvent))
       })
