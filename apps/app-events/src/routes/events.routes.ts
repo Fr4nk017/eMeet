@@ -42,7 +42,8 @@ router.get('/locatario', async (req, res) => {
     .from('locatario_events')
     .select('*')
     .eq('creator_id', req.authUser!.id)
-    .order('created_at', { ascending: false })
+    .gte('event_date', new Date().toISOString())
+    .order('event_date', { ascending: true })
 
   if (error) {
     return serverError(res, 'No se pudieron obtener los eventos.')
