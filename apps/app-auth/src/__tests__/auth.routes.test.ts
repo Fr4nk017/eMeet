@@ -1,6 +1,12 @@
 import 'dotenv/config'
+import { describe, expect, it } from '@jest/globals'
 import request from 'supertest'
 import app from '../app'
+
+const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL
+const TEST_USER_PASSWORD = process.env.TEST_USER_PASSWORD
+const hasAuthTestUser = Boolean(TEST_USER_EMAIL && TEST_USER_PASSWORD)
+const itIfAuthUser = hasAuthTestUser ? it : it.skip
 
 describe('POST /auth/login', () => {
   it('rechaza si faltan credenciales', async () => {
@@ -15,10 +21,10 @@ describe('POST /auth/login', () => {
     expect(res.status).toBe(400)
   })
 
-  it('autentica con credenciales válidas', async () => {
+  itIfAuthUser('autentica con credenciales válidas', async () => {
     const res = await request(app)
       .post('/auth/login')
-      .send({ email: process.env.TEST_USER_EMAIL, password: process.env.TEST_USER_PASSWORD })
+      .send({ email: TEST_USER_EMAIL, password: TEST_USER_PASSWORD })
     expect(res.status).toBe(200)
     expect(res.body.session?.access_token).toBeDefined()
     expect(res.body.user?.id).toBeDefined()
@@ -46,10 +52,10 @@ describe('GET /auth/session', () => {
     expect(res.body.session).toBeNull()
   })
 
-  it('devuelve session válida con token correcto', async () => {
+  itIfAuthUser('devuelve session válida con token correcto', async () => {
     const loginRes = await request(app)
       .post('/auth/login')
-      .send({ email: process.env.TEST_USER_EMAIL, password: process.env.TEST_USER_PASSWORD })
+      .send({ email: TEST_USER_EMAIL, password: TEST_USER_PASSWORD })
 
     const token = loginRes.body.session?.access_token
     const res = await request(app)
@@ -62,10 +68,10 @@ describe('GET /auth/session', () => {
 })
 
 describe('POST /auth/logout', () => {
-  it('cierra sesión con token válido', async () => {
+  itIfAuthUser('cierra sesión con token válido', async () => {
     const loginRes = await request(app)
       .post('/auth/login')
-      .send({ email: process.env.TEST_USER_EMAIL, password: process.env.TEST_USER_PASSWORD })
+      .send({ email: TEST_USER_EMAIL, password: TEST_USER_PASSWORD })
 
     const token = loginRes.body.session?.access_token
     const res = await request(app)

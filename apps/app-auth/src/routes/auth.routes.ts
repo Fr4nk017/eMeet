@@ -110,13 +110,13 @@ router.get('/session', async (req, res) => {
   }
 
   const supabase = createAnonClient(token)
-  const { data, error } = await supabase.auth.getSession()
+  const { data, error } = await supabase.auth.getUser()
 
-  if (error) {
-    return serverError(res, error.message)
+  if (error || !data.user) {
+    return res.json({ session: null })
   }
 
-  return res.json({ session: data.session })
+  return res.json({ session: { user: data.user, access_token: token } })
 })
 
 router.get('/callback', async (req, res) => {
