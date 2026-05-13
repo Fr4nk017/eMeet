@@ -6,6 +6,7 @@ import { motion } from 'framer-motion'
 import { ArrowLeft, MapPin, Calendar, Heart, Bookmark } from 'lucide-react'
 import Layout from '../../../src/components/Layout'
 import { useAuth } from '../../../src/context/AuthContext'
+import { getSupabaseBrowserClient, hasSupabaseEnv } from '../../../src/lib/supabase'
 
 interface EventDetail {
   event_id: string
@@ -24,13 +25,44 @@ function formatDate(isoDate: string) {
   })
 }
 
+async function getAccessToken(): Promise<string | null> {
+  if (!hasSupabaseEnv) return null
+  const supabase = getSupabaseBrowserClient()
+  const { data } = await supabase.auth.getSession()
+  if (data.session?.access_token) return data.session.access_token
+  const { data: refreshed, error } = await supabase.auth.refreshSession()
+  if (error) return null
+  return refreshed.session?.access_token ?? null
+}
+
+async function callSavedApi<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers({ 'Content-Type': 'application/json' })
+  if (hasSupabaseEnv) {
+    const token = await getAccessToken()
+    if (!token) throw new Error('Sesión expirada. Vuelve a iniciar sesión.')
+    headers.set('Authorization', `Bearer ${token}`)
+  }
+  const res = await fetch(`/api/saved${path}`, {
+    credentials: 'include',
+    ...init,
+    headers,
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null
+    throw new Error(body?.error ?? 'Error al comunicarse con el servicio de guardados.')
+  }
+  if (res.status === 204) return undefined as T
+  return res.json()
+}
+
 export default function EventDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const { user, isAuthReady } = useAuth()
   const eventId = decodeURIComponent(params.id)
   const [event, setEvent] = useState<EventDetail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [isSaved, setIsSaved] = useState(true)
+  const [isSaved, setIsSaved] = useState(false)
+  const [savingToggle, setSavingToggle] = useState(false)
 
   useEffect(() => {
     if (isAuthReady && !user) {
@@ -42,30 +74,55 @@ export default function EventDetailPage({ params }: { params: { id: string } }) 
     if (!user) return
 
     let cancelled = false
-    
-    // Simulate loading the event (the actual data would come from context or BE)
-    const timer = setTimeout(() => {
-      if (!cancelled) {
-        setEvent({
-          event_id: eventId,
-          event_title: 'Evento Guardado',
-          event_image_url: null,
-          event_address: 'Ubicación no disponible',
-          created_at: new Date().toISOString(),
-        })
-        setLoading(false)
-      }
-    }, 300)
+    setLoading(true)
 
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
+    async function loadEvent() {
+      try {
+        const [saved, liked] = await Promise.all([
+          callSavedApi<EventDetail[]>('/events/saved').catch(() => [] as EventDetail[]),
+          callSavedApi<EventDetail[]>('/events/liked').catch(() => [] as EventDetail[]),
+        ])
+
+        if (cancelled) return
+
+        const found = [...saved, ...liked].find((e) => e.event_id === eventId)
+        setEvent(found ?? null)
+        setIsSaved(saved.some((e) => e.event_id === eventId))
+      } catch {
+        if (!cancelled) setEvent(null)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
     }
+
+    loadEvent()
+    return () => { cancelled = true }
   }, [user, eventId])
 
   async function handleToggleSave() {
-    if (!event) return
-    setIsSaved(!isSaved)
+    if (!event || savingToggle) return
+    const wasLiked = isSaved
+    setIsSaved(!wasLiked)
+    setSavingToggle(true)
+    try {
+      if (wasLiked) {
+        await callSavedApi(`/events/save/${event.event_id}`, { method: 'DELETE' })
+      } else {
+        await callSavedApi('/events/save', {
+          method: 'POST',
+          body: JSON.stringify({
+            eventId: event.event_id,
+            eventTitle: event.event_title,
+            eventImageUrl: event.event_image_url,
+            eventAddress: event.event_address,
+          }),
+        })
+      }
+    } catch {
+      setIsSaved(wasLiked)
+    } finally {
+      setSavingToggle(false)
+    }
   }
 
   if (loading) {
@@ -123,8 +180,9 @@ export default function EventDetailPage({ params }: { params: { id: string } }) 
           <span className="text-sm font-semibold text-muted">Evento</span>
           <button
             onClick={handleToggleSave}
-            className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-white/10 transition-colors"
-            aria-label="Guardar evento"
+            disabled={savingToggle}
+            className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-white/10 transition-colors disabled:opacity-50"
+            aria-label={isSaved ? 'Quitar guardado' : 'Guardar evento'}
           >
             <Bookmark
               className={`h-5 w-5 ${isSaved ? 'fill-primary text-primary' : 'text-muted'}`}
