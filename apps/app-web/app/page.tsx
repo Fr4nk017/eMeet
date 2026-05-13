@@ -335,6 +335,7 @@ function HomePageContent() {
               eventLat: likedEvent.lat,
               eventLng: likedEvent.lng,
               eventDistance: likedEvent.distance,
+              eventDate: likedEvent.date ?? null,
             }),
           })
         } catch (err) {

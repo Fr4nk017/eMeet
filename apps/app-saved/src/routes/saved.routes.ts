@@ -205,26 +205,21 @@ async function ensureRoomMember(
   req: Parameters<typeof router.post>[1] extends (...args: infer T) => any ? T[0] : never,
   roomId: string,
 ) {
-  const { error: deleteError } = await createServiceRoleClient()
-    .from('room_members')
-    .delete()
-    .eq('room_id', roomId)
-    .eq('user_id', req.authUser!.id)
-
-  if (deleteError) {
-    return deleteError
-  }
-
+  // Upsert idempotente: safe para likes simultáneos del mismo usuario.
+  // ignoreDuplicates=true evita que una segunda inserción sobreescriba joined_at.
   const now = new Date().toISOString()
-  const { error: insertError } = await createServiceRoleClient()
+  const { error } = await createServiceRoleClient()
     .from('room_members')
-    .insert({ room_id: roomId, user_id: req.authUser!.id, joined_at: now, last_read_at: now })
+    .upsert(
+      { room_id: roomId, user_id: req.authUser!.id, joined_at: now, last_read_at: now },
+      { onConflict: 'room_id,user_id', ignoreDuplicates: true },
+    )
 
-  return insertError
+  return error
 }
 
 router.post('/like', async (req, res) => {
-  const { eventId, eventTitle, eventImageUrl, eventAddress, eventType, eventLat, eventLng, eventDistance } = req.body as {
+  const { eventId, eventTitle, eventImageUrl, eventAddress, eventType, eventLat, eventLng, eventDistance, eventDate } = req.body as {
     eventId?: string
     eventTitle?: string
     eventImageUrl?: string
@@ -233,6 +228,7 @@ router.post('/like', async (req, res) => {
     eventLat?: number
     eventLng?: number
     eventDistance?: number
+    eventDate?: string
   }
 
   if (!eventId || !eventTitle) {
@@ -276,9 +272,11 @@ router.post('/like', async (req, res) => {
         event_title: eventTitle,
         event_image_url: eventImageUrl ?? null,
         event_address: eventAddress ?? null,
+        expires_at: eventDate ?? null,
+        status: 'active',
         created_at: new Date().toISOString(),
       },
-      { onConflict: 'id' },
+      { onConflict: 'id', ignoreDuplicates: false },
     )
 
   if (roomError) {

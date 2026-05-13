@@ -5,7 +5,13 @@ import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useChatContext } from '../../../src/context/ChatContext'
 import { useAuth } from '../../../src/context/AuthContext'
-import { ArrowLeft as HiArrowLeft, Send as HiPaperAirplane, MapPin as HiMapPin } from 'lucide-react'
+import {
+  ArrowLeft as HiArrowLeft,
+  Send as HiPaperAirplane,
+  MapPin as HiMapPin,
+  LogOut,
+  AlertTriangle,
+} from 'lucide-react'
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('es-CL', {
@@ -27,25 +33,20 @@ export default function ChatRoomRoutePage() {
   const params = useParams<{ roomId: string }>()
   const roomId = typeof params?.roomId === 'string' ? params.roomId : undefined
   const router = useRouter()
-  const { rooms, messages, sendMessage, markRoomRead } = useChatContext()
+  const { rooms, messages, loadMessagesForRoom, sendMessage, markRoomRead, leaveRoom } = useChatContext()
   const { user, isAuthReady } = useAuth()
   const [input, setInput] = useState('')
   const [typingUser, setTypingUser] = useState<string | null>(null)
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
+  const [leavingRoom, setLeavingRoom] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const room = rooms.find((r) => r.id === roomId)
   const roomMessages = messages[roomId ?? ''] ?? []
+  const isExpired = room && room.status !== 'active'
 
-  useEffect(() => {
-    if (roomId) {
-      markRoomRead(roomId).catch(() => {
-        // Evita romper la vista si falla el marcado de leído.
-      })
-    }
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [roomId, markRoomRead])
-
+  // Redirige si no autenticado
   useEffect(() => {
     if (isAuthReady && !user) {
       const next = roomId ? `/chat/${roomId}` : '/chat'
@@ -53,13 +54,23 @@ export default function ChatRoomRoutePage() {
     }
   }, [isAuthReady, roomId, router, user])
 
+  // Carga mensajes al entrar a la sala
+  useEffect(() => {
+    if (!roomId || !user) return
+    loadMessagesForRoom(roomId).catch(() => {})
+  }, [roomId, user, loadMessagesForRoom])
+
+  useEffect(() => {
+    if (roomId) {
+      markRoomRead(roomId).catch(() => {})
+    }
+  }, [roomId, markRoomRead])
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [roomMessages.length])
 
-  if (isAuthReady && !user) {
-    return null
-  }
+  if (isAuthReady && !user) return null
 
   const otherParticipants = useMemo(() => {
     const bySender = new Map<string, { name: string; avatar: string }>()
@@ -71,19 +82,19 @@ export default function ChatRoomRoutePage() {
     return Array.from(bySender.values())
   }, [roomMessages, user?.id])
 
+  // Indicador de escritura simulado (solo cuando hay otros participantes)
   useEffect(() => {
-    if (!roomId || otherParticipants.length === 0) return
+    if (!roomId || otherParticipants.length === 0 || isExpired) return
 
     const interval = setInterval(() => {
-      const chance = Math.random()
-      if (chance > 0.45) return
+      if (Math.random() > 0.45) return
       const randomUser = otherParticipants[Math.floor(Math.random() * otherParticipants.length)]
       setTypingUser(randomUser.name)
       setTimeout(() => setTypingUser((curr) => (curr === randomUser.name ? null : curr)), 2000)
     }, 6500)
 
     return () => clearInterval(interval)
-  }, [otherParticipants, roomId])
+  }, [otherParticipants, roomId, isExpired])
 
   if (!room) {
     return (
@@ -97,10 +108,8 @@ export default function ChatRoomRoutePage() {
   }
 
   function handleSend() {
-    if (!input.trim() || !user || !roomId) return
-    sendMessage(roomId, input.trim()).catch(() => {
-      // El error se informa desde el contexto con mensajes en español.
-    })
+    if (!input.trim() || !user || !roomId || isExpired) return
+    sendMessage(roomId, input.trim()).catch(() => {})
     setInput('')
     inputRef.current?.focus()
   }
@@ -109,6 +118,18 @@ export default function ChatRoomRoutePage() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
+    }
+  }
+
+  async function handleLeave() {
+    if (!roomId) return
+    setLeavingRoom(true)
+    try {
+      await leaveRoom(roomId)
+      router.push('/chat')
+    } catch {
+      setLeavingRoom(false)
+      setShowLeaveConfirm(false)
     }
   }
 
@@ -125,7 +146,7 @@ export default function ChatRoomRoutePage() {
 
   return (
     <div className="flex h-full flex-col bg-surface">
-      {/* Header mejorado */}
+      {/* Header */}
       <div className="z-10 shrink-0 border-b border-white/10 bg-gradient-to-r from-card/95 to-surface/95 px-3 py-3 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <button
@@ -135,14 +156,15 @@ export default function ChatRoomRoutePage() {
             <HiArrowLeft className="h-5 w-5 text-white" />
           </button>
 
-          {/* Imagen con punto de actividad */}
           <div className="relative shrink-0">
             <img
               src={room.eventImageUrl}
               alt={room.eventTitle}
               className="h-10 w-10 rounded-xl border border-white/10 object-cover"
             />
-            <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-surface bg-green-400" />
+            {!isExpired && (
+              <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-surface bg-green-400" />
+            )}
           </div>
 
           <div className="min-w-0 flex-1">
@@ -153,13 +175,42 @@ export default function ChatRoomRoutePage() {
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-col items-end gap-0.5">
-            <span className="text-xs font-semibold text-white">👥 {room.memberCount}</span>
-            <span className="text-[10px] text-green-400">en línea</span>
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="flex flex-col items-end gap-0.5">
+              <span className="text-xs font-semibold text-white">👥 {room.memberCount}</span>
+              {!isExpired && <span className="text-[10px] text-green-400">en línea</span>}
+              {isExpired && (
+                <span className="text-[10px] text-red-400">
+                  {room.status === 'expired' ? 'Expirado' : 'Cerrado'}
+                </span>
+              )}
+            </div>
+
+            {/* Botón Salir */}
+            <button
+              title="Salir del chat"
+              onClick={() => setShowLeaveConfirm(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-red-500/20 hover:text-red-400"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
         </div>
       </div>
 
+      {/* Banner sala expirada */}
+      {isExpired && (
+        <div className="flex items-center gap-2 border-b border-red-500/20 bg-red-500/10 px-4 py-2">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-red-400" />
+          <p className="text-xs text-red-300">
+            Este chat está{' '}
+            {room.status === 'expired' ? 'expirado — el evento ya pasó' : 'cerrado'}.
+            Solo puedes leer el historial.
+          </p>
+        </div>
+      )}
+
+      {/* Mensajes */}
       <div className="flex-1 space-y-1 overflow-y-auto px-3 py-3">
         {roomMessages.length === 0 && (
           <motion.p
@@ -167,7 +218,7 @@ export default function ChatRoomRoutePage() {
             animate={{ opacity: 1 }}
             className="py-8 text-center text-sm text-muted"
           >
-            Sé el primero en escribir 👋
+            {isExpired ? 'No hubo mensajes en este chat.' : 'Sé el primero en escribir 👋'}
           </motion.p>
         )}
 
@@ -191,7 +242,7 @@ export default function ChatRoomRoutePage() {
                     className={`mb-2 flex gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}
                   >
                     <img
-                      src={msg.senderAvatar}
+                      src={msg.senderAvatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(msg.senderName)}`}
                       alt={msg.senderName}
                       className="h-8 w-8 shrink-0 self-end rounded-full border border-white/10 object-cover"
                     />
@@ -236,49 +287,104 @@ export default function ChatRoomRoutePage() {
               className="mt-1 flex items-center gap-2 px-1"
             >
               <span className="h-2 w-2 animate-pulse rounded-full bg-green-400" />
-              <span className="text-xs text-muted">
-                {typingUser} está escribiendo...
-              </span>
+              <span className="text-xs text-muted">{typingUser} está escribiendo...</span>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
+      {/* Input (bloqueado si sala expirada) */}
       <div className="shrink-0 border-t border-white/10 bg-gradient-to-r from-card/95 to-surface/95 px-3 py-3 backdrop-blur-md">
-        <div className="flex items-center gap-2">
-          {/* Botón emoji */}
-          <button
-            type="button"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg text-muted transition-colors hover:bg-white/10 hover:text-white"
-            aria-label="Emojis"
-          >
-            😊
-          </button>
+        {isExpired ? (
+          <p className="text-center text-xs text-muted py-1">
+            Chat cerrado · solo lectura
+          </p>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg text-muted transition-colors hover:bg-white/10 hover:text-white"
+              aria-label="Emojis"
+            >
+              😊
+            </button>
 
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Escribe un mensaje..."
-            className="flex-1 rounded-full border border-white/15 bg-surface px-4 py-2.5 text-sm text-white placeholder:text-muted transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
-          />
+            <input
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Escribe un mensaje..."
+              className="flex-1 rounded-full border border-white/15 bg-surface px-4 py-2.5 text-sm text-white placeholder:text-muted transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+            />
 
-          <motion.button
-            whileTap={{ scale: 0.88 }}
-            onClick={handleSend}
-            disabled={!input.trim()}
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all ${
-              input.trim()
-                ? 'bg-gradient-to-br from-primary to-violet-700 text-white shadow-lg shadow-primary/30'
-                : 'cursor-not-allowed bg-white/10 text-muted'
-            }`}
-          >
-            <HiPaperAirplane className="h-5 w-5" />
-          </motion.button>
-        </div>
+            <motion.button
+              whileTap={{ scale: 0.88 }}
+              onClick={handleSend}
+              disabled={!input.trim()}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all ${
+                input.trim()
+                  ? 'bg-gradient-to-br from-primary to-violet-700 text-white shadow-lg shadow-primary/30'
+                  : 'cursor-not-allowed bg-white/10 text-muted'
+              }`}
+            >
+              <HiPaperAirplane className="h-5 w-5" />
+            </motion.button>
+          </div>
+        )}
       </div>
+
+      {/* Modal confirmación salir */}
+      <AnimatePresence>
+        {showLeaveConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6"
+            onClick={() => !leavingRoom && setShowLeaveConfirm(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500/20">
+                  <LogOut className="h-5 w-5 text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Salir del chat</h3>
+                  <p className="text-xs text-muted">Esta acción no afecta a los demás miembros.</p>
+                </div>
+              </div>
+              <p className="mb-5 text-xs text-white/70">
+                ¿Confirmas que deseas salir de{' '}
+                <strong className="text-white">{room.eventTitle}</strong>?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  disabled={leavingRoom}
+                  onClick={handleLeave}
+                  className="flex-1 rounded-xl bg-red-500/80 py-2.5 text-sm font-semibold text-white transition hover:bg-red-500 disabled:opacity-50"
+                >
+                  {leavingRoom ? 'Saliendo…' : 'Sí, salir'}
+                </button>
+                <button
+                  disabled={leavingRoom}
+                  onClick={() => setShowLeaveConfirm(false)}
+                  className="flex-1 rounded-xl bg-white/10 py-2.5 text-sm text-white transition hover:bg-white/20"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
