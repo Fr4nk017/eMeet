@@ -365,7 +365,7 @@ function HomePageContent() {
     } finally {
       processingIds.current.delete(id)
     }
-  }, [events, excludePlace, joinRoom, updateUser, user])
+    }, [events, excludePlace, joinRoom, updateUser, user])
 
   const handleSwipeLeft = useCallback((id: string) => {
     setDismissedIds((prev) => new Set(prev).add(id))
