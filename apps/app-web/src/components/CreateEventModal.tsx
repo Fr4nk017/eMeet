@@ -46,6 +46,12 @@ type DeezerTrack = {
   previewUrl: string
 }
 
+type AddressSuggestion = {
+  label: string
+  lat: number
+  lng: number
+}
+
 type InitialValues = {
   title?: string
   description?: string
@@ -94,6 +100,8 @@ export function CreateEventModal({
   const [gpsStatus, setGpsStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [geocodeStatus, setGeocodeStatus] = useState<'idle' | 'loading' | 'done'>('idle')
+  const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([])
+  const [isAddressSearching, setIsAddressSearching] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
@@ -126,6 +134,8 @@ export function CreateEventModal({
       setSelectedFile(null)
       setGpsCoords(null)
       setGpsStatus('idle')
+      setAddressSuggestions([])
+      setIsAddressSearching(false)
       setValidationError(null)
       setDeezerQuery('')
       setDeezerResults([])
@@ -138,6 +148,8 @@ export function CreateEventModal({
       setMediaType(null)
       setGpsCoords(null)
       setGpsStatus('idle')
+      setAddressSuggestions([])
+      setIsAddressSearching(false)
       setIsFree(true)
       setValidationError(null)
       setUploadProgress(null)
@@ -162,9 +174,12 @@ export function CreateEventModal({
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(`/api/geocode?address=${encodeURIComponent(address)}`)
-        const data = await res.json() as { lat: number | null; lng: number | null }
+        const data = await res.json() as { lat: number | null; lng: number | null; address?: string | null }
         if (data.lat !== null && data.lng !== null) {
           setGpsCoords({ lat: data.lat, lng: data.lng })
+          if (typeof data.address === 'string' && data.address.trim().length > 0) {
+            setEventForm((prev) => ({ ...prev, address: data.address!.trim() }))
+          }
           setGeocodeStatus('done')
         } else {
           setGpsCoords(null)
@@ -178,6 +193,38 @@ export function CreateEventModal({
 
     return () => clearTimeout(timer)
   }, [eventForm.address, gpsStatus])
+
+  useEffect(() => {
+    const query = eventForm.address.trim()
+    if (query.length < 3 || gpsStatus === 'success') {
+      setAddressSuggestions([])
+      setIsAddressSearching(false)
+      return
+    }
+
+    setIsAddressSearching(true)
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/address-search?query=${encodeURIComponent(query)}`)
+        const data = await res.json() as { suggestions?: AddressSuggestion[] }
+        setAddressSuggestions(data.suggestions ?? [])
+      } catch {
+        setAddressSuggestions([])
+      } finally {
+        setIsAddressSearching(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [eventForm.address, gpsStatus])
+
+  function selectAddressSuggestion(suggestion: AddressSuggestion) {
+    setEventForm((prev) => ({ ...prev, address: suggestion.label }))
+    setGpsCoords({ lat: suggestion.lat, lng: suggestion.lng })
+    setGpsStatus('idle')
+    setGeocodeStatus('done')
+    setAddressSuggestions([])
+  }
 
   useEffect(() => {
     const q = deezerQuery.trim()
@@ -316,9 +363,12 @@ export function CreateEventModal({
       if (!finalCoords && gpsStatus !== 'success' && eventForm.address.trim().length >= 8) {
         try {
           const res = await fetch(`/api/geocode?address=${encodeURIComponent(eventForm.address.trim())}`)
-          const data = await res.json() as { lat: number | null; lng: number | null }
+          const data = await res.json() as { lat: number | null; lng: number | null; address?: string | null }
           if (data.lat !== null && data.lng !== null) {
             finalCoords = { lat: data.lat, lng: data.lng }
+            if (typeof data.address === 'string' && data.address.trim().length > 0) {
+              setEventForm((prev) => ({ ...prev, address: data.address!.trim() }))
+            }
           }
         } catch {
           // best-effort: si falla, el evento se guarda sin coordenadas
@@ -567,6 +617,21 @@ export function CreateEventModal({
                         : <FiNavigation size={11} />}
                     GPS
                   </button>
+
+                  {addressSuggestions.length > 0 && (
+                    <div className="absolute z-30 mt-1 w-full rounded-xl border border-white/10 bg-[#131326] shadow-xl">
+                      {addressSuggestions.map((suggestion) => (
+                        <button
+                          key={`${suggestion.lat}-${suggestion.lng}-${suggestion.label}`}
+                          type="button"
+                          onClick={() => selectAddressSuggestion(suggestion)}
+                          className="block w-full border-b border-white/5 px-3 py-2 text-left text-xs text-white/80 transition-colors hover:bg-white/5 last:border-b-0"
+                        >
+                          {suggestion.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {gpsStatus !== 'success' && (
                   <p className={`mt-1 text-[11px] transition-opacity ${
@@ -577,6 +642,9 @@ export function CreateEventModal({
                     {geocodeStatus === 'loading' && '⏳ Buscando coordenadas...'}
                     {geocodeStatus === 'done' && '📍 Ubicación detectada — el evento aparecerá en el mapa'}
                   </p>
+                )}
+                {isAddressSearching && (
+                  <p className="mt-1 text-[11px] text-white/35">Buscando direcciones...</p>
                 )}
               </div>
 

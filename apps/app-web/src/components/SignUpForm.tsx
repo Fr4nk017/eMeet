@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
@@ -35,6 +35,12 @@ function getPasswordStrength(pwd: string) {
 const INPUT_CLASS =
   'w-full rounded-xl border border-white/10 bg-[hsl(222,30%,13%)] py-3 pl-10 pr-4 text-sm text-white placeholder-slate-600 outline-none transition-colors hover:border-white/20 focus:border-[hsl(262,80%,60%)] focus:ring-1 focus:ring-[hsl(262,80%,60%)]/30'
 
+type AddressSuggestion = {
+  label: string
+  lat: number
+  lng: number
+}
+
 export default function SignUpForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -55,10 +61,48 @@ export default function SignUpForm() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [emailTouched, setEmailTouched] = useState(false)
+  const [locationSuggestions, setLocationSuggestions] = useState<AddressSuggestion[]>([])
+  const [isLocationSearching, setIsLocationSearching] = useState(false)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+
+  useEffect(() => {
+    if (role !== 'locatario') {
+      setLocationSuggestions([])
+      setIsLocationSearching(false)
+      return
+    }
+
+    const query = formData.location.trim()
+    if (query.length < 3) {
+      setLocationSuggestions([])
+      setIsLocationSearching(false)
+      return
+    }
+
+    setIsLocationSearching(true)
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/address-search?query=${encodeURIComponent(query)}`)
+        const payload = await res.json() as { suggestions?: AddressSuggestion[] }
+        setLocationSuggestions(payload.suggestions ?? [])
+      } catch {
+        setLocationSuggestions([])
+      } finally {
+        setIsLocationSearching(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [formData.location, role])
+
+  function selectLocationSuggestion(label: string) {
+    setFormData((prev) => ({ ...prev, location: label }))
+    setLocationSuggestions([])
+    setIsLocationSearching(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -344,7 +388,25 @@ export default function SignUpForm() {
                     placeholder="Santiago, Chile"
                     className={INPUT_CLASS}
                   />
+
+                  {locationSuggestions.length > 0 && (
+                    <div className="absolute z-20 mt-1 w-full rounded-xl border border-white/10 bg-[hsl(222,30%,13%)] shadow-xl">
+                      {locationSuggestions.map((suggestion) => (
+                        <button
+                          key={`${suggestion.lat}-${suggestion.lng}-${suggestion.label}`}
+                          type="button"
+                          onClick={() => selectLocationSuggestion(suggestion.label)}
+                          className="block w-full border-b border-white/5 px-3 py-2 text-left text-xs text-slate-200 transition-colors hover:bg-white/5 last:border-b-0"
+                        >
+                          {suggestion.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
+                {isLocationSearching && (
+                  <p className="text-xs text-slate-500">Buscando direcciones...</p>
+                )}
               </div>
 
               <div className="space-y-1.5">
