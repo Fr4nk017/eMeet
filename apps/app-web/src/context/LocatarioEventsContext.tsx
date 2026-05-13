@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react'
 import type { Event, EventCategory } from '../types'
 import { getSupabaseBrowserClient, hasSupabaseEnv } from '../lib/supabase'
+import { resolveServiceUrl } from '../lib/serviceUrl'
 
 export interface CreateLocatarioEventInput {
   title: string
@@ -34,7 +35,7 @@ const LocatarioEventsContext = createContext<LocatarioEventsContextValue | undef
 
 const STORAGE_KEY = 'emeet-locatario-events'
 const FALLBACK_EVENT_IMAGE = 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=1200&q=80'
-const EVENTS_URL = (process.env.NEXT_PUBLIC_EVENTS_URL ?? '').trim().replace(/\/$/, '')
+const EVENTS_URL = resolveServiceUrl(process.env.NEXT_PUBLIC_EVENTS_URL, 'EVENTS_URL')
 
 // ── localStorage helpers (modo local sin Supabase) ───────────────────────────
 

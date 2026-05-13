@@ -13,6 +13,7 @@ import type { ReactNode } from 'react'
 import type { ChatMessage, ChatRoom } from '../types'
 import { useAuth } from './AuthContext'
 import { getSupabaseBrowserClient, hasSupabaseEnv } from '../lib/supabase'
+import { resolveServiceUrl } from '../lib/serviceUrl'
 
 interface ChatContextValue {
   rooms: ChatRoom[]
@@ -25,7 +26,7 @@ interface ChatContextValue {
 }
 
 const ChatContext = createContext<ChatContextValue | undefined>(undefined)
-const CHAT_URL = (process.env.NEXT_PUBLIC_CHAT_URL ?? '').trim().replace(/\/$/, '')
+const CHAT_URL = resolveServiceUrl(process.env.NEXT_PUBLIC_CHAT_URL, 'CHAT_URL')
 
 type RoomPayload = {
   id: string

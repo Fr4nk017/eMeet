@@ -420,6 +420,8 @@ export function CreateEventModal({
       })
     } catch (err) {
       setUploadProgress(null)
+      const msg = err instanceof Error ? err.message : 'No se pudo guardar el evento.'
+      setValidationError(msg)
       throw err
     } finally {
       setIsSubmitting(false)

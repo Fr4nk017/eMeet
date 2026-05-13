@@ -1,6 +1,7 @@
 import type { ScrapedPlace, PlaceType } from '../types'
+import { resolveServiceUrl } from '../lib/serviceUrl'
 
-const PLACES_URL = (process.env.NEXT_PUBLIC_PLACES_URL ?? '').trim().replace(/\/$/, '')
+const PLACES_URL = resolveServiceUrl(process.env.NEXT_PUBLIC_PLACES_URL, 'PLACES_URL')
 
 // ─── Configuración visual por tipo de lugar ──────────────────────────────────
 
