@@ -40,11 +40,36 @@ router.get('/rooms', async (req, res) => {
     if (!lastMessageByRoom.has(msg.room_id)) lastMessageByRoom.set(msg.room_id, msg)
   })
 
+  // Fetch profiles for last-message senders to populate senderName/senderAvatar
+  const lastMsgSenderIds = Array.from(new Set(Array.from(lastMessageByRoom.values()).map((m) => m.user_id)))
+  let lastMsgProfileMap = new Map<string, { name: string; avatar_url: string | null }>()
+  if (lastMsgSenderIds.length > 0) {
+    const { data: profiles } = await req.supabase!
+      .from('profiles')
+      .select('id, name, avatar_url')
+      .in('id', lastMsgSenderIds)
+    if (profiles) lastMsgProfileMap = new Map(profiles.map((p) => [p.id, p]))
+  }
+
   const result = rooms.map((room) => {
     const lastReadAt = memberships.find((m) => m.room_id === room.id)?.last_read_at
     const unreadCount = messages.filter(
       (msg) => msg.room_id === room.id && msg.created_at > (lastReadAt ?? '') && msg.user_id !== req.authUser!.id,
     ).length
+
+    const rawLast = lastMessageByRoom.get(room.id) ?? null
+    const lastMsgSender = rawLast ? lastMsgProfileMap.get(rawLast.user_id) : null
+    const lastMessage = rawLast
+      ? {
+          id: rawLast.id,
+          roomId: rawLast.room_id,
+          senderId: rawLast.user_id,
+          senderName: lastMsgSender?.name ?? 'Usuario',
+          senderAvatar: lastMsgSender?.avatar_url ?? '',
+          text: rawLast.text,
+          timestamp: rawLast.created_at,
+        }
+      : null
 
     return {
       id: room.id,
@@ -52,7 +77,7 @@ router.get('/rooms', async (req, res) => {
       eventImageUrl: room.event_image_url,
       eventAddress: room.event_address,
       memberCount: memberCountMap[room.id] ?? 0,
-      lastMessage: lastMessageByRoom.get(room.id) ?? null,
+      lastMessage,
       unreadCount,
     }
   })

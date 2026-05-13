@@ -27,7 +27,7 @@ export default function ChatRoomRoutePage() {
   const params = useParams<{ roomId: string }>()
   const roomId = typeof params?.roomId === 'string' ? params.roomId : undefined
   const router = useRouter()
-  const { rooms, messages, sendMessage, markRoomRead } = useChatContext()
+  const { rooms, messages, sendMessage, markRoomRead, loadMessagesForRoom } = useChatContext()
   const { user, isAuthReady } = useAuth()
   const [input, setInput] = useState('')
   const [typingUser, setTypingUser] = useState<string | null>(null)
@@ -39,9 +39,13 @@ export default function ChatRoomRoutePage() {
 
   useEffect(() => {
     if (roomId) {
-      markRoomRead(roomId).catch(() => {
-        // Evita romper la vista si falla el marcado de leído.
-      })
+      loadMessagesForRoom(roomId).catch(() => {})
+    }
+  }, [roomId, loadMessagesForRoom])
+
+  useEffect(() => {
+    if (roomId) {
+      markRoomRead(roomId).catch(() => {})
     }
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [roomId, markRoomRead])
