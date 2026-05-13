@@ -434,8 +434,8 @@ export function CreateEventModal({
   const hasAudio = deezerTrack || existingAudioUrl
 
   return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-[#1a1a2e] rounded-2xl w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col shadow-2xl ring-1 ring-white/10">
+    <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4">
+      <div className="bg-[#1a1a2e] rounded-t-2xl sm:rounded-2xl w-full sm:max-w-4xl max-h-[92dvh] sm:max-h-[92vh] overflow-hidden flex flex-col shadow-2xl ring-1 ring-white/10">
 
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/10 flex-shrink-0">
           <button
@@ -456,9 +456,9 @@ export function CreateEventModal({
           </button>
         </div>
 
-        <div className="flex flex-1 overflow-hidden min-h-0">
+        <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
           <div
-            className={`relative flex-1 bg-black flex items-center justify-center transition-colors min-w-0 ${isDragging ? 'bg-violet-900/20' : ''}`}
+            className={`relative h-44 sm:h-52 md:h-auto md:flex-1 bg-black flex items-center justify-center transition-colors flex-shrink-0 md:min-w-0 ${isDragging ? 'bg-violet-900/20' : ''}`}
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
@@ -470,14 +470,12 @@ export function CreateEventModal({
                     src={mediaPreview}
                     controls
                     className="w-full h-full object-contain"
-                    style={{ maxHeight: 'calc(92vh - 56px)' }}
                   />
                 ) : (
                   <img
                     src={mediaPreview}
                     alt="preview"
                     className="w-full h-full object-contain"
-                    style={{ maxHeight: 'calc(92vh - 56px)' }}
                     onError={clearMedia}
                   />
                 )}
@@ -498,19 +496,24 @@ export function CreateEventModal({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex flex-col items-center gap-4 p-10 text-center w-full h-full justify-center group"
+                className="flex flex-col items-center gap-3 md:gap-4 p-6 md:p-10 text-center w-full h-full justify-center group"
               >
-                <div className={`w-20 h-20 rounded-2xl flex items-center justify-center transition-all ${isDragging ? 'bg-violet-500/30 scale-110' : 'bg-white/5 group-hover:bg-white/10'}`}>
+                <div className={`w-14 h-14 md:w-20 md:h-20 rounded-2xl flex items-center justify-center transition-all ${isDragging ? 'bg-violet-500/30 scale-110' : 'bg-white/5 group-hover:bg-white/10'}`}>
                   <div className={`flex gap-2 transition-colors ${isDragging ? 'text-violet-300' : 'text-white/30 group-hover:text-white/50'}`}>
-                    <FiImage size={28} />
-                    <FiVideo size={28} />
+                    <FiImage size={22} className="md:hidden" />
+                    <FiVideo size={22} className="md:hidden" />
+                    <FiImage size={28} className="hidden md:block" />
+                    <FiVideo size={28} className="hidden md:block" />
                   </div>
                 </div>
                 <div>
-                  <p className="text-white font-medium mb-1">Arrastra una foto o video aquí</p>
-                  <p className="text-white/40 text-sm">o haz clic para seleccionar</p>
+                  <p className="text-white font-medium mb-1 text-sm md:text-base">
+                    <span className="hidden md:inline">Arrastra una foto o video aquí</span>
+                    <span className="md:hidden">Foto o video</span>
+                  </p>
+                  <p className="text-white/40 text-xs md:text-sm">Toca para seleccionar</p>
                 </div>
-                <span className="text-xs text-white/20">PNG, JPG, GIF, WEBP, AVIF, BMP, TIFF, HEIC · MP4, MOV, WEBM</span>
+                <span className="hidden md:inline text-xs text-white/20">PNG, JPG, GIF, WEBP, AVIF, BMP, TIFF, HEIC · MP4, MOV, WEBM</span>
               </button>
             )}
             <input
@@ -522,7 +525,7 @@ export function CreateEventModal({
             />
           </div>
 
-          <div className="w-[320px] flex-shrink-0 flex flex-col border-l border-white/10 overflow-y-auto">
+          <div className="w-full md:w-[320px] flex-shrink-0 flex flex-col border-t md:border-t-0 md:border-l border-white/10 overflow-y-auto flex-1 md:flex-none">
             <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10 flex-shrink-0">
               {avatarUrl ? (
                 <img src={avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
