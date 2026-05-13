@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react'
 import { getSupabaseBrowserClient, hasSupabaseEnv } from '../lib/supabase'
 import type { User } from '../types'
+import { resolveServiceUrl } from '../lib/serviceUrl'
 
-const PROFILE_URL = (process.env.NEXT_PUBLIC_PROFILE_URL ?? '').trim().replace(/\/$/, '')
+const PROFILE_URL = resolveServiceUrl(process.env.NEXT_PUBLIC_PROFILE_URL, 'PROFILE_URL')
 
 export function useFollowersCount(user: User | null) {
   const [followersCount, setFollowersCount] = useState<number | null>(null)

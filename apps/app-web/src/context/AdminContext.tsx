@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { useAuth } from './AuthContext'
+import { resolveServiceUrl } from '../lib/serviceUrl'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 export interface AdminUser {
@@ -54,7 +55,7 @@ interface AdminContextValue {
 
 const AdminContext = createContext<AdminContextValue | undefined>(undefined)
 
-const ADMIN_API_URL = (process.env.NEXT_PUBLIC_ADMIN_API_URL ?? '').replace(/\/$/, '')
+const ADMIN_API_URL = resolveServiceUrl(process.env.NEXT_PUBLIC_ADMIN_API_URL, 'ADMIN_API_URL')
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 export function AdminProvider({ children }: { children: ReactNode }) {

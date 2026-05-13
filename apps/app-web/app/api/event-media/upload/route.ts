@@ -40,16 +40,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Token de autorización requerido.' }, { status: 401 })
     }
 
-    const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    })
-
-    const { data: userData, error: authError } = await anonClient.auth.getUser()
+    // Pass the JWT directly to getUser() for reliable server-side validation
+    const anonClient = createClient(supabaseUrl, supabaseAnonKey)
+    const { data: userData, error: authError } = await anonClient.auth.getUser(token)
     if (authError || !userData.user) {
       return NextResponse.json({ error: 'Sesión inválida o expirada.' }, { status: 401 })
     }
 
-    const formData = await request.formData()
+    let formData: FormData
+    try {
+      formData = await request.formData()
+    } catch {
+      return NextResponse.json({ error: 'Error al leer el archivo adjunto.' }, { status: 400 })
+    }
+
     const file = formData.get('file')
 
     if (!(file instanceof File)) {
@@ -59,36 +63,47 @@ export async function POST(request: NextRequest) {
     const ext = getExtension(file.name, file.type)
     const objectPath = `event-media/${userData.user.id}/${Date.now()}.${ext}`
     const isVideo = file.type.startsWith('video/')
-    const candidateBuckets = isVideo
-      ? ['event-videos', 'events-videos', 'events-media', 'avatars']
-      : ['event-images', 'events-images', 'events-media', 'avatars']
 
-    const serviceClient = createClient(supabaseUrl, supabaseServiceRoleKey)
+    // Only existing buckets: event-videos / event-images → avatars as fallback
+    const candidateBuckets = isVideo
+      ? ['event-videos', 'avatars']
+      : ['event-images', 'avatars']
+
+    const serviceClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+
     const bytes = await file.arrayBuffer()
     const body = Buffer.from(bytes)
 
-    let lastError = 'Error desconocido al subir archivo.'
+    const errors: string[] = []
 
     for (const bucket of candidateBuckets) {
       const { error } = await serviceClient.storage
         .from(bucket)
         .upload(objectPath, body, {
-          contentType: file.type || undefined,
+          contentType: file.type || 'application/octet-stream',
           upsert: false,
         })
 
       if (error) {
-        lastError = `[${bucket}] ${error.message}`
+        errors.push(`[${bucket}] ${error.message}`)
         continue
       }
 
       const { data } = serviceClient.storage.from(bucket).getPublicUrl(objectPath)
+      if (!data.publicUrl) {
+        errors.push(`[${bucket}] URL pública vacía`)
+        continue
+      }
       return NextResponse.json({ publicUrl: data.publicUrl })
     }
 
-    return NextResponse.json({ error: `No se pudo subir el archivo. ${lastError}` }, { status: 400 })
+    const detail = errors.join(' | ')
+    return NextResponse.json({ error: `No se pudo subir el archivo. ${detail}` }, { status: 400 })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error interno subiendo archivo.'
+    console.error('[event-media/upload] error:', message)
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
