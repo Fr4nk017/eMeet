@@ -8,6 +8,7 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "outDir": "dist",
+    "types": ["jest", "node"],
     "paths": {
       "@emeet/shared/*": ["../../packages/shared/src/*"]
     }
