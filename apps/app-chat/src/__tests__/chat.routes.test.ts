@@ -317,17 +317,27 @@ describe('POST /chat/rooms/:id/messages', () => {
 
     // User2 se suscribe a INSERT en chat_messages
     const receivedText = await new Promise<string | null>((resolve) => {
+      let timeoutHandle: ReturnType<typeof setTimeout>
+
       const channel = anonClient2
         .channel(`rt-test-${roomId}`)
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${roomId}` },
           (payload) => {
+            clearTimeout(timeoutHandle)
+            anonClient2.removeChannel(channel)
             resolve((payload.new as { text: string }).text)
           },
         )
         .subscribe(async (status) => {
           if (status === 'SUBSCRIBED') {
+            // El timeout empieza sólo cuando la suscripción está confirmada
+            timeoutHandle = setTimeout(() => {
+              anonClient2.removeChannel(channel)
+              resolve(null)
+            }, 10_000)
+
             // User1 envía mensaje después de que user2 esté suscrito
             await request(app)
               .post(`/chat/rooms/${roomId}/messages`)
@@ -335,12 +345,6 @@ describe('POST /chat/rooms/:id/messages', () => {
               .send({ text: 'Mensaje en tiempo real' })
           }
         })
-
-      // Timeout de seguridad: 8 segundos
-      setTimeout(() => {
-        anonClient2.removeChannel(channel)
-        resolve(null)
-      }, 8_000)
     })
 
     expect(receivedText).toBe('Mensaje en tiempo real')

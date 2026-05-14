@@ -9,6 +9,7 @@
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
+    "types": ["jest", "node"],
     "paths": {
       "@emeet/shared/*": ["../../packages/shared/src/*"]
     }

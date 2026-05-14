@@ -265,7 +265,12 @@ select cron.schedule(
 );
 
 -- ─── REALTIME ────────────────────────────────────────────────
--- Habilitar publicaciones para chat en tiempo real
+-- Habilitar publicaciones para chat en tiempo real.
+-- REPLICA IDENTITY FULL es necesario para que los filtros en
+-- postgres_changes funcionen correctamente en Supabase Realtime.
+
+alter table public.chat_messages replica identity full;
+
 do $$
 begin
   if not exists (
