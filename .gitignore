@@ -7,10 +7,18 @@ dist/
 dist-ssr/
 out/
 
-# Environment variables — never commit
+# ─── Variables de entorno — NUNCA versionar archivos con credenciales reales ──
+# Se ignoran .env y cualquier variante (.env.local, .env.development, etc.)
+# La única excepción son los archivos .env.example, que SÍ se versionan
+# porque solo contienen nombres de variables, sin valores reales.
 .env
 .env.*
 !.env.example
+# Ignorar también variantes con sufijo por si existen archivos como
+# apps/app-auth/.env.local o packages/db/.env.development
+**/.env
+**/.env.*
+!**/.env.example
 
 # Logs
 logs/
@@ -38,3 +46,6 @@ pnpm-debug.log*
 
 # TypeScript
 *.tsbuildinfo
+
+# Prisma — cache de engines (regenerar con `npm run db:generate`)
+packages/db/node_modules/.prisma/
