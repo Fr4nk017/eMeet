@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import multer from 'multer'
 import { withAuth } from '../../../../packages/shared/src/middleware/auth.js'
 import { badRequest, serverError } from '../../../../packages/shared/src/utils/http.js'
 import { createServiceRoleClient } from '../../../../packages/shared/src/lib/supabase.js'
@@ -185,6 +186,80 @@ router.delete('/locatario/:id', async (req, res) => {
   }
 
   return res.status(204).send()
+})
+
+// ── POST /upload — Subir media a Supabase Storage ────────────────────────────
+
+const upload = multer({ storage: multer.memoryStorage() })
+
+const BUCKET = 'event-media'
+const MAX_SIZE_BYTES = 52_428_800 // 50 MB
+
+function getExtension(fileName: string, mimeType: string): string {
+  const fromName = fileName.split('.').pop()?.toLowerCase()
+  if (fromName && fromName.length <= 5) return fromName
+  if (mimeType.includes('png')) return 'png'
+  if (mimeType.includes('webp')) return 'webp'
+  if (mimeType.includes('gif')) return 'gif'
+  if (mimeType.includes('jpeg') || mimeType.includes('jpg')) return 'jpg'
+  if (mimeType.includes('mp4')) return 'mp4'
+  if (mimeType.includes('webm')) return 'webm'
+  if (mimeType.includes('quicktime')) return 'mov'
+  return 'bin'
+}
+
+async function ensureBucket(supabase: ReturnType<typeof createServiceRoleClient>) {
+  await supabase.storage.createBucket(BUCKET, {
+    public: true,
+    fileSizeLimit: MAX_SIZE_BYTES,
+    allowedMimeTypes: ['image/*', 'video/*'],
+  }).catch(() => {
+    // Duplicate error ignorado: el bucket ya existe
+  })
+}
+
+router.post('/upload', upload.single('file'), async (req, res) => {
+  // withAuth ya fue aplicado via router.use(withAuth) en línea 38
+
+  if (!req.file) {
+    return badRequest(res, 'Debes adjuntar un archivo válido.')
+  }
+
+  if (req.file.size > MAX_SIZE_BYTES) {
+    return badRequest(res, 'El archivo supera el límite de 50 MB.')
+  }
+
+  const ext = getExtension(req.file.originalname, req.file.mimetype)
+  const objectPath = `${req.authUser!.id}/${Date.now()}.${ext}`
+
+  try {
+    const supabase = createServiceRoleClient()
+    await ensureBucket(supabase)
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET)
+      .upload(objectPath, req.file.buffer, {
+        contentType: req.file.mimetype || 'application/octet-stream',
+        upsert: false,
+      })
+
+    if (uploadError) {
+      console.error('[app-events] storage upload error:', uploadError.message)
+      return serverError(res, `Error al guardar el archivo: ${uploadError.message}`)
+    }
+
+    const { data } = supabase.storage.from(BUCKET).getPublicUrl(objectPath)
+
+    if (!data.publicUrl) {
+      return serverError(res, 'No se pudo obtener la URL pública.')
+    }
+
+    return res.json({ publicUrl: data.publicUrl })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error interno subiendo archivo.'
+    console.error('[app-events] upload error:', message)
+    return serverError(res, message)
+  }
 })
 
 export default router

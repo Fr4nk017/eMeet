@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api'
 import { Loader2, Navigation } from 'lucide-react'
+import { MAPS_API_KEY, MAPS_LIBRARIES, MAPS_VERSION } from '../lib/googleMapsConfig'
 
 const DEFAULT_CENTER = { lat: -33.4489, lng: -70.6693 } // Santiago, Chile
-const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? ''
+const GOOGLE_MAPS_API_KEY = MAPS_API_KEY
 
 const DARK_STYLES: google.maps.MapTypeStyle[] = [
   { elementType: 'geometry', stylers: [{ color: '#1e2132' }] },
@@ -46,8 +47,9 @@ async function nominatimReverse(lat: number, lng: number): Promise<string> {
 
 export function LocationPickerMap({ value, onChange, height = 200 }: Props) {
   const { isLoaded, loadError } = useJsApiLoader({
-    googleMapsApiKey: GOOGLE_MAPS_API_KEY || '',
-    version: 'weekly',
+    googleMapsApiKey: GOOGLE_MAPS_API_KEY,
+    libraries: MAPS_LIBRARIES,
+    version: MAPS_VERSION,
   })
 
   const [markerPos, setMarkerPos] = useState<{ lat: number; lng: number }>(

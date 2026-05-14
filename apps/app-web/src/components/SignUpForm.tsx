@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import {
@@ -37,7 +37,6 @@ const INPUT_CLASS =
 
 export default function SignUpForm() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { register } = useAuth()
 
   const [role, setRole] = useState<'user' | 'locatario'>('user')
@@ -95,12 +94,9 @@ export default function SignUpForm() {
         businessName: role === 'locatario' ? formData.businessName : undefined,
         businessLocation: role === 'locatario' ? formData.location : undefined,
       })
-
-      // Si llegamos aquí con sesión activa, el useEffect en AuthPage redirigirá automáticamente.
-      // Igual hacemos push explícito como respaldo.
-      const next = searchParams.get('next')
-      if (next && next.startsWith('/')) { router.push(next); return }
-      router.push(role === 'locatario' ? '/locatario' : '/')
+      // Cuando register() tiene éxito, AuthContext seteó isAuthenticated: true.
+      // El useEffect de AuthPage detecta el cambio y redirige — no navegar aquí
+      // para evitar doble navegación que bloquea el router de Next.js.
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al registrarte'
       // Supabase requiere confirmación de email — redirigir a la página correspondiente

@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createSupabaseServerClient, hasSupabaseEnv } from './src/lib/supabase'
 
 // Rutas que requieren sesión activa. El usuario sin sesión es redirigido a /auth.
-const PROTECTED_ROUTES = ['/profile', '/chat', '/saved', '/search']
+const PROTECTED_ROUTES = ['/profile', '/chat', '/saved', '/search', '/locatario', '/admin']
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
