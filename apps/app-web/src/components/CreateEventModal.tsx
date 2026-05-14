@@ -6,9 +6,7 @@ import {
   DollarSign as FiDollarSign,
   ImageIcon as FiImage,
   Loader2 as FiLoader,
-  MapPin as FiMapPin,
   Music as FiMusic,
-  Navigation as FiNavigation,
   Video as FiVideo,
   X as FiX,
 } from 'lucide-react'
@@ -16,6 +14,7 @@ import type { CreateLocatarioEventInput } from '../context/LocatarioEventsContex
 import type { EventCategory } from '../types'
 import { uploadEventMedia } from '../lib/uploadEventMedia'
 import { hasSupabaseEnv } from '../lib/supabase'
+import { LocationPickerMap, type LocationValue } from './LocationPickerMap'
 
 const CATEGORIES: { value: EventCategory; label: string; emoji: string }[] = [
   { value: 'fiesta',      label: 'Fiesta',      emoji: '🎉' },
@@ -44,12 +43,6 @@ type DeezerTrack = {
   artist: string
   coverUrl: string
   previewUrl: string
-}
-
-type AddressSuggestion = {
-  label: string
-  lat: number
-  lng: number
 }
 
 type InitialValues = {
@@ -97,11 +90,7 @@ export function CreateEventModal({
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [isFree, setIsFree] = useState(true)
-  const [gpsStatus, setGpsStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
-  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null)
-  const [geocodeStatus, setGeocodeStatus] = useState<'idle' | 'loading' | 'done'>('idle')
-  const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([])
-  const [isAddressSearching, setIsAddressSearching] = useState(false)
+  const [locationPick, setLocationPick] = useState<LocationValue | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
@@ -119,12 +108,13 @@ export function CreateEventModal({
       const dateVal = initialValues.date
         ? new Date(initialValues.date).toISOString().slice(0, 16)
         : ''
+      const addr = initialValues.address ?? defaultAddress
       setEventForm({
         title: initialValues.title ?? '',
         description: initialValues.description ?? '',
         date: dateVal,
         price: initialValues.price != null ? String(initialValues.price) : '',
-        address: initialValues.address ?? defaultAddress,
+        address: addr,
         imageUrl: initialValues.imageUrl ?? '',
         category: initialValues.category ?? 'fiesta',
       })
@@ -132,24 +122,29 @@ export function CreateEventModal({
       setMediaPreview(initialValues.videoUrl || initialValues.imageUrl || null)
       setMediaType(initialValues.videoUrl ? 'video' : initialValues.imageUrl ? 'image' : null)
       setSelectedFile(null)
-      setGpsCoords(null)
-      setGpsStatus('idle')
-      setAddressSuggestions([])
-      setIsAddressSearching(false)
+      setLocationPick(null)
       setValidationError(null)
       setDeezerQuery('')
       setDeezerResults([])
       setDeezerTrack(null)
       setExistingAudioUrl(initialValues.audioUrl ?? null)
+      // Pre-center map on existing address
+      if (addr && addr.length > 4) {
+        fetch(`/api/geocode?address=${encodeURIComponent(addr)}`)
+          .then((r) => r.json())
+          .then((d: { lat: number | null; lng: number | null }) => {
+            if (d.lat !== null && d.lng !== null) {
+              setLocationPick({ lat: d.lat, lng: d.lng, address: addr })
+            }
+          })
+          .catch(() => {})
+      }
     } else if (!isOpen) {
       setEventForm({ ...EMPTY_FORM, address: defaultAddress })
       setMediaPreview(null)
       setSelectedFile(null)
       setMediaType(null)
-      setGpsCoords(null)
-      setGpsStatus('idle')
-      setAddressSuggestions([])
-      setIsAddressSearching(false)
+      setLocationPick(null)
       setIsFree(true)
       setValidationError(null)
       setUploadProgress(null)
@@ -160,71 +155,6 @@ export function CreateEventModal({
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }, [isOpen, defaultAddress, mode, initialValues])
-
-  useEffect(() => {
-    if (gpsStatus === 'success') return
-    const address = eventForm.address.trim()
-    if (address.length < 8) {
-      setGpsCoords(null)
-      setGeocodeStatus('idle')
-      return
-    }
-
-    setGeocodeStatus('loading')
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/geocode?address=${encodeURIComponent(address)}`)
-        const data = await res.json() as { lat: number | null; lng: number | null; address?: string | null }
-        if (data.lat !== null && data.lng !== null) {
-          setGpsCoords({ lat: data.lat, lng: data.lng })
-          if (typeof data.address === 'string' && data.address.trim().length > 0) {
-            setEventForm((prev) => ({ ...prev, address: data.address!.trim() }))
-          }
-          setGeocodeStatus('done')
-        } else {
-          setGpsCoords(null)
-          setGeocodeStatus('idle')
-        }
-      } catch {
-        setGpsCoords(null)
-        setGeocodeStatus('idle')
-      }
-    }, 800)
-
-    return () => clearTimeout(timer)
-  }, [eventForm.address, gpsStatus])
-
-  useEffect(() => {
-    const query = eventForm.address.trim()
-    if (query.length < 3 || gpsStatus === 'success') {
-      setAddressSuggestions([])
-      setIsAddressSearching(false)
-      return
-    }
-
-    setIsAddressSearching(true)
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/address-search?query=${encodeURIComponent(query)}`)
-        const data = await res.json() as { suggestions?: AddressSuggestion[] }
-        setAddressSuggestions(data.suggestions ?? [])
-      } catch {
-        setAddressSuggestions([])
-      } finally {
-        setIsAddressSearching(false)
-      }
-    }, 300)
-
-    return () => clearTimeout(timer)
-  }, [eventForm.address, gpsStatus])
-
-  function selectAddressSuggestion(suggestion: AddressSuggestion) {
-    setEventForm((prev) => ({ ...prev, address: suggestion.label }))
-    setGpsCoords({ lat: suggestion.lat, lng: suggestion.lng })
-    setGpsStatus('idle')
-    setGeocodeStatus('done')
-    setAddressSuggestions([])
-  }
 
   useEffect(() => {
     const q = deezerQuery.trim()
@@ -300,30 +230,9 @@ export function CreateEventModal({
     if (file) handleMediaFile(file)
   }
 
-  const handleGetGPS = () => {
-    if (!navigator.geolocation) return
-    setGpsStatus('loading')
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords
-        setGpsCoords({ lat: latitude, lng: longitude })
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=es`,
-          )
-          const data = (await res.json()) as { display_name?: string }
-          setEventForm((prev) => ({
-            ...prev,
-            address: data.display_name ?? `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
-          }))
-        } catch {
-          setEventForm((prev) => ({ ...prev, address: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}` }))
-        }
-        setGpsStatus('success')
-      },
-      () => setGpsStatus('error'),
-      { enableHighAccuracy: true, timeout: 10000 },
-    )
+  const handleLocationChange = (val: LocationValue) => {
+    setLocationPick(val)
+    setEventForm((prev) => ({ ...prev, address: val.address }))
   }
 
   const clearMedia = () => {
@@ -358,22 +267,7 @@ export function CreateEventModal({
     setIsSubmitting(true)
 
     try {
-      // Si no hay coordenadas aún (debounce no completó), geocodificar ahora
-      let finalCoords = gpsCoords
-      if (!finalCoords && gpsStatus !== 'success' && eventForm.address.trim().length >= 8) {
-        try {
-          const res = await fetch(`/api/geocode?address=${encodeURIComponent(eventForm.address.trim())}`)
-          const data = await res.json() as { lat: number | null; lng: number | null; address?: string | null }
-          if (data.lat !== null && data.lng !== null) {
-            finalCoords = { lat: data.lat, lng: data.lng }
-            if (typeof data.address === 'string' && data.address.trim().length > 0) {
-              setEventForm((prev) => ({ ...prev, address: data.address!.trim() }))
-            }
-          }
-        } catch {
-          // best-effort: si falla, el evento se guarda sin coordenadas
-        }
-      }
+      const finalCoords = locationPick ? { lat: locationPick.lat, lng: locationPick.lng } : null
 
       let finalImageUrl = eventForm.imageUrl
       let finalVideoUrl: string | undefined
@@ -591,65 +485,11 @@ export function CreateEventModal({
 
               <div>
                 <p className="text-xs text-white/35 mb-1.5 font-medium">Dirección</p>
-                <div className="relative">
-                  <FiMapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-white/25 pointer-events-none" size={13} />
-                  <input
-                    type="text"
-                    placeholder="Dirección del evento"
-                    value={eventForm.address}
-                    onChange={(e) => {
-                      setEventForm((prev) => ({ ...prev, address: e.target.value }))
-                      setGpsCoords(null)
-                      setGpsStatus('idle')
-                      setGeocodeStatus('idle')
-                    }}
-                    className="w-full bg-white/5 border border-white/10 focus:border-violet-500/50 outline-none py-2.5 pl-9 pr-[4.5rem] rounded-xl text-white text-sm placeholder-white/30 transition-colors"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleGetGPS}
-                    disabled={gpsStatus === 'loading'}
-                    className={`absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${
-                      gpsStatus === 'success'
-                        ? 'bg-green-500/20 text-green-400'
-                        : 'bg-white/10 hover:bg-white/15 text-white/50'
-                    }`}
-                  >
-                    {gpsStatus === 'loading'
-                      ? <FiLoader className="animate-spin" size={11} />
-                      : gpsStatus === 'success'
-                        ? <FiCheck size={11} />
-                        : <FiNavigation size={11} />}
-                    GPS
-                  </button>
-
-                  {addressSuggestions.length > 0 && (
-                    <div className="absolute z-30 mt-1 w-full rounded-xl border border-white/10 bg-[#131326] shadow-xl">
-                      {addressSuggestions.map((suggestion) => (
-                        <button
-                          key={`${suggestion.lat}-${suggestion.lng}-${suggestion.label}`}
-                          type="button"
-                          onClick={() => selectAddressSuggestion(suggestion)}
-                          className="block w-full border-b border-white/5 px-3 py-2 text-left text-xs text-white/80 transition-colors hover:bg-white/5 last:border-b-0"
-                        >
-                          {suggestion.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {gpsStatus !== 'success' && (
-                  <p className={`mt-1 text-[11px] transition-opacity ${
-                    geocodeStatus === 'loading' ? 'text-white/30 opacity-100' :
-                    geocodeStatus === 'done' ? 'text-green-400/80 opacity-100' :
-                    'opacity-0'
-                  }`}>
-                    {geocodeStatus === 'loading' && '⏳ Buscando coordenadas...'}
-                    {geocodeStatus === 'done' && '📍 Ubicación detectada — el evento aparecerá en el mapa'}
+                <LocationPickerMap value={locationPick} onChange={handleLocationChange} height={210} />
+                {locationPick && (
+                  <p className="mt-1 text-[11px] text-green-400/80">
+                    📍 Ubicación seleccionada — el evento aparecerá en el mapa
                   </p>
-                )}
-                {isAddressSearching && (
-                  <p className="mt-1 text-[11px] text-white/35">Buscando direcciones...</p>
                 )}
               </div>
 

@@ -140,15 +140,35 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    if (!hasSupabaseEnv) return
-    getSupabaseBrowserClient()
-      .from('locatario_events')
-      .select('*')
-      .gte('event_date', new Date().toISOString())
-      .order('event_date', { ascending: true })
-      .then(({ data }) => {
-        if (data) setPublicLocatarioEvents((data as unknown as LocatarioEventRow[]).map(dbRowToEvent))
-      })
+    let mounted = true
+
+    ;(async () => {
+      try {
+        if (EVENTS_URL) {
+          // Usa el endpoint público de la API (service role, bypass RLS — más fiable)
+          const rows = await apiFetch<LocatarioEventRow[]>(EVENTS_URL, '/events/public')
+          if (mounted && Array.isArray(rows)) {
+            setPublicLocatarioEvents(rows.map(dbRowToEvent))
+          }
+          return
+        }
+
+        // Fallback: query anon directo a Supabase (requiere política RLS lectura pública)
+        if (!hasSupabaseEnv) return
+        const { data } = await getSupabaseBrowserClient()
+          .from('locatario_events')
+          .select('*')
+          .gte('event_date', new Date().toISOString())
+          .order('event_date', { ascending: true })
+        if (mounted && data) {
+          setPublicLocatarioEvents((data as unknown as LocatarioEventRow[]).map(dbRowToEvent))
+        }
+      } catch {
+        // Fallo silencioso — el feed sigue funcionando sin eventos de locatarios
+      }
+    })()
+
+    return () => { mounted = false }
   }, [])
 
   // Carga inicial
