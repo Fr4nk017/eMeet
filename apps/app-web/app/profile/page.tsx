@@ -4,12 +4,12 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
-import Layout from '../../src/components/Layout'
-import { useAuth } from '../../src/context/AuthContext'
-import { useFollowersCount } from '../../src/hooks/useFollowersCount'
-import { CATEGORY_EMOJI } from '../../src/utils/eventUtils'
-import { getSupabaseBrowserClient, hasSupabaseEnv } from '../../src/lib/supabase'
-import type { EventCategory } from '../../src/types'
+import Layout from '@/src/components/Layout'
+import { useAuth } from '@/src/context/AuthContext'
+import { useFollowersCount } from '@/src/hooks/useFollowersCount'
+import { CATEGORY_EMOJI } from '@/src/utils/eventUtils'
+import { getSupabaseBrowserClient, hasSupabaseEnv } from '@/src/lib/supabase'
+import type { EventCategory } from '@/src/types'
 import {
   LogOut as HiArrowRightOnRectangle,
   Bookmark as HiBookmark,

@@ -10,10 +10,10 @@ import {
   AlertCircle,
   Users,
 } from 'lucide-react'
-import Layout from '../../src/components/Layout'
-import { useAuth } from '../../src/context/AuthContext'
-import { useChatContext } from '../../src/context/ChatContext'
-import type { ChatRoom } from '../../src/types'
+import Layout from '@/src/components/Layout'
+import { useAuth } from '@/src/context/AuthContext'
+import { useChatContext } from '@/src/context/ChatContext'
+import type { ChatRoom } from '@/src/types'
 
 function formatRelativeTime(iso: string | null): string {
   if (!iso) return ''

@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import { MapPin, Bookmark, Calendar } from 'lucide-react'
-import Layout from '../../src/components/Layout'
-import { useAuth } from '../../src/context/AuthContext'
-import { getSupabaseBrowserClient, hasSupabaseEnv } from '../../src/lib/supabase'
+import Layout from '@/src/components/Layout'
+import { useAuth } from '@/src/context/AuthContext'
+import { getSupabaseBrowserClient, hasSupabaseEnv } from '@/src/lib/supabase'
 
 type SavedEventRow = {
   event_id: string
