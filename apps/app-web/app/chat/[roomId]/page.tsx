@@ -11,6 +11,7 @@ import {
   MapPin as HiMapPin,
   LogOut,
   AlertTriangle,
+  Users,
 } from 'lucide-react'
 
 function formatTime(iso: string) {
@@ -46,7 +47,6 @@ export default function ChatRoomRoutePage() {
   const roomMessages = messages[roomId ?? ''] ?? []
   const isExpired = room && room.status !== 'active'
 
-  // Redirige si no autenticado
   useEffect(() => {
     if (isAuthReady && !user) {
       const next = roomId ? `/chat/${roomId}` : '/chat'
@@ -54,7 +54,6 @@ export default function ChatRoomRoutePage() {
     }
   }, [isAuthReady, roomId, router, user])
 
-  // Carga mensajes al entrar a la sala
   useEffect(() => {
     if (!roomId || !user) return
     loadMessagesForRoom(roomId).catch(() => {})
@@ -82,7 +81,6 @@ export default function ChatRoomRoutePage() {
     return Array.from(bySender.values())
   }, [roomMessages, user?.id])
 
-  // Indicador de escritura simulado (solo cuando hay otros participantes)
   useEffect(() => {
     if (!roomId || otherParticipants.length === 0 || isExpired) return
 
@@ -98,7 +96,7 @@ export default function ChatRoomRoutePage() {
 
   if (!room) {
     return (
-      <div className="flex h-full flex-col items-center justify-center text-muted">
+      <div className="flex h-screen flex-col items-center justify-center text-muted" style={{ height: '100dvh' }}>
         <p>Sala no encontrada</p>
         <button onClick={() => router.push('/chat')} className="mt-3 text-sm text-primary">
           Volver
@@ -145,52 +143,70 @@ export default function ChatRoomRoutePage() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-surface">
-      {/* Header */}
-      <div className="z-10 shrink-0 border-b border-white/10 bg-gradient-to-r from-card/95 to-surface/95 px-3 py-3 backdrop-blur-md">
-        <div className="flex items-center gap-3">
+    /* h-screen con dvh como override para que en móvil se ajuste al viewport visible */
+    <div
+      className="flex flex-col bg-surface"
+      style={{ height: '100dvh' }}
+    >
+      {/* ── Header ────────────────────────────────────────────────────── */}
+      <div className="z-10 shrink-0 border-b border-white/10 bg-gradient-to-r from-card/95 to-surface/95 backdrop-blur-md"
+        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+      >
+        <div className="flex items-center gap-2 px-2 py-2 sm:gap-3 sm:px-3 sm:py-3">
+          {/* Botón volver */}
           <button
             onClick={() => router.push('/chat')}
-            className="flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-white/10"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-white/10"
           >
             <HiArrowLeft className="h-5 w-5 text-white" />
           </button>
 
-          <div className="relative shrink-0">
-            <img
-              src={room.eventImageUrl}
-              alt={room.eventTitle}
-              className="h-10 w-10 rounded-xl border border-white/10 object-cover"
-            />
-            {!isExpired && (
-              <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-surface bg-green-400" />
+          {/* Imagen del evento */}
+          {room.eventImageUrl && (
+            <div className="relative shrink-0">
+              <img
+                src={room.eventImageUrl}
+                alt={room.eventTitle}
+                className="h-9 w-9 rounded-xl border border-white/10 object-cover sm:h-10 sm:w-10"
+              />
+              {!isExpired && (
+                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-surface bg-green-400" />
+              )}
+            </div>
+          )}
+
+          {/* Título + dirección */}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold leading-tight text-white">
+              {room.eventTitle}
+            </p>
+            {room.eventAddress && (
+              <div className="hidden items-center gap-1 text-xs text-muted sm:flex">
+                <HiMapPin className="h-3 w-3 shrink-0 text-primary-light" />
+                <span className="truncate">{room.eventAddress}</span>
+              </div>
             )}
           </div>
 
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-white">{room.eventTitle}</p>
+          {/* Miembros + estado */}
+          <div className="flex shrink-0 items-center gap-1.5">
             <div className="flex items-center gap-1 text-xs text-muted">
-              <HiMapPin className="h-3 w-3 shrink-0 text-primary-light" />
-              <span className="truncate">{room.eventAddress}</span>
+              <Users className="h-3.5 w-3.5 shrink-0" />
+              <span className="font-semibold text-white">{room.memberCount}</span>
             </div>
-          </div>
+            {isExpired ? (
+              <span className="hidden rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-semibold text-red-400 sm:inline">
+                {room.status === 'expired' ? 'Expirado' : 'Cerrado'}
+              </span>
+            ) : (
+              <span className="hidden text-[10px] text-green-400 sm:inline">en línea</span>
+            )}
 
-          <div className="flex shrink-0 items-center gap-2">
-            <div className="flex flex-col items-end gap-0.5">
-              <span className="text-xs font-semibold text-white">👥 {room.memberCount}</span>
-              {!isExpired && <span className="text-[10px] text-green-400">en línea</span>}
-              {isExpired && (
-                <span className="text-[10px] text-red-400">
-                  {room.status === 'expired' ? 'Expirado' : 'Cerrado'}
-                </span>
-              )}
-            </div>
-
-            {/* Botón Salir */}
+            {/* Botón salir */}
             <button
               title="Salir del chat"
               onClick={() => setShowLeaveConfirm(true)}
-              className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-red-500/20 hover:text-red-400"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-red-500/20 hover:text-red-400"
             >
               <LogOut className="h-4 w-4" />
             </button>
@@ -198,7 +214,7 @@ export default function ChatRoomRoutePage() {
         </div>
       </div>
 
-      {/* Banner sala expirada */}
+      {/* ── Banner sala expirada ───────────────────────────────────────── */}
       {isExpired && (
         <div className="flex items-center gap-2 border-b border-red-500/20 bg-red-500/10 px-4 py-2">
           <AlertTriangle className="h-4 w-4 shrink-0 text-red-400" />
@@ -210,8 +226,8 @@ export default function ChatRoomRoutePage() {
         </div>
       )}
 
-      {/* Mensajes */}
-      <div className="flex-1 space-y-1 overflow-y-auto px-3 py-3">
+      {/* ── Mensajes ──────────────────────────────────────────────────── */}
+      <div className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-3 py-3">
         {roomMessages.length === 0 && (
           <motion.p
             initial={{ opacity: 0 }}
@@ -242,12 +258,19 @@ export default function ChatRoomRoutePage() {
                     className={`mb-2 flex gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}
                   >
                     <img
-                      src={msg.senderAvatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(msg.senderName)}`}
+                      src={
+                        msg.senderAvatar ||
+                        `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(msg.senderName)}`
+                      }
                       alt={msg.senderName}
-                      className="h-8 w-8 shrink-0 self-end rounded-full border border-white/10 object-cover"
+                      className="h-7 w-7 shrink-0 self-end rounded-full border border-white/10 object-cover sm:h-8 sm:w-8"
                     />
 
-                    <div className={`flex max-w-[75%] flex-col gap-0.5 ${isOwn ? 'items-end' : 'items-start'}`}>
+                    <div
+                      className={`flex max-w-[80%] flex-col gap-0.5 sm:max-w-[75%] ${
+                        isOwn ? 'items-end' : 'items-start'
+                      }`}
+                    >
                       {!isOwn && (
                         <span className="px-1 text-[11px] font-medium text-primary-light">
                           {msg.senderName}
@@ -255,7 +278,7 @@ export default function ChatRoomRoutePage() {
                       )}
 
                       <div
-                        className={`rounded-2xl px-3 py-2 text-sm leading-relaxed ${
+                        className={`break-words rounded-2xl px-3 py-2 text-sm leading-relaxed ${
                           isOwn
                             ? 'rounded-tr-sm bg-gradient-to-br from-primary to-violet-700 text-white shadow-lg shadow-primary/20'
                             : 'rounded-tl-sm border border-white/10 bg-white/5 text-white backdrop-blur-sm'
@@ -264,7 +287,9 @@ export default function ChatRoomRoutePage() {
                         {msg.text}
                       </div>
 
-                      <div className={`flex items-center gap-1 px-1 ${isOwn ? 'flex-row-reverse' : ''}`}>
+                      <div
+                        className={`flex items-center gap-1 px-1 ${isOwn ? 'flex-row-reverse' : ''}`}
+                      >
                         <span className="text-[10px] text-muted">{formatTime(msg.timestamp)}</span>
                         {isOwn && <span className="text-[10px] text-primary-light">✓✓</span>}
                       </div>
@@ -293,12 +318,13 @@ export default function ChatRoomRoutePage() {
         </AnimatePresence>
       </div>
 
-      {/* Input (bloqueado si sala expirada) */}
-      <div className="shrink-0 border-t border-white/10 bg-gradient-to-r from-card/95 to-surface/95 px-3 py-3 backdrop-blur-md">
+      {/* ── Input ─────────────────────────────────────────────────────── */}
+      <div
+        className="shrink-0 border-t border-white/10 bg-gradient-to-r from-card/95 to-surface/95 px-3 pt-3 backdrop-blur-md"
+        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
+      >
         {isExpired ? (
-          <p className="text-center text-xs text-muted py-1">
-            Chat cerrado · solo lectura
-          </p>
+          <p className="py-1 text-center text-xs text-muted">Chat cerrado · solo lectura</p>
         ) : (
           <div className="flex items-center gap-2">
             <button
@@ -335,20 +361,20 @@ export default function ChatRoomRoutePage() {
         )}
       </div>
 
-      {/* Modal confirmación salir */}
+      {/* ── Modal confirmar salir ──────────────────────────────────────── */}
       <AnimatePresence>
         {showLeaveConfirm && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 pb-4 sm:items-center sm:px-6 sm:pb-6"
             onClick={() => !leavingRoom && setShowLeaveConfirm(false)}
           >
             <motion.div
-              initial={{ scale: 0.92, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.92, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
               className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >

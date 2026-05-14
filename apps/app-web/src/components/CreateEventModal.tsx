@@ -460,7 +460,7 @@ export function CreateEventModal({
 
         <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
           <div
-            className={`relative h-44 sm:h-52 md:h-auto md:flex-1 bg-black flex items-center justify-center transition-colors flex-shrink-0 md:min-w-0 ${isDragging ? 'bg-violet-900/20' : ''}`}
+            className={`relative h-32 sm:h-40 md:h-auto md:flex-1 bg-black flex items-center justify-center transition-colors flex-shrink-0 md:min-w-0 ${isDragging ? 'bg-violet-900/20' : ''}`}
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
@@ -527,7 +527,7 @@ export function CreateEventModal({
             />
           </div>
 
-          <div className="w-full md:w-[320px] flex-shrink-0 flex flex-col border-t md:border-t-0 md:border-l border-white/10 overflow-y-auto flex-1 md:flex-none">
+          <div className="w-full md:w-[320px] flex flex-col min-h-0 flex-1 md:flex-none border-t md:border-t-0 md:border-l border-white/10">
             <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10 flex-shrink-0">
               {avatarUrl ? (
                 <img src={avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
@@ -542,7 +542,7 @@ export function CreateEventModal({
               </div>
             </div>
 
-            <div className="flex-1 p-4 space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
               <input
                 type="text"
                 placeholder="Nombre del evento *"

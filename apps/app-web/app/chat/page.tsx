@@ -141,7 +141,7 @@ function RoomRow({
               e.stopPropagation()
               setConfirmLeave(true)
             }}
-            className="ml-1 shrink-0 rounded-lg p-1.5 text-muted opacity-0 transition-all hover:bg-red-500/20 hover:text-red-400 group-hover:opacity-100"
+            className="ml-1 shrink-0 rounded-lg p-1.5 text-muted transition-all hover:bg-red-500/20 hover:text-red-400 sm:opacity-0 sm:group-hover:opacity-100"
           >
             <LogOut className="h-4 w-4" />
           </button>
