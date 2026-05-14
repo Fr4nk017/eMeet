@@ -3,22 +3,22 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import dynamic from 'next/dynamic'
-import SwipeCard from '../src/components/SwipeCard'
-import RecommendationsCard from '../src/components/RecommendationsCard'
-import Layout from '../src/components/Layout'
-import DistanceFilter from '../src/components/DistanceFilter'
-import PlaceTypeFilters from '../src/components/PlaceTypeFilters'
-import { placeToEvent } from '../src/data/placeFeedAdapter'
-import { NearbyPlacesProvider, useNearbyPlacesContext } from '../src/context/NearbyPlacesContext'
-import { useChatContext } from '../src/context/ChatContext'
-import { useAuth } from '../src/context/AuthContext'
-import { useLocatarioEvents } from '../src/context/LocatarioEventsContext'
-import { getSupabaseBrowserClient, hasSupabaseEnv } from '../src/lib/supabase'
-import { useFeedEvents } from '../src/hooks/useFeedEvents'
-import { haversineKm } from '../src/utils/geo'
-import type { PlaceType } from '../src/types'
+import SwipeCard from '@/src/components/SwipeCard'
+import RecommendationsCard from '@/src/components/RecommendationsCard'
+import Layout from '@/src/components/Layout'
+import DistanceFilter from '@/src/components/DistanceFilter'
+import PlaceTypeFilters from '@/src/components/PlaceTypeFilters'
+import { placeToEvent } from '@/src/data/placeFeedAdapter'
+import { NearbyPlacesProvider, useNearbyPlacesContext } from '@/src/context/NearbyPlacesContext'
+import { useChatContext } from '@/src/context/ChatContext'
+import { useAuth } from '@/src/context/AuthContext'
+import { useLocatarioEvents } from '@/src/context/LocatarioEventsContext'
+import { getSupabaseBrowserClient, hasSupabaseEnv } from '@/src/lib/supabase'
+import { useFeedEvents } from '@/src/hooks/useFeedEvents'
+import { haversineKm } from '@/src/utils/geo'
+import type { PlaceType } from '@/src/types'
 
-const BellavistaMapMobile = dynamic(() => import('../src/components/BellavistaMap'), {
+const BellavistaMapMobile = dynamic(() => import('@/src/components/BellavistaMap'), {
   ssr: false,
   loading: () => (
     <div className="flex h-full items-center justify-center bg-card text-sm text-muted">

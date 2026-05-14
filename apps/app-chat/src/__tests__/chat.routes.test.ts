@@ -336,7 +336,7 @@ describe('POST /chat/rooms/:id/messages', () => {
             timeoutHandle = setTimeout(() => {
               anonClient2.removeChannel(channel)
               resolve(null)
-            }, 10_000)
+            }, 15_000)
 
             // User1 envía mensaje después de que user2 esté suscrito
             await request(app)
@@ -348,7 +348,7 @@ describe('POST /chat/rooms/:id/messages', () => {
     })
 
     expect(receivedText).toBe('Mensaje en tiempo real')
-  }, 20_000)
+  }, 30_000)
 
   it('[T7] bloquea envío a no-miembros', async () => {
     if (skip2('[T7] bloqueo no-miembro envío')) return

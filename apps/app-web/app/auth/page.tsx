@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowRight as FiArrowRight, CircleAlert as FiAlertCircle, MapPin, Calendar, Users } from 'lucide-react'
-import LoginForm from '../../src/components/LoginForm'
-import SignUpForm from '../../src/components/SignUpForm'
-import { useAuth } from '../../src/context/AuthContext'
+import LoginForm from '@/src/components/LoginForm'
+import SignUpForm from '@/src/components/SignUpForm'
+import { useAuth } from '@/src/context/AuthContext'
 
 function SplashScreen({ onDone }: { onDone: () => void }) {
   useEffect(() => {

@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useChatContext } from '../../../src/context/ChatContext'
-import { useAuth } from '../../../src/context/AuthContext'
+import { useChatContext } from '@/src/context/ChatContext'
+import { useAuth } from '@/src/context/AuthContext'
 import {
   ArrowLeft as HiArrowLeft,
   Send as HiPaperAirplane,

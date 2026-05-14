@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { ArrowLeft, MapPin, Calendar, Heart, Bookmark } from 'lucide-react'
-import Layout from '../../../src/components/Layout'
-import { useAuth } from '../../../src/context/AuthContext'
-import { getSupabaseBrowserClient, hasSupabaseEnv } from '../../../src/lib/supabase'
+import Layout from '@/src/components/Layout'
+import { useAuth } from '@/src/context/AuthContext'
+import { getSupabaseBrowserClient, hasSupabaseEnv } from '@/src/lib/supabase'
 
 interface EventDetail {
   event_id: string
