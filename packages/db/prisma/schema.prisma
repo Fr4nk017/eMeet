@@ -117,12 +117,22 @@ model LocatarioEvent {
 
 // ─── CHAT_ROOMS ──────────────────────────────────────────────────────────────
 
+enum ChatRoomStatus {
+  active
+  expired
+  deleted
+
+  @@schema("public")
+}
+
 model ChatRoom {
-  id            String   @id
-  eventTitle    String   @map("event_title")
-  eventImageUrl String?  @map("event_image_url")
-  eventAddress  String?  @map("event_address")
-  createdAt     DateTime @default(now()) @map("created_at")
+  id            String         @id
+  eventTitle    String         @map("event_title")
+  eventImageUrl String?        @map("event_image_url")
+  eventAddress  String?        @map("event_address")
+  status        ChatRoomStatus @default(active)
+  expiresAt     DateTime?      @map("expires_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
 
   members  RoomMember[]
   messages ChatMessage[]
