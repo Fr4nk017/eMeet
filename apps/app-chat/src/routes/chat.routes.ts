@@ -78,14 +78,15 @@ async function requireActiveRoom(req: Request, res: Response, next: NextFunction
 
   const { data, error } = await req.supabase!
     .from('chat_rooms')
-    .select('status')
+    .select('status, expires_at')
     .eq('id', roomId)
     .maybeSingle()
 
   if (error) return serverError(res, 'No se pudo verificar estado de la sala.')
   if (!data) return res.status(404).json({ error: 'Sala no encontrada.' })
 
-  if (data.status !== 'active') {
+  const pastExpiry = data.expires_at && new Date(data.expires_at) < new Date()
+  if (data.status !== 'active' || pastExpiry) {
     return res.status(410).json({ error: 'Esta sala de chat ya está cerrada o expirada.' })
   }
 
