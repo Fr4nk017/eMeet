@@ -40,6 +40,11 @@ beforeAll(async () => {
   authToken = data.session.access_token
   testUserId = data.user.id
 
+  // Garantizar que el usuario de prueba tiene un perfil (FK de locatario_events)
+  await serviceClient
+    .from('profiles')
+    .upsert({ id: testUserId, name: 'Test User', role: 'locatario' }, { onConflict: 'id' })
+
   // Insertar un evento pasado para el test de cleanup
   const { data: past, error: pastErr } = await serviceClient
     .from('locatario_events')

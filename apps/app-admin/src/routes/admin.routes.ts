@@ -51,14 +51,18 @@ router.get('/users', withAuth, adminOnly, async (_req, res) => {
       (authData?.users ?? []).map((u) => [u.id, u.email ?? ''])
     )
 
-    const users = (profiles ?? []).map((p) => ({
-      id: p.id,
-      name: p.name,
-      email: emailMap.get(p.id) ?? '',
-      role: p.role ?? 'user',
-      is_banned: (p as any).is_banned ?? false,
-      created_at: p.created_at,
-    }))
+    // Solo mostrar perfiles que tienen un usuario activo en auth.users.
+    // Los perfiles huérfanos (borrados directo desde Supabase) quedan filtrados.
+    const users = (profiles ?? [])
+      .filter((p) => emailMap.has(p.id))
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        email: emailMap.get(p.id) ?? '',
+        role: p.role ?? 'user',
+        is_banned: (p as any).is_banned ?? false,
+        created_at: p.created_at,
+      }))
 
     return res.json({ users })
   } catch (err) {
@@ -183,20 +187,23 @@ router.get('/statistics', withAuth, adminOnly, async (_req, res) => {
     const supabase = createServiceRoleClient()
 
     const [
-      { count: totalUsers },
+      { data: authData },
       { count: totalEvents },
       { count: totalLikes },
       { count: bannedUsers },
     ] = await Promise.all([
-      supabase.from('profiles').select('*', { count: 'exact', head: true }),
+      supabase.auth.admin.listUsers({ perPage: 1000 }),
       supabase.from('locatario_events').select('*', { count: 'exact', head: true }),
       supabase.from('user_events').select('*', { count: 'exact', head: true }).eq('action', 'like'),
       supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_banned' as any, true),
     ])
 
+    // totalUsers desde auth.users para no contar perfiles huérfanos
+    const totalUsers = authData?.users?.length ?? 0
+
     return res.json({
       statistics: {
-        totalUsers: totalUsers ?? 0,
+        totalUsers,
         totalEvents: totalEvents ?? 0,
         totalLikes: totalLikes ?? 0,
         bannedUsers: bannedUsers ?? 0,
