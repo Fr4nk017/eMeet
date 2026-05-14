@@ -16,7 +16,7 @@ type RegisterOptions = {
 interface AuthContextValue extends AuthState {
   isAuthReady: boolean
   login: (email: string, password: string) => Promise<User['role']>
-  loginWithOAuth: (provider: 'google' | 'facebook') => Promise<void>
+  loginWithOAuth: (provider: 'google') => Promise<void>
   register: (name: string, email: string, password: string, options?: RegisterOptions) => Promise<void>
   logout: () => Promise<void>
   updateUser: (data: Partial<User>) => Promise<void>
@@ -410,7 +410,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     throw new Error('Registro creado. Revisa tu correo para confirmar la cuenta antes de iniciar sesión.')
   }, [syncUserData])
 
-  const loginWithOAuth = useCallback(async (provider: 'google' | 'facebook') => {
+  const loginWithOAuth = useCallback(async (provider: 'google') => {
     if (!hasSupabaseEnv) {
       throw new Error('OAuth no está disponible en modo local. Usa email y contraseña.')
     }

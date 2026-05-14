@@ -13,7 +13,8 @@ import { NearbyPlacesProvider, useNearbyPlacesContext } from '@/src/context/Near
 import { useChatContext } from '@/src/context/ChatContext'
 import { useAuth } from '@/src/context/AuthContext'
 import { useLocatarioEvents } from '@/src/context/LocatarioEventsContext'
-import { getSupabaseBrowserClient, hasSupabaseEnv } from '@/src/lib/supabase'
+import { callSavedApi } from '@/src/lib/savedApi'
+import { hasSupabaseEnv } from '@/src/lib/supabase'
 import { useFeedEvents } from '@/src/hooks/useFeedEvents'
 import { haversineKm } from '@/src/utils/geo'
 import type { PlaceType } from '@/src/types'
@@ -29,49 +30,6 @@ const BellavistaMapMobile = dynamic(() => import('@/src/components/BellavistaMap
 
 const DEFAULT_FEED_TYPES: PlaceType[] = ['restaurant', 'bar', 'night_club', 'cafe']
 const LOCATARIO_MAX_KM = 10
-
-async function getAccessToken() {
-  if (!hasSupabaseEnv) return null
-
-  const supabase = getSupabaseBrowserClient()
-  const { data } = await supabase.auth.getSession()
-
-  if (data.session?.access_token) {
-    return data.session.access_token
-  }
-
-  const { data: refreshed, error } = await supabase.auth.refreshSession()
-  if (error) return null
-
-  return refreshed.session?.access_token ?? null
-}
-
-async function callSavedApi(path: string, init?: RequestInit) {
-  const headers = new Headers({
-    'Content-Type': 'application/json',
-    ...(init?.headers ?? {}),
-  })
-
-  if (hasSupabaseEnv) {
-    const token = await getAccessToken()
-    if (!token) {
-      throw new Error('Tu sesión expiró o no tiene token. Vuelve a iniciar sesión.')
-    }
-    headers.set('Authorization', `Bearer ${token}`)
-  }
-
-  const response = await fetch(`/api/saved${path}`, {
-    credentials: 'include',
-    ...init,
-    headers,
-  })
-
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string; debug?: unknown } | null
-    console.error('[callSavedApi] error', response.status, path, body)
-    throw new Error(body?.error ?? 'Error al comunicarse con el servicio de guardados.')
-  }
-}
 
 
 function FeedSkeleton() {

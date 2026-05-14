@@ -1,109 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 
-function getEnvValue(...keys: string[]) {
-  for (const key of keys) {
-    const value = process.env[key]?.trim()
-    if (value) return value
-  }
-  return null
-}
-
-function getExtension(fileName: string, mimeType: string) {
-  const fromName = fileName.split('.').pop()?.toLowerCase()
-  if (fromName) return fromName
-
-  if (mimeType.includes('png')) return 'png'
-  if (mimeType.includes('webp')) return 'webp'
-  if (mimeType.includes('gif')) return 'gif'
-  if (mimeType.includes('jpeg') || mimeType.includes('jpg')) return 'jpg'
-  if (mimeType.includes('mp4')) return 'mp4'
-  if (mimeType.includes('webm')) return 'webm'
-  if (mimeType.includes('quicktime')) return 'mov'
-  return 'bin'
-}
+const EVENTS_SERVICE_URL = (
+  process.env.NEXT_PUBLIC_EVENTS_URL ?? process.env.NEXT_PUBLIC_APP_EVENTS_URL ?? ''
+).trim().replace(/\/$/, '')
 
 export async function POST(request: NextRequest) {
+  if (!EVENTS_SERVICE_URL) {
+    return NextResponse.json(
+      { error: 'Falta NEXT_PUBLIC_EVENTS_URL para el proxy del servicio de eventos.' },
+      { status: 500 },
+    )
+  }
+
+  const authorization = request.headers.get('authorization')
+  if (!authorization) {
+    return NextResponse.json({ error: 'Token de autorización requerido.' }, { status: 401 })
+  }
+
+  // content-type debe reenviarse con el boundary de multipart/form-data
+  // o multer no puede parsear el archivo en app-events
+  const headers = new Headers()
+  headers.set('authorization', authorization)
+  const contentType = request.headers.get('content-type')
+  if (contentType) headers.set('content-type', contentType)
+
   try {
-    const supabaseUrl = getEnvValue('SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_URL')
-    const supabaseAnonKey = getEnvValue('SUPABASE_ANON_KEY', 'NEXT_PUBLIC_SUPABASE_ANON_KEY')
-    const supabaseServiceRoleKey = getEnvValue('SUPABASE_SERVICE_ROLE_KEY')
-
-    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
-      return NextResponse.json({ error: 'Faltan variables de entorno de Supabase en app-web.' }, { status: 500 })
-    }
-
-    const authHeader = request.headers.get('authorization')
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
-
-    if (!token) {
-      return NextResponse.json({ error: 'Token de autorización requerido.' }, { status: 401 })
-    }
-
-    // Pass the JWT directly to getUser() for reliable server-side validation
-    const anonClient = createClient(supabaseUrl, supabaseAnonKey)
-    const { data: userData, error: authError } = await anonClient.auth.getUser(token)
-    if (authError || !userData.user) {
-      return NextResponse.json({ error: 'Sesión inválida o expirada.' }, { status: 401 })
-    }
-
-    let formData: FormData
-    try {
-      formData = await request.formData()
-    } catch {
-      return NextResponse.json({ error: 'Error al leer el archivo adjunto.' }, { status: 400 })
-    }
-
-    const file = formData.get('file')
-
-    if (!(file instanceof File)) {
-      return NextResponse.json({ error: 'Debes adjuntar un archivo válido.' }, { status: 400 })
-    }
-
-    const ext = getExtension(file.name, file.type)
-    const objectPath = `event-media/${userData.user.id}/${Date.now()}.${ext}`
-    const isVideo = file.type.startsWith('video/')
-
-    // Only existing buckets: event-videos / event-images → avatars as fallback
-    const candidateBuckets = isVideo
-      ? ['event-videos', 'avatars']
-      : ['event-images', 'avatars']
-
-    const serviceClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
+    const upstream = await fetch(`${EVENTS_SERVICE_URL}/events/upload`, {
+      method: 'POST',
+      headers,
+      body: await request.arrayBuffer(),
+      cache: 'no-store',
     })
 
-    const bytes = await file.arrayBuffer()
-    const body = Buffer.from(bytes)
+    const responseHeaders = new Headers()
+    const upstreamContentType = upstream.headers.get('content-type')
+    if (upstreamContentType) responseHeaders.set('content-type', upstreamContentType)
 
-    const errors: string[] = []
-
-    for (const bucket of candidateBuckets) {
-      const { error } = await serviceClient.storage
-        .from(bucket)
-        .upload(objectPath, body, {
-          contentType: file.type || 'application/octet-stream',
-          upsert: false,
-        })
-
-      if (error) {
-        errors.push(`[${bucket}] ${error.message}`)
-        continue
-      }
-
-      const { data } = serviceClient.storage.from(bucket).getPublicUrl(objectPath)
-      if (!data.publicUrl) {
-        errors.push(`[${bucket}] URL pública vacía`)
-        continue
-      }
-      return NextResponse.json({ publicUrl: data.publicUrl })
-    }
-
-    const detail = errors.join(' | ')
-    return NextResponse.json({ error: `No se pudo subir el archivo. ${detail}` }, { status: 400 })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Error interno subiendo archivo.'
-    console.error('[event-media/upload] error:', message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    return new Response(await upstream.text(), {
+      status: upstream.status,
+      headers: responseHeaders,
+    })
+  } catch {
+    return NextResponse.json(
+      { error: 'No se pudo comunicar con el servicio de eventos.' },
+      { status: 502 },
+    )
   }
 }

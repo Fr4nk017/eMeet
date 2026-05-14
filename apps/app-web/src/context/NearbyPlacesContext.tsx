@@ -11,14 +11,13 @@ import {
 } from 'react'
 import { useJsApiLoader } from '@react-google-maps/api'
 import type { ReactNode } from 'react'
-import type { Libraries } from '@react-google-maps/api'
 import type { PlaceType, ScrapedPlace } from '../types'
 import { useNearbyPlaces } from '../hooks/useNearbyPlaces'
+import { MAPS_API_KEY, MAPS_LIBRARIES, MAPS_VERSION } from '../lib/googleMapsConfig'
 
-const LIBRARIES: Libraries = ['places']
 const DEFAULT_PLACE_TYPES: PlaceType[] = ['restaurant', 'bar', 'night_club', 'cafe']
 
-const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? ''
+const GOOGLE_MAPS_API_KEY = MAPS_API_KEY
 const HAS_GOOGLE_MAPS_KEY = GOOGLE_MAPS_API_KEY.length > 0
 const LOOKS_LIKE_GOOGLE_MAPS_KEY = GOOGLE_MAPS_API_KEY.startsWith('AIza')
 
@@ -77,8 +76,8 @@ export function NearbyPlacesProvider({ children }: { children: ReactNode }) {
 
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: invalidApiKey ? '' : GOOGLE_MAPS_API_KEY,
-    libraries: LIBRARIES,
-    version: 'weekly',
+    libraries: MAPS_LIBRARIES,
+    version: MAPS_VERSION,
   })
 
   const refreshPlaces = useCallback(() => {
