@@ -194,6 +194,14 @@ function AdminPageContent() {
     fetchStatistics()
   }, [fetchUsers, fetchEvents, fetchStatistics])
 
+  // Refresca datos al cambiar de pestaña para reflejar cambios externos (ej. borrados en Supabase)
+  useEffect(() => {
+    if (activeTab === 'users') fetchUsers()
+    else if (activeTab === 'events') fetchEvents()
+    else if (activeTab === 'overview') fetchStatistics()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab])
+
   useEffect(() => { setUserPage(1) }, [userSearch, roleFilter, statusFilter, userSort])
   useEffect(() => { setEventPage(1) }, [eventSearch, eventSort])
 
