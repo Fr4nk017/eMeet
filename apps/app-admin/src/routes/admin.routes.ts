@@ -119,9 +119,12 @@ router.delete('/users/:id', withAuth, adminOnly, async (req, res) => {
     const { id } = req.params
     const supabase = createServiceRoleClient()
 
-    const { error } = await supabase.from('profiles').delete().eq('id', id)
+    // Eliminar de auth.users (borra la cuenta real + cascadea a profiles si hay FK)
+    const { error: authError } = await supabase.auth.admin.deleteUser(id)
+    if (authError) return serverError(res, authError.message)
 
-    if (error) return serverError(res, error.message)
+    // Limpiar profile por si no hay cascade configurado
+    await supabase.from('profiles').delete().eq('id', id)
 
     return res.json({ message: 'Usuario eliminado correctamente' })
   } catch (err) {
