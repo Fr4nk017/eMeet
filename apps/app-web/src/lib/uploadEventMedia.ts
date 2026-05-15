@@ -1,5 +1,9 @@
 import { getSupabaseBrowserClient } from './supabase'
 
+const EVENTS_URL = (
+  process.env.NEXT_PUBLIC_EVENTS_URL ?? ''
+).trim().replace(/\/$/, '')
+
 export async function uploadEventMedia(file: File, userId: string): Promise<string> {
   const supabase = getSupabaseBrowserClient()
   const { data } = await supabase.auth.getSession()
@@ -9,11 +13,16 @@ export async function uploadEventMedia(file: File, userId: string): Promise<stri
     throw new Error('Debes iniciar sesión para subir archivos.')
   }
 
+  if (!EVENTS_URL) {
+    throw new Error('No está configurada la URL del servicio de eventos.')
+  }
+
   const formData = new FormData()
   formData.append('file', file)
   formData.append('userId', userId)
 
-  const res = await fetch('/api/event-media/upload', {
+  // Llamamos directo al backend para evitar el límite de 4.5 MB de Vercel Functions
+  const res = await fetch(`${EVENTS_URL}/events/upload`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
