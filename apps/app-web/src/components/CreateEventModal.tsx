@@ -415,7 +415,7 @@ export function CreateEventModal({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/bmp,image/tiff,image/svg+xml,image/heic,image/heif,video/mp4,video/quicktime,video/webm,video/x-msvideo"
+              accept="image/*,video/*"
               className="hidden"
               onChange={handleFileSelect}
             />

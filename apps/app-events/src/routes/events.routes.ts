@@ -190,10 +190,10 @@ router.delete('/locatario/:id', async (req, res) => {
 
 // ── POST /upload — Subir media a Supabase Storage ────────────────────────────
 
-const upload = multer({ storage: multer.memoryStorage() })
-
 const BUCKET = 'event-media'
 const MAX_SIZE_BYTES = 52_428_800 // 50 MB
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_SIZE_BYTES } })
 
 function getExtension(fileName: string, mimeType: string): string {
   const fromName = fileName.split('.').pop()?.toLowerCase()
@@ -209,13 +209,16 @@ function getExtension(fileName: string, mimeType: string): string {
 }
 
 async function ensureBucket(supabase: ReturnType<typeof createServiceRoleClient>) {
-  await supabase.storage.createBucket(BUCKET, {
+  const bucketOptions = {
     public: true,
     fileSizeLimit: MAX_SIZE_BYTES,
     allowedMimeTypes: ['image/*', 'video/*'],
-  }).catch(() => {
-    // Duplicate error ignorado: el bucket ya existe
-  })
+  }
+  const { error } = await supabase.storage.createBucket(BUCKET, bucketOptions)
+  if (error) {
+    // Bucket ya existe — actualizar configuración para garantizar que video/* está permitido
+    await supabase.storage.updateBucket(BUCKET, bucketOptions).catch(() => {})
+  }
 }
 
 router.post('/upload', upload.single('file'), async (req, res) => {
