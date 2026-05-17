@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { useEffect } from 'react'
 import {
   House as HiHome,
   Bookmark as HiBookmark,
@@ -13,6 +14,8 @@ import {
 } from 'lucide-react'
 import { useChatContext } from '../context/ChatContext'
 import { useAuth } from '../context/AuthContext'
+
+const ALL_ROUTES = ['/', '/search', '/chat', '/saved', '/profile', '/locatario', '/admin']
 
 const USER_NAV_ITEMS = [
   { href: '/', label: 'Inicio', icon: HiHome },
@@ -31,7 +34,12 @@ export default function BottomNavBar() {
   const { totalUnread } = useChatContext()
   const { user } = useAuth()
   const pathname = usePathname() ?? '/'
+  const router = useRouter()
   const navItems = user?.role === 'locatario' ? LOCATARIO_NAV_ITEMS : USER_NAV_ITEMS
+
+  useEffect(() => {
+    ALL_ROUTES.forEach((route) => router.prefetch(route))
+  }, [router])
 
   const isRouteActive = (href: string) => {
     if (href === '/') return pathname === '/'
@@ -51,6 +59,7 @@ export default function BottomNavBar() {
         {user?.role === 'admin' && (
           <Link
             href="/admin"
+            prefetch
             className={`flex flex-col items-center gap-1 text-xs font-medium transition-all duration-200 ${
               pathname === '/admin' ? 'text-white' : 'text-muted hover:text-primary-light'
             }`}
@@ -66,6 +75,7 @@ export default function BottomNavBar() {
         {user?.role === 'locatario' && (
           <Link
             href="/locatario"
+            prefetch
             className={`flex flex-col items-center gap-1 text-xs font-medium transition-all duration-200 ${
               pathname === '/locatario' ? 'text-white' : 'text-muted hover:text-primary-light'
             }`}

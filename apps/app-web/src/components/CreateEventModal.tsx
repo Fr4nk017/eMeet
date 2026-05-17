@@ -80,7 +80,7 @@ export function CreateEventModal({
   organizerAvatar,
   avatarUrl,
   initials,
-  userId,
+  userId: _userId,
   mode = 'create',
   initialValues,
 }: Props) {
@@ -272,10 +272,13 @@ export function CreateEventModal({
       let finalImageUrl = eventForm.imageUrl
       let finalVideoUrl: string | undefined
 
-      if (selectedFile && userId && hasSupabaseEnv) {
-        setUploadProgress(mediaType === 'video' ? 'Subiendo video...' : 'Subiendo imagen...')
+      if (selectedFile && hasSupabaseEnv) {
+        const label = mediaType === 'video' ? 'video' : 'imagen'
+        setUploadProgress(`Subiendo ${label}... 0%`)
         try {
-          const publicUrl = await uploadEventMedia(selectedFile, userId)
+          const publicUrl = await uploadEventMedia(selectedFile, (pct) => {
+            setUploadProgress(`Subiendo ${label}... ${pct}%`)
+          })
           if (mediaType === 'video') {
             finalVideoUrl = publicUrl
           } else {
@@ -295,7 +298,9 @@ export function CreateEventModal({
         setUploadProgress(null)
       }
 
-      const finalAudioUrl = deezerTrack?.previewUrl ?? existingAudioUrl ?? undefined
+      const finalAudioUrl = deezerTrack
+        ? `/api/deezer/preview/${deezerTrack.id}`
+        : existingAudioUrl ?? undefined
 
       await onSubmit({
         title: eventForm.title,
@@ -553,7 +558,7 @@ export function CreateEventModal({
                       </div>
                     </div>
                     <audio
-                      src={deezerTrack.previewUrl}
+                      src={`/api/deezer/preview/${deezerTrack.id}`}
                       controls
                       className="w-full h-8 rounded-lg [color-scheme:dark]"
                     />

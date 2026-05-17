@@ -188,7 +188,7 @@ router.delete('/locatario/:id', async (req, res) => {
   return res.status(204).send()
 })
 
-// ── POST /upload — Subir media a Supabase Storage ────────────────────────────
+// ── Helpers de media ─────────────────────────────────────────────────────────
 
 const BUCKET = 'event-media'
 const MAX_SIZE_BYTES = 52_428_800 // 50 MB
@@ -212,18 +212,63 @@ async function ensureBucket(supabase: ReturnType<typeof createServiceRoleClient>
   const bucketOptions = {
     public: true,
     fileSizeLimit: MAX_SIZE_BYTES,
-    allowedMimeTypes: ['image/*', 'video/*'],
+    allowedMimeTypes: ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif', 'image/bmp', 'image/tiff', 'video/mp4', 'video/webm', 'video/quicktime'],
   }
   const { error } = await supabase.storage.createBucket(BUCKET, bucketOptions)
   if (error) {
-    // Bucket ya existe — actualizar configuración para garantizar que video/* está permitido
     await supabase.storage.updateBucket(BUCKET, bucketOptions).catch(() => {})
   }
 }
 
-router.post('/upload', upload.single('file'), async (req, res) => {
-  // withAuth ya fue aplicado via router.use(withAuth) en línea 38
+// ── POST /upload-url — Genera URL firmada para subida directa al bucket ──────
+// El browser sube directo a Supabase Storage, evitando el límite de 4.5 MB
+// de Vercel Functions que bloqueaba los videos.
 
+router.post('/upload-url', async (req, res) => {
+  const body = req.body as { fileName?: string; mimeType?: string }
+
+  if (!body.mimeType) {
+    return badRequest(res, 'mimeType es requerido.')
+  }
+
+  const isImage = body.mimeType.startsWith('image/')
+  const isVideo = body.mimeType.startsWith('video/')
+  if (!isImage && !isVideo) {
+    return badRequest(res, 'Solo se permiten imágenes y videos.')
+  }
+
+  const ext = getExtension(body.fileName ?? '', body.mimeType)
+  const objectPath = `${req.authUser!.id}/${Date.now()}.${ext}`
+
+  try {
+    const supabase = createServiceRoleClient()
+    await ensureBucket(supabase)
+
+    const { data, error } = await supabase.storage.from(BUCKET).createSignedUploadUrl(objectPath)
+
+    if (error || !data) {
+      console.error('[app-events] createSignedUploadUrl error:', error?.message)
+      return serverError(res, 'No se pudo generar la URL de subida.')
+    }
+
+    const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(objectPath)
+
+    return res.json({
+      signedUrl: data.signedUrl,
+      token: data.token,
+      path: data.path,
+      publicUrl: urlData.publicUrl,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error interno.'
+    console.error('[app-events] upload-url error:', message)
+    return serverError(res, message)
+  }
+})
+
+// ── POST /upload — Fallback para archivos pequeños (≤ 4.5 MB) ────────────────
+
+router.post('/upload', upload.single('file'), async (req, res) => {
   if (!req.file) {
     return badRequest(res, 'Debes adjuntar un archivo válido.')
   }
