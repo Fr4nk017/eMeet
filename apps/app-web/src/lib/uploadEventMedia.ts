@@ -4,8 +4,6 @@ const EVENTS_URL = (
   process.env.NEXT_PUBLIC_EVENTS_URL ?? ''
 ).trim().replace(/\/$/, '')
 
-const BUCKET = 'event-media'
-
 export async function uploadEventMedia(
   file: File,
   onProgress?: (pct: number) => void,
@@ -22,7 +20,7 @@ export async function uploadEventMedia(
     throw new Error('No está configurada la URL del servicio de eventos.')
   }
 
-  // Paso 1: pedir una URL firmada al backend (solo JSON, sin body grande)
+  // Paso 1: pedir una URL firmada al backend (request JSON liviano)
   const urlRes = await fetch(`${EVENTS_URL}/events/upload-url`, {
     method: 'POST',
     headers: {
@@ -40,28 +38,37 @@ export async function uploadEventMedia(
     error?: string
   } | null
 
-  if (!urlRes.ok || !urlPayload?.token || !urlPayload?.path) {
+  if (!urlRes.ok || !urlPayload?.signedUrl || !urlPayload?.publicUrl) {
     throw new Error(urlPayload?.error ?? 'No se pudo iniciar la subida.')
   }
 
-  // Paso 2: subir directo a Supabase Storage con la URL firmada
-  // Esto bypasea el límite de 4.5 MB de Vercel Functions
-  const { error: uploadError } = await supabase.storage
-    .from(BUCKET)
-    .uploadToSignedUrl(urlPayload.path, urlPayload.token, file, {
-      contentType: file.type,
-      onUploadProgress: onProgress
-        ? (progress) => {
-            if (progress.total) {
-              onProgress(Math.round((progress.loaded / progress.total) * 100))
-            }
-          }
-        : undefined,
+  // Paso 2: subir directo a Supabase Storage con XHR para tener progreso real.
+  // Esto bypasea el límite de 4.5 MB de Vercel Functions.
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', urlPayload.signedUrl!)
+    xhr.setRequestHeader('Content-Type', file.type)
+
+    if (onProgress) {
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          onProgress(Math.round((e.loaded / e.total) * 100))
+        }
+      })
+    }
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve()
+      } else {
+        reject(new Error(xhr.responseText || `Error ${xhr.status} al subir el archivo.`))
+      }
     })
+    xhr.addEventListener('error', () => reject(new Error('No se pudo subir el archivo.')))
+    xhr.addEventListener('abort', () => reject(new Error('Subida cancelada.')))
 
-  if (uploadError) {
-    throw new Error(uploadError.message ?? 'No se pudo subir el archivo.')
-  }
+    xhr.send(file)
+  })
 
-  return urlPayload.publicUrl!
+  return urlPayload.publicUrl
 }
