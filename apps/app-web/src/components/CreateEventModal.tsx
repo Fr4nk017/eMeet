@@ -80,7 +80,7 @@ export function CreateEventModal({
   organizerAvatar,
   avatarUrl,
   initials,
-  userId,
+  userId: _userId,
   mode = 'create',
   initialValues,
 }: Props) {
