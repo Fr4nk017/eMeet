@@ -8,7 +8,6 @@ const BUCKET = 'event-media'
 
 export async function uploadEventMedia(
   file: File,
-  userId: string,
   onProgress?: (pct: number) => void,
 ): Promise<string> {
   const supabase = getSupabaseBrowserClient()

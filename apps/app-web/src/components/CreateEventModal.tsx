@@ -272,11 +272,11 @@ export function CreateEventModal({
       let finalImageUrl = eventForm.imageUrl
       let finalVideoUrl: string | undefined
 
-      if (selectedFile && userId && hasSupabaseEnv) {
+      if (selectedFile && hasSupabaseEnv) {
         const label = mediaType === 'video' ? 'video' : 'imagen'
         setUploadProgress(`Subiendo ${label}... 0%`)
         try {
-          const publicUrl = await uploadEventMedia(selectedFile, userId, (pct) => {
+          const publicUrl = await uploadEventMedia(selectedFile, (pct) => {
             setUploadProgress(`Subiendo ${label}... ${pct}%`)
           })
           if (mediaType === 'video') {
