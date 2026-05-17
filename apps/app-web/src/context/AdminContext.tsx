@@ -54,7 +54,6 @@ interface AdminContextValue {
 }
 
 const AdminContext = createContext<AdminContextValue | undefined>(undefined)
-
 const ADMIN_API_URL = resolveServiceUrl(process.env.NEXT_PUBLIC_ADMIN_API_URL, 'ADMIN_API_URL')
 
 // ─── Provider ────────────────────────────────────────────────────────────────

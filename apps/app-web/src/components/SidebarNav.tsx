@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { useEffect } from 'react'
 import {
   House as HiHome,
   Bookmark as HiBookmark,
@@ -13,6 +14,8 @@ import {
 } from 'lucide-react'
 import { useChatContext } from '../context/ChatContext'
 import { useAuth } from '../context/AuthContext'
+
+const ALL_ROUTES = ['/', '/search', '/chat', '/saved', '/profile', '/locatario', '/admin']
 
 const USER_NAV_ITEMS = [
   { href: '/', label: 'Feed', icon: HiHome },
@@ -31,7 +34,12 @@ export default function SidebarNav() {
   const { totalUnread } = useChatContext()
   const { user } = useAuth()
   const pathname = usePathname() ?? '/'
+  const router = useRouter()
   const navItems = user?.role === 'locatario' ? LOCATARIO_NAV_ITEMS : USER_NAV_ITEMS
+
+  useEffect(() => {
+    ALL_ROUTES.forEach((route) => router.prefetch(route))
+  }, [router])
 
   const isRouteActive = (href: string) => {
     if (href === '/') return pathname === '/'
@@ -58,6 +66,7 @@ export default function SidebarNav() {
         {user?.role === 'admin' && (
           <Link
             href="/admin"
+            prefetch
             className={`group relative flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 border ${
               pathname === '/admin'
                 ? 'bg-gradient-to-r from-violet-600/25 via-violet-500/15 to-violet-600/20 text-white border-violet-400/25'
@@ -75,6 +84,7 @@ export default function SidebarNav() {
         {user?.role === 'locatario' && (
           <Link
             href="/locatario"
+            prefetch
             className={`group relative flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 border ${
               pathname === '/locatario'
                 ? 'bg-gradient-to-r from-violet-600/25 via-violet-500/15 to-violet-600/20 text-white border-violet-400/25'
