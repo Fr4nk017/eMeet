@@ -22,7 +22,6 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "incremental": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./*"]
     },
