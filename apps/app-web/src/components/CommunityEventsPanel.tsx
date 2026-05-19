@@ -1,7 +1,6 @@
 'use client'
 
 import { memo, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import { Calendar, MapPin, Sparkles, ChevronRight } from 'lucide-react'
@@ -53,13 +52,10 @@ function EventCard({ event, idx, onClick }: { event: Event; idx: number; onClick
       onClick={onClick}
       className="group relative overflow-hidden rounded-2xl border border-white/[0.07] bg-[#14142a] transition-all duration-300 hover:border-white/20 hover:shadow-xl hover:shadow-violet-950/40 cursor-pointer"
     >
-      {/* Hero */}
       <div className="relative h-[130px] overflow-hidden">
         {hasVideo ? (
           <>
-            {!videoReady && (
-              <div className={`absolute inset-0 bg-gradient-to-br ${meta.gradient}`} />
-            )}
+            {!videoReady && <div className={`absolute inset-0 bg-gradient-to-br ${meta.gradient}`} />}
             <video
               src={event.videoUrl!}
               className={`h-full w-full object-cover transition-all duration-500 group-hover:scale-105 ${videoReady ? 'opacity-100' : 'opacity-0'}`}
@@ -68,23 +64,19 @@ function EventCard({ event, idx, onClick }: { event: Event; idx: number; onClick
             />
           </>
         ) : (
-          <>
-            <Image
-              src={imgSrc}
-              alt={event.title}
-              fill
-              className="object-cover transition-transform duration-500 group-hover:scale-105"
-              sizes="280px"
-              onError={() => setImgSrc(FALLBACK_IMAGE)}
-            />
-          </>
+          <Image
+            src={imgSrc}
+            alt={event.title}
+            fill
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            sizes="280px"
+            onError={() => setImgSrc(FALLBACK_IMAGE)}
+          />
         )}
 
-        {/* Dark gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-[#14142a] via-black/30 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-black/40" />
 
-        {/* Top badges row */}
         <div className="absolute left-2.5 right-2.5 top-2.5 flex items-center justify-between">
           <span className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold backdrop-blur-md ${meta.badge} ${meta.text}`}>
             <span>{meta.emoji}</span>
@@ -99,7 +91,6 @@ function EventCard({ event, idx, onClick }: { event: Event; idx: number; onClick
           </span>
         </div>
 
-        {/* Upcoming indicator */}
         {upcoming && (
           <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5">
             <span className="relative flex h-2 w-2">
@@ -110,7 +101,6 @@ function EventCard({ event, idx, onClick }: { event: Event; idx: number; onClick
           </div>
         )}
 
-        {/* Arrow hover hint */}
         <div className="absolute bottom-2.5 right-2.5 opacity-0 transition-opacity group-hover:opacity-100">
           <div className="flex items-center gap-0.5 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-md">
             Ver <ChevronRight className="h-3 w-3" />
@@ -118,7 +108,6 @@ function EventCard({ event, idx, onClick }: { event: Event; idx: number; onClick
         </div>
       </div>
 
-      {/* Content */}
       <div className="px-3 pb-3 pt-2.5">
         <h4 className="mb-2 line-clamp-2 text-[13px] font-semibold leading-snug text-white transition-colors group-hover:text-violet-200">
           {event.title}
@@ -141,15 +130,10 @@ function EventCard({ event, idx, onClick }: { event: Event; idx: number; onClick
           )}
         </div>
 
-        {/* Footer */}
         <div className="mt-2.5 flex items-center justify-between border-t border-white/[0.06] pt-2.5">
           <div className="flex items-center gap-1.5 min-w-0">
             {event.organizerAvatar ? (
-              <img
-                src={event.organizerAvatar}
-                alt=""
-                className="h-5 w-5 shrink-0 rounded-full border border-white/20 object-cover"
-              />
+              <img src={event.organizerAvatar} alt="" className="h-5 w-5 shrink-0 rounded-full border border-white/20 object-cover" />
             ) : (
               <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-violet-500/30 bg-violet-600/30 text-[9px] font-bold text-violet-300">
                 {event.organizerName.charAt(0).toUpperCase()}
@@ -157,12 +141,9 @@ function EventCard({ event, idx, onClick }: { event: Event; idx: number; onClick
             )}
             <span className="truncate text-[10px] text-slate-500">{event.organizerName}</span>
           </div>
-
           {event.distance > 0 && (
             <span className="shrink-0 text-[10px] font-semibold text-violet-400">
-              {event.distance < 1
-                ? `${Math.round(event.distance * 1000)} m`
-                : `${event.distance.toFixed(1)} km`}
+              {event.distance < 1 ? `${Math.round(event.distance * 1000)} m` : `${event.distance.toFixed(1)} km`}
             </span>
           )}
         </div>
@@ -173,16 +154,15 @@ function EventCard({ event, idx, onClick }: { event: Event; idx: number; onClick
 
 interface CommunityEventsPanelProps {
   events: Event[]
+  onEventClick: (event: Event) => void
 }
 
-const CommunityEventsPanel = memo(function CommunityEventsPanel({ events }: CommunityEventsPanelProps) {
-  const router = useRouter()
+const CommunityEventsPanel = memo(function CommunityEventsPanel({ events, onEventClick }: CommunityEventsPanelProps) {
   const communityEvents = events.filter((e) => e.source === 'locatario')
 
   return (
     <div className="flex h-full flex-col">
-
-      {/* ── Header ── */}
+      {/* Header */}
       <div className="mb-1 flex items-center gap-2.5">
         <div className="relative">
           <div className="absolute -inset-2 rounded-xl bg-gradient-to-r from-violet-500/15 to-fuchsia-500/15 blur-md" />
@@ -211,7 +191,6 @@ const CommunityEventsPanel = memo(function CommunityEventsPanel({ events }: Comm
 
       <p className="mb-3.5 text-[11px] text-slate-500">De la comunidad · cerca tuyo</p>
 
-      {/* ── List ── */}
       {communityEvents.length === 0 ? (
         <motion.div
           initial={{ opacity: 0 }}
@@ -236,7 +215,7 @@ const CommunityEventsPanel = memo(function CommunityEventsPanel({ events }: Comm
               key={event.id}
               event={event}
               idx={idx}
-              onClick={() => router.push(`/event/${encodeURIComponent(event.id)}`)}
+              onClick={() => onEventClick(event)}
             />
           ))}
         </div>
