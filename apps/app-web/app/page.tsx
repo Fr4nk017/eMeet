@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import dynamic from 'next/dynamic'
+import { Search, X as XIcon, SlidersHorizontal } from 'lucide-react'
 import SwipeCard from '@/src/components/SwipeCard'
 import CommunityEventsPanel from '@/src/components/CommunityEventsPanel'
 import Layout from '@/src/components/Layout'
@@ -17,7 +18,18 @@ import { callSavedApi } from '@/src/lib/savedApi'
 import { hasSupabaseEnv } from '@/src/lib/supabase'
 import { useFeedEvents } from '@/src/hooks/useFeedEvents'
 import { haversineKm } from '@/src/utils/geo'
-import type { PlaceType } from '@/src/types'
+import type { PlaceType, EventCategory, Event } from '@/src/types'
+
+const CATEGORY_OPTIONS: { value: EventCategory; emoji: string; label: string }[] = [
+  { value: 'fiesta',      emoji: '🎉', label: 'Fiesta' },
+  { value: 'musica',      emoji: '🎵', label: 'Música' },
+  { value: 'gastronomia', emoji: '🍽️', label: 'Gastro' },
+  { value: 'networking',  emoji: '🤝', label: 'Networking' },
+  { value: 'deporte',     emoji: '⚽', label: 'Deporte' },
+  { value: 'cultura',     emoji: '🏛️', label: 'Cultura' },
+  { value: 'teatro',      emoji: '🎭', label: 'Teatro' },
+  { value: 'arte',        emoji: '🎨', label: 'Arte' },
+]
 
 const BellavistaMapMobile = dynamic(() => import('@/src/components/BellavistaMap'), {
   ssr: false,
@@ -171,6 +183,10 @@ function HomePageContent() {
   const processingIds = useRef<Set<string>>(new Set())
   const [isFiltersOpen, setIsFiltersOpen] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedCategories, setSelectedCategories] = useState<Set<EventCategory>>(new Set())
+  const [onlyCommunity, setOnlyCommunity] = useState(false)
+  const [pinnedEventId, setPinnedEventId] = useState<string | null>(null)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -308,6 +324,7 @@ function HomePageContent() {
       setLikedIds((prev) => new Set(prev).add(id))
       setDismissedIds((prev) => new Set(prev).add(id))
       excludePlace(id)
+      setPinnedEventId((prev) => prev === id ? null : prev)
 
       showToast(`¡Like! ${likedEvent.title}`, 'like')
       setFocusedPlaceId(likedEvent.id)
@@ -331,6 +348,7 @@ function HomePageContent() {
   const handleSwipeLeft = useCallback((id: string) => {
     setDismissedIds((prev) => new Set(prev).add(id))
     excludePlace(id)
+    setPinnedEventId((prev) => prev === id ? null : prev)
     showToast('No es para ti', 'nope')
   }, [excludePlace])
 
@@ -384,14 +402,67 @@ function HomePageContent() {
     showToast('Evento guardado 🔖', 'save')
   }, [events, savedIds, updateUser, user])
 
-  const visibleEvents = useMemo(() => events.slice(0, 3), [events])
+  const filteredEvents = useMemo(() => {
+    let result = events
+    if (onlyCommunity) {
+      result = result.filter((e) => e.source === 'locatario')
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      result = result.filter((e) =>
+        e.title.toLowerCase().includes(q) ||
+        e.address?.toLowerCase().includes(q) ||
+        e.location?.toLowerCase().includes(q) ||
+        e.description?.toLowerCase().includes(q)
+      )
+    }
+    if (selectedCategories.size > 0) {
+      result = result.filter((e) => selectedCategories.has(e.category))
+    }
+    return result
+  }, [events, onlyCommunity, searchQuery, selectedCategories])
+
+  const visibleEvents = useMemo(() => {
+    if (pinnedEventId) {
+      const pinned = events.find((e) => e.id === pinnedEventId)
+      if (pinned) {
+        const rest = filteredEvents.filter((e) => e.id !== pinnedEventId)
+        return [pinned, ...rest].slice(0, 3)
+      }
+    }
+    return filteredEvents.slice(0, 3)
+  }, [filteredEvents, events, pinnedEventId])
 
   const activeFilterCount =
     (selectedDistanceKm !== 3 ? 1 : 0) +
-    (selectedPlaceTypes.length !== DEFAULT_FEED_TYPES.length ? 1 : 0)
+    (selectedPlaceTypes.length !== DEFAULT_FEED_TYPES.length ? 1 : 0) +
+    (searchQuery.trim() ? 1 : 0) +
+    selectedCategories.size +
+    (onlyCommunity ? 1 : 0)
+
+  function toggleCategory(cat: EventCategory) {
+    setSelectedCategories((prev) => {
+      const next = new Set(prev)
+      if (next.has(cat)) next.delete(cat)
+      else next.add(cat)
+      return next
+    })
+  }
+
+  function handlePinEvent(event: Event) {
+    setDismissedIds((prev) => {
+      const next = new Set(prev)
+      next.delete(event.id)
+      return next
+    })
+    setPinnedEventId(event.id)
+  }
 
   function restoreDefaultFilters() {
     setDistanceKm(3)
+    setSearchQuery('')
+    setSelectedCategories(new Set())
+    setOnlyCommunity(false)
 
     const selectedSet = new Set(selectedPlaceTypes)
     const defaultSet = new Set(DEFAULT_FEED_TYPES)
@@ -449,29 +520,125 @@ function HomePageContent() {
             <button
               type="button"
               onClick={() => setIsFiltersOpen((v) => !v)}
-              className={`rounded-full border px-3 py-2 text-xs font-semibold shadow-lg backdrop-blur-md transition-colors ${
+              className={`flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-semibold shadow-lg backdrop-blur-md transition-colors ${
                 isFiltersOpen || activeFilterCount > 0
                   ? 'border-primary/70 bg-primary/20 text-primary-light'
                   : 'border-white/20 bg-surface/70 text-slate-200 hover:border-white/40'
               }`}
             >
-              Filtros {activeFilterCount > 0 ? `(${activeFilterCount})` : ''}
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              Filtros
+              {activeFilterCount > 0 && (
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
+                  {activeFilterCount}
+                </span>
+              )}
             </button>
 
             <AnimatePresence>
               {isFiltersOpen && (
                 <motion.div
-                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                  initial={{ opacity: 0, y: -8, scale: 0.97 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.98 }}
-                  transition={{ duration: 0.16 }}
-                  className="mt-3 w-[320px] rounded-2xl border border-white/10 bg-card/95 p-3 shadow-2xl backdrop-blur-lg"
+                  exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                  className="mt-3 w-[340px] overflow-hidden rounded-2xl border border-white/10 bg-[#111127]/95 shadow-2xl shadow-violet-950/40 backdrop-blur-xl"
                 >
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-300">Opciones de filtro</p>
+                  {/* Header */}
+                  <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <SlidersHorizontal className="h-3.5 w-3.5 text-violet-400" />
+                      <span className="text-[13px] font-semibold text-white">Filtrar eventos</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsFiltersOpen(false)}
+                      className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.06] text-slate-400 hover:text-white transition-colors"
+                    >
+                      <XIcon className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-4 p-4">
+                    {/* Search */}
                     <div>
-                      <p className="mb-1 text-[11px] font-semibold text-muted">Distancia</p>
+                      <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Buscar
+                      </label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+                        <input
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="Nombre, lugar, dirección…"
+                          className="w-full rounded-xl border border-white/[0.08] bg-white/[0.05] py-2 pl-8 pr-8 text-[13px] text-white placeholder-slate-600 outline-none transition-all focus:border-violet-500/50 focus:bg-white/[0.07]"
+                        />
+                        {searchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setSearchQuery('')}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+                          >
+                            <XIcon className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Eventos CD toggle */}
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Fuente
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setOnlyCommunity((v) => !v)}
+                        className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-[12px] font-semibold transition-all w-full ${
+                          onlyCommunity
+                            ? 'border-violet-500/60 bg-violet-500/20 text-violet-200'
+                            : 'border-white/[0.08] bg-white/[0.04] text-slate-400 hover:border-white/20 hover:text-slate-200'
+                        }`}
+                      >
+                        <span className="text-base">🏘️</span>
+                        <span>Eventos CD</span>
+                        <span className="ml-auto text-[10px] text-slate-500">Solo eventos de la comunidad</span>
+                        <span className={`h-4 w-4 rounded-full border-2 transition-all ${onlyCommunity ? 'border-violet-400 bg-violet-400' : 'border-slate-600'}`} />
+                      </button>
+                    </div>
+
+                    {/* Categories */}
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Categoría
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {CATEGORY_OPTIONS.map(({ value, emoji, label }) => {
+                          const active = selectedCategories.has(value)
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => toggleCategory(value)}
+                              className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-all ${
+                                active
+                                  ? 'border-violet-500/60 bg-violet-500/25 text-violet-200'
+                                  : 'border-white/[0.08] bg-white/[0.04] text-slate-400 hover:border-white/20 hover:text-slate-200'
+                              }`}
+                            >
+                              <span>{emoji}</span>
+                              {label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Distance */}
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Distancia
+                      </label>
                       <DistanceFilter
                         selectedKm={selectedDistanceKm}
                         onChange={setDistanceKm}
@@ -479,8 +646,11 @@ function HomePageContent() {
                       />
                     </div>
 
+                    {/* Place types */}
                     <div>
-                      <p className="mb-1 text-[11px] font-semibold text-muted">Tipos de lugar</p>
+                      <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Tipos de lugar
+                      </label>
                       <PlaceTypeFilters
                         selectedTypes={selectedPlaceTypes}
                         onToggleType={togglePlaceType}
@@ -489,21 +659,30 @@ function HomePageContent() {
                     </div>
                   </div>
 
-                  <div className="mt-4 flex items-center justify-between">
+                  {/* Footer */}
+                  <div className="flex items-center justify-between border-t border-white/[0.07] px-4 py-3">
                     <button
                       type="button"
                       onClick={restoreDefaultFilters}
-                      className="rounded-full border border-white/20 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-white/40"
+                      disabled={activeFilterCount === 0}
+                      className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold text-slate-400 transition-colors hover:border-white/30 hover:text-slate-200 disabled:opacity-40"
                     >
-                      Limpiar filtros
+                      Limpiar todo
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsFiltersOpen(false)}
-                      className="rounded-full border border-primary/60 bg-primary/15 px-3 py-1.5 text-xs font-semibold text-primary-light"
-                    >
-                      Aplicar
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {filteredEvents.length > 0 && (
+                        <span className="text-[11px] text-slate-500">
+                          {filteredEvents.length} resultado{filteredEvents.length !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setIsFiltersOpen(false)}
+                        className="rounded-full bg-primary/20 border border-primary/50 px-3 py-1.5 text-xs font-semibold text-primary-light transition-colors hover:bg-primary/30"
+                      >
+                        Ver resultados
+                      </button>
+                    </div>
                   </div>
                 </motion.div>
               )}
@@ -606,7 +785,7 @@ function HomePageContent() {
                   </div>
 
                   <aside className="hidden h-full min-h-[500px] w-[300px] overflow-y-auto rounded-2xl border border-white/[0.08] bg-gradient-to-b from-[#12122a]/80 to-[#0d0d1a]/60 p-3.5 shadow-2xl shadow-violet-950/20 backdrop-blur-md lg:block lg:min-h-[560px] xl:min-h-[620px]">
-                    <CommunityEventsPanel events={events} />
+                    <CommunityEventsPanel events={events} onEventClick={handlePinEvent} />
                   </aside>
                 </div>
               )}
@@ -678,7 +857,11 @@ function HomePageContent() {
 
         {visibleEvents.length > 0 && (
           <div className="flex items-center justify-center gap-3 px-4 pb-2 lg:px-5 lg:pb-3">
-            <span className="text-xs text-muted">{events.length} lugares cerca de ti</span>
+            <span className="text-xs text-muted">
+              {filteredEvents.length !== events.length
+                ? `${filteredEvents.length} de ${events.length} eventos`
+                : `${events.length} lugares cerca de ti`}
+            </span>
             {likedIds.size > 0 && (
               <span className="text-xs font-medium text-green-400">· {likedIds.size} te interesaron</span>
             )}
