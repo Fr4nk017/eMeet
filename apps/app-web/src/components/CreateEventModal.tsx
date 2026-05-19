@@ -95,6 +95,8 @@ export function CreateEventModal({
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
 
+  const [videoAudioMode, setVideoAudioMode] = useState<'video' | 'music'>('video')
+
   const [deezerQuery, setDeezerQuery] = useState('')
   const [deezerResults, setDeezerResults] = useState<DeezerTrack[]>([])
   const [deezerTrack, setDeezerTrack] = useState<DeezerTrack | null>(null)
@@ -150,6 +152,7 @@ export function CreateEventModal({
       setIsFree(true)
       setValidationError(null)
       setUploadProgress(null)
+      setVideoAudioMode('video')
       setDeezerQuery('')
       setDeezerResults([])
       setDeezerTrack(null)
@@ -199,9 +202,19 @@ export function CreateEventModal({
   if (!isOpen) return null
 
   const handleMediaFile = (file: File) => {
-    const isVideo = file.type.startsWith('video/')
-    const isImage = file.type.startsWith('image/')
-    if (!isVideo && !isImage) return
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+    const VIDEO_EXTS = new Set(['mp4', 'mov', 'webm', 'avi', 'mkv', 'flv', 'm4v', 'wmv', '3gp', 'ts', 'ogv'])
+    const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'bmp', 'tiff', 'heic', 'heif'])
+
+    const isVideo = file.type.startsWith('video/') || VIDEO_EXTS.has(ext)
+    const isImage = file.type.startsWith('image/') || IMAGE_EXTS.has(ext)
+
+    if (!isVideo && !isImage) {
+      setValidationError(
+        `Formato no soportado (.${ext || file.type || '?'}). Usa MP4, MOV, WEBM, AVI, MKV o imágenes JPG/PNG/WEBP.`
+      )
+      return
+    }
 
     const MAX_IMAGE_MB = 10
     const MAX_VIDEO_MB = 50
@@ -243,6 +256,7 @@ export function CreateEventModal({
     setMediaPreview(null)
     setSelectedFile(null)
     setMediaType(null)
+    setVideoAudioMode('video')
     setValidationError(null)
     setEventForm((prev) => ({ ...prev, imageUrl: '' }))
     if (fileInputRef.current) fileInputRef.current.value = ''
@@ -317,9 +331,11 @@ export function CreateEventModal({
         setUploadProgress(null)
       }
 
-      const finalAudioUrl = deezerTrack
-        ? (audioPreviewUrl ?? undefined)
-        : existingAudioUrl ?? undefined
+      const finalAudioUrl = (mediaType === 'video' && videoAudioMode === 'video')
+        ? undefined
+        : deezerTrack
+          ? (audioPreviewUrl ?? undefined)
+          : existingAudioUrl ?? undefined
 
       await onSubmit({
         title: eventForm.title,
@@ -351,7 +367,7 @@ export function CreateEventModal({
       ? (mode === 'edit' ? 'Guardando...' : 'Publicando...')
       : (mode === 'edit' ? 'Guardar' : 'Publicar'))
 
-  const hasAudio = deezerTrack || existingAudioUrl
+  const hasAudio = (deezerTrack || existingAudioUrl) && (mediaType !== 'video' || videoAudioMode === 'music')
 
   return (
     <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4">
@@ -389,6 +405,7 @@ export function CreateEventModal({
                   <video
                     src={mediaPreview}
                     controls
+                    muted={videoAudioMode === 'music'}
                     className="w-full h-full object-contain"
                   />
                 ) : (
@@ -433,13 +450,13 @@ export function CreateEventModal({
                   </p>
                   <p className="text-white/40 text-xs md:text-sm">Toca para seleccionar</p>
                 </div>
-                <span className="hidden md:inline text-xs text-white/20">PNG, JPG, GIF, WEBP, AVIF, BMP, TIFF, HEIC · MP4, MOV, WEBM</span>
+                <span className="hidden md:inline text-xs text-white/20">JPG, PNG, WEBP, HEIC · MP4, MOV, WEBM, AVI, MKV y más</span>
               </button>
             )}
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*,video/*"
+              accept="image/*,video/*,.avi,.mkv,.flv,.wmv,.m4v,.3gp,.ts,.ogv,.heic,.heif"
               className="hidden"
               onChange={handleFileSelect}
             />
@@ -548,7 +565,51 @@ export function CreateEventModal({
                 )}
               </div>
 
-              {/* Música del evento — Deezer */}
+              {/* Toggle audio: solo cuando hay video */}
+              {mediaType === 'video' && (
+                <div>
+                  <p className="text-xs text-white/35 mb-1.5 font-medium">Audio del evento</p>
+                  <div className="flex rounded-xl border border-white/10 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVideoAudioMode('video')
+                        setDeezerTrack(null)
+                        setAudioPreviewUrl(null)
+                        setDeezerQuery('')
+                        setDeezerResults([])
+                      }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all ${
+                        videoAudioMode === 'video'
+                          ? 'bg-violet-600/25 text-violet-300'
+                          : 'bg-white/5 text-white/35 hover:bg-white/8 hover:text-white/55'
+                      }`}
+                    >
+                      🎬 Sonido del video
+                    </button>
+                    <div className="w-px bg-white/10" />
+                    <button
+                      type="button"
+                      onClick={() => setVideoAudioMode('music')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all ${
+                        videoAudioMode === 'music'
+                          ? 'bg-violet-600/25 text-violet-300'
+                          : 'bg-white/5 text-white/35 hover:bg-white/8 hover:text-white/55'
+                      }`}
+                    >
+                      🎵 Música
+                    </button>
+                  </div>
+                  {videoAudioMode === 'video' && (
+                    <p className="mt-1 text-[10px] text-white/20">
+                      El video se reproducirá con su audio original
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Música del evento — Deezer (oculto si video usa su propio audio) */}
+              {(mediaType !== 'video' || videoAudioMode === 'music') && (
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-xs text-white/35 font-medium">Música del evento</p>
@@ -637,6 +698,7 @@ export function CreateEventModal({
                   </div>
                 )}
               </div>
+              )}
 
               {!mediaPreview && (
                 <div>

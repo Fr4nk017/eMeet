@@ -1,6 +1,7 @@
 'use client'
 
 import { memo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import { Calendar, MapPin, Sparkles, ChevronRight } from 'lucide-react'
@@ -35,7 +36,7 @@ function isUpcomingEvent(iso: string): boolean {
   try { return new Date(iso) > new Date() } catch { return false }
 }
 
-function EventCard({ event, idx }: { event: Event; idx: number }) {
+function EventCard({ event, idx, onClick }: { event: Event; idx: number; onClick: () => void }) {
   const [imgSrc, setImgSrc] = useState(event.imageUrl || FALLBACK_IMAGE)
   const [videoReady, setVideoReady] = useState(false)
   const meta = CATEGORY_META[event.category] ?? CATEGORY_META.fiesta
@@ -49,6 +50,7 @@ function EventCard({ event, idx }: { event: Event; idx: number }) {
       initial={{ opacity: 0, y: 14, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ delay: idx * 0.06, type: 'spring', stiffness: 300, damping: 26 }}
+      onClick={onClick}
       className="group relative overflow-hidden rounded-2xl border border-white/[0.07] bg-[#14142a] transition-all duration-300 hover:border-white/20 hover:shadow-xl hover:shadow-violet-950/40 cursor-pointer"
     >
       {/* Hero */}
@@ -174,6 +176,7 @@ interface CommunityEventsPanelProps {
 }
 
 const CommunityEventsPanel = memo(function CommunityEventsPanel({ events }: CommunityEventsPanelProps) {
+  const router = useRouter()
   const communityEvents = events.filter((e) => e.source === 'locatario')
 
   return (
@@ -229,7 +232,12 @@ const CommunityEventsPanel = memo(function CommunityEventsPanel({ events }: Comm
       ) : (
         <div className="space-y-2.5">
           {communityEvents.slice(0, 6).map((event, idx) => (
-            <EventCard key={event.id} event={event} idx={idx} />
+            <EventCard
+              key={event.id}
+              event={event}
+              idx={idx}
+              onClick={() => router.push(`/event/${encodeURIComponent(event.id)}`)}
+            />
           ))}
         </div>
       )}
