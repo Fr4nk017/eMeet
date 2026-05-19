@@ -14,7 +14,7 @@ export async function GET(
     if (!res.ok) return NextResponse.json({ error: 'Track not found' }, { status: 404 })
     const data = await res.json() as { preview?: string }
     if (!data.preview) return NextResponse.json({ error: 'No preview available' }, { status: 404 })
-    return NextResponse.redirect(data.preview)
+    return NextResponse.json({ previewUrl: data.preview })
   } catch {
     return NextResponse.json({ error: 'Failed to fetch preview' }, { status: 502 })
   }

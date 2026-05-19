@@ -98,6 +98,8 @@ export function CreateEventModal({
   const [deezerQuery, setDeezerQuery] = useState('')
   const [deezerResults, setDeezerResults] = useState<DeezerTrack[]>([])
   const [deezerTrack, setDeezerTrack] = useState<DeezerTrack | null>(null)
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null)
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false)
   const [existingAudioUrl, setExistingAudioUrl] = useState<string | null>(null)
   const [isSearchingDeezer, setIsSearchingDeezer] = useState(false)
 
@@ -151,6 +153,8 @@ export function CreateEventModal({
       setDeezerQuery('')
       setDeezerResults([])
       setDeezerTrack(null)
+      setAudioPreviewUrl(null)
+      setIsLoadingPreview(false)
       setExistingAudioUrl(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
@@ -244,16 +248,31 @@ export function CreateEventModal({
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  const selectDeezerTrack = (track: DeezerTrack) => {
+  const selectDeezerTrack = async (track: DeezerTrack) => {
     setDeezerTrack(track)
     setExistingAudioUrl(null)
     setDeezerResults([])
     setDeezerQuery('')
+    setAudioPreviewUrl(null)
+    setIsLoadingPreview(true)
+    try {
+      const res = await fetch(`/api/deezer/preview/${track.id}`)
+      if (res.ok) {
+        const data = await res.json() as { previewUrl?: string }
+        setAudioPreviewUrl(data.previewUrl ?? null)
+      }
+    } catch {
+      // audio preview no disponible
+    } finally {
+      setIsLoadingPreview(false)
+    }
   }
 
   const clearAudio = () => {
     setDeezerTrack(null)
     setExistingAudioUrl(null)
+    setAudioPreviewUrl(null)
+    setIsLoadingPreview(false)
     setDeezerQuery('')
     setDeezerResults([])
   }
@@ -299,7 +318,7 @@ export function CreateEventModal({
       }
 
       const finalAudioUrl = deezerTrack
-        ? `/api/deezer/preview/${deezerTrack.id}`
+        ? (audioPreviewUrl ?? undefined)
         : existingAudioUrl ?? undefined
 
       await onSubmit({
@@ -557,11 +576,17 @@ export function CreateEventModal({
                         <p className="text-xs text-white/40 truncate">{deezerTrack.artist}</p>
                       </div>
                     </div>
-                    <audio
-                      src={`/api/deezer/preview/${deezerTrack.id}`}
-                      controls
-                      className="w-full h-8 rounded-lg [color-scheme:dark]"
-                    />
+                    {isLoadingPreview ? (
+                      <p className="text-[11px] text-white/30 text-center py-1">Cargando preview…</p>
+                    ) : audioPreviewUrl ? (
+                      <audio
+                        src={audioPreviewUrl}
+                        controls
+                        className="w-full h-8 rounded-lg [color-scheme:dark]"
+                      />
+                    ) : (
+                      <p className="text-[11px] text-red-400/70 text-center py-1">Preview no disponible</p>
+                    )}
                     <p className="text-[10px] text-white/20 text-center">Preview de 30 seg · Deezer</p>
                   </div>
                 ) : existingAudioUrl ? (
