@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import dynamic from 'next/dynamic'
 import SwipeCard from '@/src/components/SwipeCard'
-import RecommendationsCard from '@/src/components/RecommendationsCard'
+import CommunityEventsPanel from '@/src/components/CommunityEventsPanel'
 import Layout from '@/src/components/Layout'
 import DistanceFilter from '@/src/components/DistanceFilter'
 import PlaceTypeFilters from '@/src/components/PlaceTypeFilters'
@@ -170,8 +170,6 @@ function HomePageContent() {
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const processingIds = useRef<Set<string>>(new Set())
   const [isFiltersOpen, setIsFiltersOpen] = useState(false)
-  const [onlyLocatario, setOnlyLocatario] = useState(false)
-  const [showRecommendations, setShowRecommendations] = useState(true)
   const [showOnboarding, setShowOnboarding] = useState(false)
 
   useEffect(() => {
@@ -223,10 +221,6 @@ function HomePageContent() {
       })
       .filter((e) => e.distance <= LOCATARIO_MAX_KM)
 
-    if (onlyLocatario) {
-      return locatarioMapped.sort((a, b) => a.distance - b.distance)
-    }
-
     const placeEvents = userLocation
       ? places
           .filter((place) => selectedPlaceTypes.includes(place.type))
@@ -241,7 +235,7 @@ function HomePageContent() {
       .concat(locatarioMapped)
       .concat(externalEvents.filter((e) => e.distance <= selectedDistanceKm))
       .sort((a, b) => a.distance - b.distance)
-  }, [externalEvents, allLocatarioEvents, onlyLocatario, places, selectedDistanceKm, selectedPlaceTypes, userLocation])
+  }, [externalEvents, allLocatarioEvents, places, selectedDistanceKm, selectedPlaceTypes, userLocation])
 
   const events = useMemo(() => {
     return baseEvents
@@ -394,12 +388,10 @@ function HomePageContent() {
 
   const activeFilterCount =
     (selectedDistanceKm !== 3 ? 1 : 0) +
-    (selectedPlaceTypes.length !== DEFAULT_FEED_TYPES.length ? 1 : 0) +
-    (onlyLocatario ? 1 : 0)
+    (selectedPlaceTypes.length !== DEFAULT_FEED_TYPES.length ? 1 : 0)
 
   function restoreDefaultFilters() {
     setDistanceKm(3)
-    setOnlyLocatario(false)
 
     const selectedSet = new Set(selectedPlaceTypes)
     const defaultSet = new Set(DEFAULT_FEED_TYPES)
@@ -451,17 +443,6 @@ function HomePageContent() {
             >
               GPS en mapa
             </button>
-            <button
-              type="button"
-              onClick={() => setOnlyLocatario((v) => !v)}
-              className={`rounded-full border px-3 py-2 text-xs font-semibold shadow-lg backdrop-blur-md transition-colors ${
-                onlyLocatario
-                  ? 'border-amber-400/60 bg-amber-500/25 text-amber-200'
-                  : 'border-white/20 bg-surface/70 text-slate-300 hover:border-white/40'
-              }`}
-            >
-              🏪 Locatarios {onlyLocatario ? `(≤${LOCATARIO_MAX_KM} km)` : ''}
-            </button>
           </div>
 
           <div className="absolute right-4 top-2 z-30 hidden lg:block lg:right-5">
@@ -489,24 +470,6 @@ function HomePageContent() {
                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-300">Opciones de filtro</p>
 
                   <div className="space-y-3">
-                    <div>
-                      <p className="mb-1 text-[11px] font-semibold text-muted">Eventos de locatarios</p>
-                      <button
-                        type="button"
-                        onClick={() => setOnlyLocatario((v) => !v)}
-                        className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${
-                          onlyLocatario
-                            ? 'border-amber-400/50 bg-amber-500/15 text-amber-200'
-                            : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
-                        }`}
-                      >
-                        <span>🏪 Solo eventos de locatarios</span>
-                        <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] ${onlyLocatario ? 'bg-amber-500/30 text-amber-200' : 'bg-white/10 text-slate-400'}`}>
-                          ≤ {LOCATARIO_MAX_KM} km
-                        </span>
-                      </button>
-                    </div>
-
                     <div>
                       <p className="mb-1 text-[11px] font-semibold text-muted">Distancia</p>
                       <DistanceFilter
@@ -642,15 +605,9 @@ function HomePageContent() {
                     })}
                   </div>
 
-                  {showRecommendations && (
-                    <aside className="hidden h-full min-h-[500px] w-[300px] overflow-y-auto rounded-2xl border border-white/10 bg-card/50 p-3 shadow-xl backdrop-blur-md lg:block lg:min-h-[560px] xl:min-h-[620px]">
-                      <RecommendationsCard
-                        events={events}
-                        onClose={() => setShowRecommendations(false)}
-                        userInterests={user?.interests ?? []}
-                      />
-                    </aside>
-                  )}
+                  <aside className="hidden h-full min-h-[500px] w-[300px] overflow-y-auto rounded-2xl border border-white/[0.08] bg-gradient-to-b from-[#12122a]/80 to-[#0d0d1a]/60 p-3.5 shadow-2xl shadow-violet-950/20 backdrop-blur-md lg:block lg:min-h-[560px] xl:min-h-[620px]">
+                    <CommunityEventsPanel events={events} />
+                  </aside>
                 </div>
               )}
             </>
