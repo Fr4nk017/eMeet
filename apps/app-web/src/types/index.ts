@@ -59,6 +59,7 @@ export interface User {
   email: string
   role: UserRole
   avatarUrl?: string
+  coverUrl?: string
   bio?: string
   interests: EventCategory[]
   likedEvents: string[]   // IDs de eventos con like

@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useChatContext } from '@/src/context/ChatContext'
 import { useAuth } from '@/src/context/AuthContext'
+import { CATEGORY_EMOJI } from '@/src/utils/eventUtils'
 import {
   ArrowLeft as HiArrowLeft,
   Send as HiPaperAirplane,
@@ -12,7 +13,18 @@ import {
   LogOut,
   AlertTriangle,
   Users,
+  X,
 } from 'lucide-react'
+
+type PublicProfile = {
+  id: string
+  name: string
+  bio?: string
+  location?: string
+  interests?: string[]
+  avatar_url?: string
+  cover_url?: string
+}
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('es-CL', {
@@ -30,6 +42,10 @@ function formatDateLabel(iso: string) {
   return date.toLocaleDateString('es-CL', { day: 'numeric', month: 'long' })
 }
 
+function toHandle(name: string) {
+  return `@${name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '')}`
+}
+
 export default function ChatRoomRoutePage() {
   const params = useParams<{ roomId: string }>()
   const roomId = typeof params?.roomId === 'string' ? params.roomId : undefined
@@ -42,6 +58,12 @@ export default function ChatRoomRoutePage() {
   const [leavingRoom, setLeavingRoom] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // ── Participants panel ─────────────────────────────────────────────────────
+  const [showParticipants, setShowParticipants] = useState(false)
+  const [viewingProfile, setViewingProfile] = useState<{ id: string; name: string; avatar: string } | null>(null)
+  const [profileData, setProfileData] = useState<PublicProfile | null>(null)
+  const [loadingProfile, setLoadingProfile] = useState(false)
 
   const room = rooms.find((r) => r.id === roomId)
   const roomMessages = messages[roomId ?? ''] ?? []
@@ -69,13 +91,25 @@ export default function ChatRoomRoutePage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [roomMessages.length])
 
+  // ── Fetch public profile when viewingProfile changes ──────────────────────
+  useEffect(() => {
+    if (!viewingProfile) { setProfileData(null); return }
+    setLoadingProfile(true)
+    setProfileData(null)
+    fetch(`/api/profile/${viewingProfile.id}`, { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: PublicProfile | null) => setProfileData(data))
+      .catch(() => setProfileData(null))
+      .finally(() => setLoadingProfile(false))
+  }, [viewingProfile])
+
   if (isAuthReady && !user) return null
 
   const otherParticipants = useMemo(() => {
-    const bySender = new Map<string, { name: string; avatar: string }>()
+    const bySender = new Map<string, { id: string; name: string; avatar: string }>()
     for (const msg of roomMessages) {
       if (msg.senderId !== user?.id && !bySender.has(msg.senderId)) {
-        bySender.set(msg.senderId, { name: msg.senderName, avatar: msg.senderAvatar })
+        bySender.set(msg.senderId, { id: msg.senderId, name: msg.senderName, avatar: msg.senderAvatar })
       }
     }
     return Array.from(bySender.values())
@@ -143,7 +177,6 @@ export default function ChatRoomRoutePage() {
   }
 
   return (
-    /* h-screen con dvh como override para que en móvil se ajuste al viewport visible */
     <div
       className="flex flex-col bg-surface"
       style={{ height: '100dvh' }}
@@ -190,10 +223,17 @@ export default function ChatRoomRoutePage() {
 
           {/* Miembros + estado */}
           <div className="flex shrink-0 items-center gap-1.5">
-            <div className="flex items-center gap-1 text-xs text-muted">
+            {/* Participants toggle button */}
+            <button
+              title="Ver participantes"
+              onClick={() => setShowParticipants((prev) => !prev)}
+              className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs transition-colors ${
+                showParticipants ? 'bg-primary/20 text-primary-light' : 'text-muted hover:bg-white/10 hover:text-white'
+              }`}
+            >
               <Users className="h-3.5 w-3.5 shrink-0" />
               <span className="font-semibold text-white">{room.memberCount}</span>
-            </div>
+            </button>
             {isExpired ? (
               <span className="hidden rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-semibold text-red-400 sm:inline">
                 {room.status === 'expired' ? 'Expirado' : 'Cerrado'}
@@ -212,6 +252,68 @@ export default function ChatRoomRoutePage() {
             </button>
           </div>
         </div>
+
+        {/* ── Participants panel ── */}
+        <AnimatePresence>
+          {showParticipants && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden border-t border-white/10"
+            >
+              <div className="flex gap-3 overflow-x-auto px-3 py-3 scrollbar-hide">
+                {/* Current user */}
+                {user && (
+                  <button
+                    onClick={() => setViewingProfile({ id: user.id, name: user.name, avatar: user.avatarUrl ?? '' })}
+                    className="flex flex-col items-center gap-1 shrink-0"
+                  >
+                    <div className="relative">
+                      {user.avatarUrl ? (
+                        <img
+                          src={user.avatarUrl}
+                          alt={user.name}
+                          className="h-10 w-10 rounded-full border-2 border-primary object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary bg-primary/20 text-xs font-bold text-white">
+                          {user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
+                      <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border border-surface bg-green-400" />
+                    </div>
+                    <span className="max-w-[56px] truncate text-[10px] text-primary-light">Tú</span>
+                  </button>
+                )}
+                {/* Other participants */}
+                {otherParticipants.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setViewingProfile({ id: p.id, name: p.name, avatar: p.avatar })}
+                    className="flex flex-col items-center gap-1 shrink-0"
+                  >
+                    {p.avatar ? (
+                      <img
+                        src={p.avatar}
+                        alt={p.name}
+                        className="h-10 w-10 rounded-full border border-white/20 object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/10 text-xs font-bold text-white">
+                        {p.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="max-w-[56px] truncate text-[10px] text-muted">{p.name.split(' ')[0]}</span>
+                  </button>
+                ))}
+                {otherParticipants.length === 0 && (
+                  <p className="py-1 text-xs text-muted">Aún no hay otros participantes.</p>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* ── Banner sala expirada ───────────────────────────────────────── */}
@@ -409,6 +511,109 @@ export default function ChatRoomRoutePage() {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Mini profile sheet ────────────────────────────────────────── */}
+      <AnimatePresence>
+        {viewingProfile && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+              onClick={() => setViewingProfile(null)}
+            />
+            {/* Drawer */}
+            <motion.div
+              initial={{ y: '100%', opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: '100%', opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 34 }}
+              className="fixed bottom-0 left-0 right-0 z-50 mx-auto max-w-lg rounded-t-3xl border border-white/10 bg-card shadow-2xl"
+              style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom, 0px))' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Drag handle */}
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="h-1 w-10 rounded-full bg-white/20" />
+              </div>
+
+              {/* Close button */}
+              <button
+                onClick={() => setViewingProfile(null)}
+                className="absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-muted hover:bg-white/20"
+              >
+                <X className="h-4 w-4" />
+              </button>
+
+              <div className="px-5 pb-2 pt-3">
+                {loadingProfile ? (
+                  <div className="flex flex-col items-center gap-3 py-8">
+                    <div className="h-16 w-16 animate-pulse rounded-full bg-white/10" />
+                    <div className="h-4 w-32 animate-pulse rounded bg-white/10" />
+                    <div className="h-3 w-48 animate-pulse rounded bg-white/5" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Avatar + name */}
+                    <div className="flex flex-col items-center text-center">
+                      <div className="mb-3 rounded-full bg-gradient-to-br from-primary via-purple-500 to-pink-500 p-[2px] shadow-lg shadow-primary/30">
+                        {(profileData?.avatar_url ?? viewingProfile.avatar) ? (
+                          <img
+                            src={profileData?.avatar_url ?? viewingProfile.avatar}
+                            alt={viewingProfile.name}
+                            className="h-16 w-16 rounded-full border-2 border-surface object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-surface bg-surface text-lg font-bold text-white">
+                            {viewingProfile.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <h3 className="text-base font-bold text-white">{profileData?.name ?? viewingProfile.name}</h3>
+                      <p className="text-xs font-semibold text-primary-light">
+                        {toHandle(profileData?.name ?? viewingProfile.name)}
+                      </p>
+                      {(profileData?.bio) && (
+                        <p className="mt-2 max-w-xs text-xs text-muted leading-relaxed line-clamp-2">{profileData.bio}</p>
+                      )}
+                      {(profileData?.location) && (
+                        <div className="mt-1.5 flex items-center gap-1 text-[11px] text-muted">
+                          <HiMapPin className="h-3 w-3 text-primary-light" />
+                          <span>{profileData.location}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Interests */}
+                    {profileData?.interests && profileData.interests.length > 0 && (
+                      <div className="mt-4">
+                        <p className="mb-2 text-[11px] uppercase tracking-wide text-muted">Intereses</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {profileData.interests.slice(0, 6).map((interest) => (
+                            <span
+                              key={interest}
+                              className="inline-flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-[11px] text-violet-300"
+                            >
+                              {CATEGORY_EMOJI[interest as keyof typeof CATEGORY_EMOJI] ?? '🎯'} {interest}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* No profile data fallback */}
+                    {!profileData && !loadingProfile && (
+                      <p className="mt-4 text-center text-xs text-muted">No se pudo cargar el perfil.</p>
+                    )}
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>

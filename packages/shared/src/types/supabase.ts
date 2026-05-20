@@ -17,6 +17,7 @@ export interface Database {
           name: string
           bio: string
           avatar_url: string | null
+          cover_url: string | null
           location: string
           interests: EventCategory[]
           role: string
@@ -29,6 +30,7 @@ export interface Database {
           name: string
           bio?: string
           avatar_url?: string | null
+          cover_url?: string | null
           location?: string
           interests?: EventCategory[]
           role?: string
@@ -40,6 +42,7 @@ export interface Database {
           name?: string
           bio?: string
           avatar_url?: string | null
+          cover_url?: string | null
           location?: string
           interests?: EventCategory[]
           role?: string

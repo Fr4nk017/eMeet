@@ -39,6 +39,7 @@ type ProfilePayload = {
   name: string
   bio: string
   avatar_url: string | null
+  cover_url?: string | null
   location: string
   interests: User['interests']
   role?: string | null
@@ -452,6 +453,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       name?: string
       bio?: string
       avatar_url?: string
+      cover_url?: string
       location?: string
       interests?: User['interests']
     } = {}
@@ -459,6 +461,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof data.name === 'string') profilePayload.name = data.name
     if (typeof data.bio === 'string') profilePayload.bio = data.bio
     if (typeof data.avatarUrl === 'string') profilePayload.avatar_url = data.avatarUrl
+    if (typeof data.coverUrl === 'string') profilePayload.cover_url = data.coverUrl
     if (typeof data.location === 'string') profilePayload.location = data.location
     if (Array.isArray(data.interests)) profilePayload.interests = data.interests
 
