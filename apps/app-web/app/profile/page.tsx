@@ -12,17 +12,13 @@ import { callSavedApi } from '@/src/lib/savedApi'
 import type { EventCategory } from '@/src/types'
 import {
   LogOut,
-  Bookmark,
   CalendarDays,
   MessageCircle,
   Mail,
-  Heart,
   MapPin,
   Pencil,
   ImageIcon,
   Plus,
-  Sparkles,
-  Users,
   Camera,
   Check,
 } from 'lucide-react'
