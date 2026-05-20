@@ -101,8 +101,8 @@ export function CreateEventModal({
   const [deezerResults, setDeezerResults] = useState<DeezerTrack[]>([])
   const [deezerTrack, setDeezerTrack] = useState<DeezerTrack | null>(null)
   const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null)
-  const [isLoadingPreview, setIsLoadingPreview] = useState(false)
   const [existingAudioUrl, setExistingAudioUrl] = useState<string | null>(null)
+  const [videoPreviewError, setVideoPreviewError] = useState(false)
   const [isSearchingDeezer, setIsSearchingDeezer] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -153,11 +153,11 @@ export function CreateEventModal({
       setValidationError(null)
       setUploadProgress(null)
       setVideoAudioMode('video')
+      setVideoPreviewError(false)
       setDeezerQuery('')
       setDeezerResults([])
       setDeezerTrack(null)
       setAudioPreviewUrl(null)
-      setIsLoadingPreview(false)
       setExistingAudioUrl(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
@@ -203,27 +203,29 @@ export function CreateEventModal({
 
   const handleMediaFile = (file: File) => {
     const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
-    const VIDEO_EXTS = new Set(['mp4', 'mov', 'webm', 'avi', 'mkv', 'flv', 'm4v', 'wmv', '3gp', 'ts', 'ogv'])
     const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'bmp', 'tiff', 'heic', 'heif'])
+    const VIDEO_EXTS = new Set(['mp4', 'mov', 'webm', 'avi', 'mkv', 'flv', 'm4v', 'wmv', '3gp', 'ts', 'ogv'])
+    const BLOCKED_PREFIXES = ['text/', 'application/pdf', 'application/zip', 'application/msword', 'application/vnd']
 
-    const isVideo = file.type.startsWith('video/') || VIDEO_EXTS.has(ext)
     const isImage = file.type.startsWith('image/') || IMAGE_EXTS.has(ext)
+    const isVideo = !isImage && (
+      file.type.startsWith('video/') ||
+      VIDEO_EXTS.has(ext) ||
+      // Formatos exportados por TikTok/apps con extensiones numéricas o MIME desconocido
+      !BLOCKED_PREFIXES.some((p) => file.type.startsWith(p))
+    )
 
     if (!isVideo && !isImage) {
-      setValidationError(
-        `Formato no soportado (.${ext || file.type || '?'}). Usa MP4, MOV, WEBM, AVI, MKV o imágenes JPG/PNG/WEBP.`
-      )
+      setValidationError('Formato no soportado. Usa MP4, MOV, WEBM, AVI o imágenes JPG/PNG/WEBP.')
       return
     }
 
     const MAX_IMAGE_MB = 10
-    const MAX_VIDEO_MB = 50
+    const MAX_VIDEO_MB = 100
     const maxMB = isVideo ? MAX_VIDEO_MB : MAX_IMAGE_MB
     const fileMB = (file.size / (1024 * 1024)).toFixed(1)
     if (file.size > maxMB * 1024 * 1024) {
-      setValidationError(
-        `El archivo pesa ${fileMB} MB y supera el límite de ${maxMB} MB permitido.`
-      )
+      setValidationError(`El archivo pesa ${fileMB} MB y supera el límite de ${maxMB} MB.`)
       return
     }
 
@@ -257,36 +259,25 @@ export function CreateEventModal({
     setSelectedFile(null)
     setMediaType(null)
     setVideoAudioMode('video')
+    setVideoPreviewError(false)
     setValidationError(null)
     setEventForm((prev) => ({ ...prev, imageUrl: '' }))
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  const selectDeezerTrack = async (track: DeezerTrack) => {
+  const selectDeezerTrack = (track: DeezerTrack) => {
     setDeezerTrack(track)
     setExistingAudioUrl(null)
     setDeezerResults([])
     setDeezerQuery('')
-    setAudioPreviewUrl(null)
-    setIsLoadingPreview(true)
-    try {
-      const res = await fetch(`/api/deezer/preview/${track.id}`)
-      if (res.ok) {
-        const data = await res.json() as { previewUrl?: string }
-        setAudioPreviewUrl(data.previewUrl ?? null)
-      }
-    } catch {
-      // audio preview no disponible
-    } finally {
-      setIsLoadingPreview(false)
-    }
+    // Proxy route streams audio directly — works on all devices including mobile
+    setAudioPreviewUrl(`/api/deezer/preview/${track.id}`)
   }
 
   const clearAudio = () => {
     setDeezerTrack(null)
     setExistingAudioUrl(null)
     setAudioPreviewUrl(null)
-    setIsLoadingPreview(false)
     setDeezerQuery('')
     setDeezerResults([])
   }
@@ -402,12 +393,23 @@ export function CreateEventModal({
             {mediaPreview ? (
               <>
                 {mediaType === 'video' ? (
-                  <video
-                    src={mediaPreview}
-                    controls
-                    muted={videoAudioMode === 'music'}
-                    className="w-full h-full object-contain"
-                  />
+                  <>
+                    <video
+                      src={mediaPreview}
+                      controls
+                      muted={videoAudioMode === 'music'}
+                      className="w-full h-full object-contain"
+                      onLoadStart={() => setVideoPreviewError(false)}
+                      onError={() => setVideoPreviewError(true)}
+                    />
+                    {videoPreviewError && (
+                      <div className="absolute inset-x-0 bottom-14 flex justify-center px-4">
+                        <span className="rounded-full bg-black/75 px-3 py-1.5 text-center text-xs text-yellow-300">
+                          Este formato no se puede previsualizar en el navegador, pero el video se subirá igual
+                        </span>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <img
                     src={mediaPreview}
@@ -456,7 +458,7 @@ export function CreateEventModal({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*,video/*,.avi,.mkv,.flv,.wmv,.m4v,.3gp,.ts,.ogv,.heic,.heif"
+              accept="image/*,video/*"
               className="hidden"
               onChange={handleFileSelect}
             />
@@ -637,16 +639,14 @@ export function CreateEventModal({
                         <p className="text-xs text-white/40 truncate">{deezerTrack.artist}</p>
                       </div>
                     </div>
-                    {isLoadingPreview ? (
-                      <p className="text-[11px] text-white/30 text-center py-1">Cargando preview…</p>
-                    ) : audioPreviewUrl ? (
+                    {audioPreviewUrl ? (
                       <audio
                         src={audioPreviewUrl}
                         controls
                         className="w-full h-8 rounded-lg [color-scheme:dark]"
                       />
                     ) : (
-                      <p className="text-[11px] text-red-400/70 text-center py-1">Preview no disponible</p>
+                      <p className="text-[11px] text-white/30 text-center py-1">Cargando…</p>
                     )}
                     <p className="text-[10px] text-white/20 text-center">Preview de 30 seg · Deezer</p>
                   </div>
