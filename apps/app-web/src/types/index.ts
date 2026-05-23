@@ -126,6 +126,7 @@ export interface ChatMessage {
   senderAvatar: string
   text: string
   timestamp: string  // ISO 8601
+  status?: 'sending' | 'sent' | 'failed'
 }
 
 export type ChatRoomStatus = 'active' | 'expired' | 'deleted'
