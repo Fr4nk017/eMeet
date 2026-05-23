@@ -56,7 +56,7 @@ async function requireMember(req: Request, res: Response, next: NextFunction) {
   const roomId = req.params.id
   const userId = req.authUser!.id
 
-  const { data, error } = await req.supabase!
+  const { data, error } = await svc
     .from('room_members')
     .select('room_id')
     .eq('room_id', roomId)
@@ -76,7 +76,7 @@ async function requireMember(req: Request, res: Response, next: NextFunction) {
 async function requireActiveRoom(req: Request, res: Response, next: NextFunction) {
   const roomId = req.params.id
 
-  const { data, error } = await req.supabase!
+  const { data, error } = await svc
     .from('chat_rooms')
     .select('status, expires_at')
     .eq('id', roomId)
@@ -290,16 +290,24 @@ router.get('/rooms/:id/members', requireMember, async (req, res) => {
 
 router.get('/rooms/:id/messages', requireMember, async (req, res) => {
   const { id } = req.params
+  const limit = Math.min(Number(req.query.limit) || 50, 100)
+  const before = typeof req.query.before === 'string' ? req.query.before : undefined
 
-  const { data, error } = await req.supabase!
+  const baseQuery = req.supabase!
     .from('chat_messages')
     .select('id, room_id, user_id, text, created_at')
     .eq('room_id', id)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  const { data, error } = await (before ? baseQuery.lt('created_at', before) : baseQuery)
 
   if (error) return serverError(res, 'No se pudieron obtener los mensajes.')
 
-  const senderIds = Array.from(new Set(data.map((row) => row.user_id)))
+  // Re-order to chronological (ascending) for the client
+  const chronological = (data ?? []).reverse()
+
+  const senderIds = Array.from(new Set(chronological.map((row) => row.user_id)))
   let profileMap = new Map<string, { id: string; name: string; avatar_url: string | null }>()
 
   if (senderIds.length > 0) {
@@ -312,7 +320,7 @@ router.get('/rooms/:id/messages', requireMember, async (req, res) => {
     profileMap = new Map((profiles ?? []).map((p) => [p.id, p]))
   }
 
-  const messages = data.map((row) => {
+  const messages = chronological.map((row) => {
     const sender = profileMap.get(row.user_id)
     return {
       id: row.id,

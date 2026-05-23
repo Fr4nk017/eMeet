@@ -1,10 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import { useChatContext } from '@/src/context/ChatContext'
 import { useAuth } from '@/src/context/AuthContext'
+import { getSupabaseBrowserClient, hasSupabaseEnv } from '@/src/lib/supabase'
+import type { ChatMessage } from '@/src/types'
 import {
   ArrowLeft as HiArrowLeft,
   Send as HiPaperAirplane,
@@ -12,13 +15,12 @@ import {
   LogOut,
   AlertTriangle,
   Users,
+  ChevronDown,
+  RotateCcw,
 } from 'lucide-react'
 
 function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('es-CL', {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
 }
 
 function formatDateLabel(iso: string) {
@@ -30,22 +32,50 @@ function formatDateLabel(iso: string) {
   return date.toLocaleDateString('es-CL', { day: 'numeric', month: 'long' })
 }
 
+type MsgGroup = {
+  key: string
+  senderId: string
+  senderName: string
+  senderAvatar: string
+  isOwn: boolean
+  msgs: ChatMessage[]
+}
+
 export default function ChatRoomRoutePage() {
   const params = useParams<{ roomId: string }>()
   const roomId = typeof params?.roomId === 'string' ? params.roomId : undefined
   const router = useRouter()
-  const { rooms, messages, loadMessagesForRoom, sendMessage, markRoomRead, leaveRoom } = useChatContext()
+  const {
+    rooms, messages, hasMoreMessages,
+    openRoom, closeRoom,
+    loadMessagesForRoom, loadMoreMessages,
+    sendMessage, retryMessage, markRoomRead, leaveRoom,
+  } = useChatContext()
   const { user, isAuthReady } = useAuth()
+
   const [input, setInput] = useState('')
-  const [typingUser, setTypingUser] = useState<string | null>(null)
+  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
   const [leavingRoom, setLeavingRoom] = useState(false)
+  const [showScrollBtn, setShowScrollBtn] = useState(false)
+  const [newMsgCount, setNewMsgCount] = useState(0)
+  const [loadingMore, setLoadingMore] = useState(false)
+
+  const presenceChannelRef = useRef<RealtimeChannel | null>(null)
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const isAtBottomRef = useRef(true)
+  const prevMsgCountRef = useRef(0)
+  const pendingScrollRestoreRef = useRef<number | null>(null)
 
   const room = rooms.find((r) => r.id === roomId)
   const roomMessages = messages[roomId ?? ''] ?? []
   const isExpired = room && room.status !== 'active'
+  const canLoadMore = roomId ? (hasMoreMessages[roomId] ?? false) : false
+
+  // ── Auth redirect ──────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (isAuthReady && !user) {
@@ -54,49 +84,120 @@ export default function ChatRoomRoutePage() {
     }
   }, [isAuthReady, roomId, router, user])
 
+  // ── Activar canal realtime por sala ───────────────────────────────────────
+
+  useEffect(() => {
+    if (!roomId || !user) return
+    openRoom(roomId)
+    return () => closeRoom()
+  }, [roomId, user, openRoom, closeRoom])
+
+  // ── Carga inicial de mensajes ──────────────────────────────────────────────
+
   useEffect(() => {
     if (!roomId || !user) return
     loadMessagesForRoom(roomId).catch(() => {})
   }, [roomId, user, loadMessagesForRoom])
 
-  useEffect(() => {
-    if (roomId) {
-      markRoomRead(roomId).catch(() => {})
-    }
-  }, [roomId, markRoomRead])
+  // ── Marcar como leídos ────────────────────────────────────────────────────
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (roomId) markRoomRead(roomId).catch(() => {})
+  }, [roomId, markRoomRead])
+
+  // ── Auto-scroll y contador de mensajes nuevos ─────────────────────────────
+
+  useEffect(() => {
+    const msgCount = roomMessages.length
+    if (msgCount === prevMsgCountRef.current) return
+    const delta = msgCount - prevMsgCountRef.current
+    prevMsgCountRef.current = msgCount
+
+    if (isAtBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+      setNewMsgCount(0)
+    } else if (delta > 0) {
+      setNewMsgCount((c) => c + delta)
+      setShowScrollBtn(true)
+    }
   }, [roomMessages.length])
+
+  // ── Restaurar posición de scroll tras cargar mensajes antiguos ─────────────
+
+  useLayoutEffect(() => {
+    const el = messagesContainerRef.current
+    const savedHeight = pendingScrollRestoreRef.current
+    if (!el || savedHeight === null) return
+    el.scrollTop = el.scrollHeight - savedHeight
+    pendingScrollRestoreRef.current = null
+  })
+
+  // ── Presence: indicador de escritura real ─────────────────────────────────
+
+  useEffect(() => {
+    if (!roomId || !user || !hasSupabaseEnv || isExpired) return
+    const supabase = getSupabaseBrowserClient()
+    const channel = supabase.channel(`room-typing-${roomId}`, {
+      config: { presence: { key: user.id } },
+    })
+    presenceChannelRef.current = channel
+    channel
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState<{ typing: boolean; name: string }>()
+        const typing = new Set<string>()
+        for (const [userId, presences] of Object.entries(state)) {
+          if (userId === user.id) continue
+          for (const p of presences) {
+            if (p.typing) typing.add(p.name)
+          }
+        }
+        setTypingUsers(typing)
+      })
+      .subscribe()
+
+    return () => {
+      presenceChannelRef.current = null
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+      void supabase.removeChannel(channel)
+    }
+  }, [roomId, user, isExpired])
+
+  // ── Agrupación: fecha → grupos de sender consecutivos ─────────────────────
+
+  const sections = useMemo(() => {
+    const result: { label: string; groups: MsgGroup[] }[] = []
+    roomMessages.forEach((msg, i) => {
+      const label = formatDateLabel(msg.timestamp)
+      const isOwn = msg.senderId === user?.id
+      let section = result[result.length - 1]
+      if (!section || section.label !== label) {
+        section = { label, groups: [] }
+        result.push(section)
+      }
+      const lastGroup = section.groups[section.groups.length - 1]
+      if (lastGroup && lastGroup.senderId === msg.senderId && lastGroup.msgs.length < 10) {
+        lastGroup.msgs.push(msg)
+      } else {
+        section.groups.push({
+          key: `${label}-${i}`,
+          senderId: msg.senderId,
+          senderName: msg.senderName,
+          senderAvatar: msg.senderAvatar,
+          isOwn,
+          msgs: [msg],
+        })
+      }
+    })
+    return result
+  }, [roomMessages, user?.id])
+
+  // ── Early returns (todos los hooks ya declarados arriba) ──────────────────
 
   if (isAuthReady && !user) return null
 
-  const otherParticipants = useMemo(() => {
-    const bySender = new Map<string, { name: string; avatar: string }>()
-    for (const msg of roomMessages) {
-      if (msg.senderId !== user?.id && !bySender.has(msg.senderId)) {
-        bySender.set(msg.senderId, { name: msg.senderName, avatar: msg.senderAvatar })
-      }
-    }
-    return Array.from(bySender.values())
-  }, [roomMessages, user?.id])
-
-  useEffect(() => {
-    if (!roomId || otherParticipants.length === 0 || isExpired) return
-
-    const interval = setInterval(() => {
-      if (Math.random() > 0.45) return
-      const randomUser = otherParticipants[Math.floor(Math.random() * otherParticipants.length)]
-      setTypingUser(randomUser.name)
-      setTimeout(() => setTypingUser((curr) => (curr === randomUser.name ? null : curr)), 2000)
-    }, 6500)
-
-    return () => clearInterval(interval)
-  }, [otherParticipants, roomId, isExpired])
-
   if (!room) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center text-muted" style={{ height: '100dvh' }}>
+      <div className="flex flex-col items-center justify-center text-muted" style={{ height: '100dvh' }}>
         <p>Sala no encontrada</p>
         <button onClick={() => router.push('/chat')} className="mt-3 text-sm text-primary">
           Volver
@@ -105,8 +206,26 @@ export default function ChatRoomRoutePage() {
     )
   }
 
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
+  function broadcastTyping(typing: boolean) {
+    const ch = presenceChannelRef.current
+    if (!ch || !user) return
+    void ch.track({ typing, name: user.name })
+  }
+
+  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setInput(e.target.value)
+    if (!hasSupabaseEnv) return
+    broadcastTyping(true)
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+    typingTimeoutRef.current = setTimeout(() => broadcastTyping(false), 3000)
+  }
+
   function handleSend() {
     if (!input.trim() || !user || !roomId || isExpired) return
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+    broadcastTyping(false)
     sendMessage(roomId, input.trim()).catch(() => {})
     setInput('')
     inputRef.current?.focus()
@@ -131,29 +250,43 @@ export default function ChatRoomRoutePage() {
     }
   }
 
-  const groupedMessages: { label: string; msgs: typeof roomMessages }[] = []
-  for (const msg of roomMessages) {
-    const label = formatDateLabel(msg.timestamp)
-    const last = groupedMessages[groupedMessages.length - 1]
-    if (last && last.label === label) {
-      last.msgs.push(msg)
-    } else {
-      groupedMessages.push({ label, msgs: [msg] })
+  function handleScroll() {
+    const el = messagesContainerRef.current
+    if (!el) return
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    isAtBottomRef.current = distFromBottom < 60
+    if (isAtBottomRef.current) {
+      setShowScrollBtn(false)
+      setNewMsgCount(0)
+    }
+    if (el.scrollTop < 80 && canLoadMore && !loadingMore) {
+      pendingScrollRestoreRef.current = el.scrollHeight
+      setLoadingMore(true)
+      loadMoreMessages(roomId!).finally(() => setLoadingMore(false))
     }
   }
 
+  function scrollToBottom() {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    setShowScrollBtn(false)
+    setNewMsgCount(0)
+  }
+
+  function handleRetry(tempId: string) {
+    if (!roomId) return
+    retryMessage(roomId, tempId).catch(() => {})
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
   return (
-    /* h-screen con dvh como override para que en móvil se ajuste al viewport visible */
-    <div
-      className="flex flex-col bg-surface"
-      style={{ height: '100dvh' }}
-    >
-      {/* ── Header ────────────────────────────────────────────────────── */}
-      <div className="z-10 shrink-0 border-b border-white/10 bg-gradient-to-r from-card/95 to-surface/95 backdrop-blur-md"
+    <div className="flex flex-col bg-surface" style={{ height: '100dvh' }}>
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div
+        className="z-10 shrink-0 border-b border-white/10 bg-gradient-to-r from-card/95 to-surface/95 backdrop-blur-md"
         style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
       >
         <div className="flex items-center gap-2 px-2 py-2 sm:gap-3 sm:px-3 sm:py-3">
-          {/* Botón volver */}
           <button
             onClick={() => router.push('/chat')}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-white/10"
@@ -161,7 +294,6 @@ export default function ChatRoomRoutePage() {
             <HiArrowLeft className="h-5 w-5 text-white" />
           </button>
 
-          {/* Imagen del evento */}
           {room.eventImageUrl && (
             <div className="relative shrink-0">
               <img
@@ -175,7 +307,6 @@ export default function ChatRoomRoutePage() {
             </div>
           )}
 
-          {/* Título + dirección */}
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold leading-tight text-white">
               {room.eventTitle}
@@ -188,7 +319,6 @@ export default function ChatRoomRoutePage() {
             )}
           </div>
 
-          {/* Miembros + estado */}
           <div className="flex shrink-0 items-center gap-1.5">
             <div className="flex items-center gap-1 text-xs text-muted">
               <Users className="h-3.5 w-3.5 shrink-0" />
@@ -201,8 +331,6 @@ export default function ChatRoomRoutePage() {
             ) : (
               <span className="hidden text-[10px] text-green-400 sm:inline">en línea</span>
             )}
-
-            {/* Botón salir */}
             <button
               title="Salir del chat"
               onClick={() => setShowLeaveConfirm(true)}
@@ -214,7 +342,7 @@ export default function ChatRoomRoutePage() {
         </div>
       </div>
 
-      {/* ── Banner sala expirada ───────────────────────────────────────── */}
+      {/* ── Banner sala expirada ─────────────────────────────────────────── */}
       {isExpired && (
         <div className="flex items-center gap-2 border-b border-red-500/20 bg-red-500/10 px-4 py-2">
           <AlertTriangle className="h-4 w-4 shrink-0 text-red-400" />
@@ -226,99 +354,188 @@ export default function ChatRoomRoutePage() {
         </div>
       )}
 
-      {/* ── Mensajes ──────────────────────────────────────────────────── */}
-      <div className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-3 py-3">
-        {roomMessages.length === 0 && (
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="py-8 text-center text-sm text-muted"
-          >
-            {isExpired ? 'No hubo mensajes en este chat.' : 'Sé el primero en escribir 👋'}
-          </motion.p>
-        )}
+      {/* ── Área de mensajes ─────────────────────────────────────────────── */}
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={messagesContainerRef}
+          onScroll={handleScroll}
+          className="h-full overflow-y-auto overscroll-contain px-3 py-3"
+        >
+          {/* Spinner carga mensajes antiguos */}
+          <AnimatePresence>
+            {loadingMore && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex justify-center py-3"
+              >
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-        {groupedMessages.map(({ label, msgs }) => (
-          <div key={label}>
-            <div className="my-3 flex items-center gap-2">
-              <div className="h-px flex-1 bg-white/10" />
-              <span className="px-2 text-[11px] text-muted">{label}</span>
-              <div className="h-px flex-1 bg-white/10" />
-            </div>
-
-            <AnimatePresence initial={false}>
-              {msgs.map((msg) => {
-                const isOwn = msg.senderId === user?.id
-                return (
-                  <motion.div
-                    key={msg.id}
-                    initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ duration: 0.2 }}
-                    className={`mb-2 flex gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}
-                  >
-                    <img
-                      src={
-                        msg.senderAvatar ||
-                        `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(msg.senderName)}`
-                      }
-                      alt={msg.senderName}
-                      className="h-7 w-7 shrink-0 self-end rounded-full border border-white/10 object-cover sm:h-8 sm:w-8"
-                    />
-
-                    <div
-                      className={`flex max-w-[80%] flex-col gap-0.5 sm:max-w-[75%] ${
-                        isOwn ? 'items-end' : 'items-start'
-                      }`}
-                    >
-                      {!isOwn && (
-                        <span className="px-1 text-[11px] font-medium text-primary-light">
-                          {msg.senderName}
-                        </span>
-                      )}
-
-                      <div
-                        className={`break-words rounded-2xl px-3 py-2 text-sm leading-relaxed ${
-                          isOwn
-                            ? 'rounded-tr-sm bg-gradient-to-br from-primary to-violet-700 text-white shadow-lg shadow-primary/20'
-                            : 'rounded-tl-sm border border-white/10 bg-white/5 text-white backdrop-blur-sm'
-                        }`}
-                      >
-                        {msg.text}
-                      </div>
-
-                      <div
-                        className={`flex items-center gap-1 px-1 ${isOwn ? 'flex-row-reverse' : ''}`}
-                      >
-                        <span className="text-[10px] text-muted">{formatTime(msg.timestamp)}</span>
-                        {isOwn && <span className="text-[10px] text-primary-light">✓✓</span>}
-                      </div>
-                    </div>
-                  </motion.div>
-                )
-              })}
-            </AnimatePresence>
-          </div>
-        ))}
-
-        <div ref={bottomRef} />
-
-        <AnimatePresence>
-          {typingUser && (
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 6 }}
-              className="mt-1 flex items-center gap-2 px-1"
+          {roomMessages.length === 0 && !loadingMore && (
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="py-8 text-center text-sm text-muted"
             >
-              <span className="h-2 w-2 animate-pulse rounded-full bg-green-400" />
-              <span className="text-xs text-muted">{typingUser} está escribiendo...</span>
-            </motion.div>
+              {isExpired ? 'No hubo mensajes en este chat.' : 'Sé el primero en escribir 👋'}
+            </motion.p>
+          )}
+
+          {sections.map(({ label, groups }) => (
+            <div key={label}>
+              {/* Separador de fecha */}
+              <div className="my-3 flex items-center gap-2">
+                <div className="h-px flex-1 bg-white/10" />
+                <span className="px-2 text-[11px] text-muted">{label}</span>
+                <div className="h-px flex-1 bg-white/10" />
+              </div>
+
+              {groups.map((group) => (
+                <div
+                  key={group.key}
+                  className={`mb-1 flex gap-2 ${group.isOwn ? 'flex-row-reverse' : 'flex-row'}`}
+                >
+                  {/* Avatar solo en último mensaje del grupo */}
+                  <div className="flex w-7 shrink-0 flex-col justify-end sm:w-8">
+                    {!group.isOwn && (
+                      <img
+                        src={
+                          group.senderAvatar ||
+                          `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(group.senderName)}`
+                        }
+                        alt={group.senderName}
+                        className="h-7 w-7 rounded-full border border-white/10 object-cover sm:h-8 sm:w-8"
+                      />
+                    )}
+                  </div>
+
+                  {/* Columna de burbujas */}
+                  <div
+                    className={`flex max-w-[80%] flex-col gap-0.5 sm:max-w-[75%] ${
+                      group.isOwn ? 'items-end' : 'items-start'
+                    }`}
+                  >
+                    {/* Nombre remitente: solo primera burbuja de grupo ajeno */}
+                    {!group.isOwn && (
+                      <span className="px-1 text-[11px] font-medium text-primary-light">
+                        {group.senderName}
+                      </span>
+                    )}
+
+                    <AnimatePresence initial={false}>
+                      {group.msgs.map((msg, msgIdx) => {
+                        const isLast = msgIdx === group.msgs.length - 1
+                        const isFailed = msg.status === 'failed'
+                        const isSending = msg.status === 'sending'
+
+                        return (
+                          <motion.div
+                            key={msg.id}
+                            initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                            animate={{ opacity: isSending ? 0.65 : 1, y: 0, scale: 1 }}
+                            transition={{ duration: 0.18 }}
+                            className="flex flex-col gap-0.5"
+                          >
+                            <div
+                              className={`break-words px-3 py-2 text-sm leading-relaxed ${
+                                group.isOwn
+                                  ? isFailed
+                                    ? 'rounded-2xl rounded-tr-sm border border-red-500/40 bg-red-500/15 text-red-300'
+                                    : 'rounded-2xl rounded-tr-sm bg-gradient-to-br from-primary to-violet-700 text-white shadow-lg shadow-primary/20'
+                                  : 'rounded-2xl rounded-tl-sm border border-white/10 bg-white/5 text-white backdrop-blur-sm'
+                              }`}
+                            >
+                              {msg.text}
+                            </div>
+
+                            {/* Timestamp + estado: solo en el último del grupo */}
+                            {isLast && (
+                              <div
+                                className={`flex items-center gap-1 px-1 ${
+                                  group.isOwn ? 'flex-row-reverse' : ''
+                                }`}
+                              >
+                                <span className="text-[10px] text-muted">
+                                  {formatTime(msg.timestamp)}
+                                </span>
+                                {group.isOwn && !isFailed && (
+                                  <span
+                                    className={`text-[10px] ${
+                                      isSending ? 'text-muted' : 'text-primary-light'
+                                    }`}
+                                  >
+                                    {isSending ? '○' : '✓✓'}
+                                  </span>
+                                )}
+                                {isFailed && (
+                                  <button
+                                    onClick={() => handleRetry(msg.id)}
+                                    className="flex items-center gap-0.5 text-[10px] text-red-400 hover:text-red-300"
+                                    title="Reintentar"
+                                  >
+                                    <RotateCcw className="h-2.5 w-2.5" />
+                                    Reintentar
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </motion.div>
+                        )
+                      })}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+
+          <div ref={bottomRef} />
+
+          <AnimatePresence>
+            {typingUsers.size > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 6 }}
+                className="mt-1 flex items-center gap-2 px-1"
+              >
+                <span className="h-2 w-2 animate-pulse rounded-full bg-green-400" />
+                <span className="text-xs text-muted">
+                  {typingUsers.size === 1
+                    ? `${[...typingUsers][0]} está escribiendo...`
+                    : `${typingUsers.size} personas están escribiendo...`}
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* ── Botón scroll-to-bottom ───────────────────────────────────── */}
+        <AnimatePresence>
+          {showScrollBtn && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 8 }}
+              onClick={scrollToBottom}
+              className="absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/30"
+            >
+              <ChevronDown className="h-5 w-5" />
+              {newMsgCount > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex min-w-4 items-center justify-center rounded-full bg-red-500 px-1 py-px text-[9px] font-bold text-white">
+                  {newMsgCount > 99 ? '99+' : newMsgCount}
+                </span>
+              )}
+            </motion.button>
           )}
         </AnimatePresence>
       </div>
 
-      {/* ── Input ─────────────────────────────────────────────────────── */}
+      {/* ── Input ───────────────────────────────────────────────────────── */}
       <div
         className="shrink-0 border-t border-white/10 bg-gradient-to-r from-card/95 to-surface/95 px-3 pt-3 backdrop-blur-md"
         style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
@@ -339,7 +556,7 @@ export default function ChatRoomRoutePage() {
               ref={inputRef}
               type="text"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               placeholder="Escribe un mensaje..."
               className="flex-1 rounded-full border border-white/15 bg-surface px-4 py-2.5 text-sm text-white placeholder:text-muted transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
@@ -361,7 +578,7 @@ export default function ChatRoomRoutePage() {
         )}
       </div>
 
-      {/* ── Modal confirmar salir ──────────────────────────────────────── */}
+      {/* ── Modal confirmar salir ────────────────────────────────────────── */}
       <AnimatePresence>
         {showLeaveConfirm && (
           <motion.div
