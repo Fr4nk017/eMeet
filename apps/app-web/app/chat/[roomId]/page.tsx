@@ -137,30 +137,48 @@ export default function ChatRoomRoutePage() {
   useEffect(() => {
     if (!roomId || !user || !hasSupabaseEnv || isExpired) return
     const supabase = getSupabaseBrowserClient()
-    const channel = supabase.channel(`room-typing-${roomId}`, {
+    const topic = `room-typing-${roomId}`
+
+    // Evita reusar canales previos (HMR/re-render) que ya quedaron en estado joining/joined.
+    const staleChannels = supabase
+      .getChannels()
+      .filter((ch) => ch.topic === topic || ch.topic === `realtime:${topic}`)
+    for (const staleChannel of staleChannels) {
+      void supabase.removeChannel(staleChannel)
+    }
+
+    const channel = supabase.channel(topic, {
       config: { presence: { key: user.id } },
     })
     presenceChannelRef.current = channel
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState<{ typing: boolean; name: string }>()
-        const typing = new Set<string>()
-        for (const [userId, presences] of Object.entries(state)) {
-          if (userId === user.id) continue
-          for (const p of presences) {
-            if (p.typing) typing.add(p.name)
-          }
+    channel.on('presence', { event: 'sync' }, () => {
+      const state = channel.presenceState<{ typing: boolean; name: string }>()
+      const typing = new Set<string>()
+      for (const [userId, presences] of Object.entries(state)) {
+        if (userId === user.id) continue
+        for (const p of presences) {
+          if (p.typing) typing.add(p.name)
         }
-        setTypingUsers(typing)
-      })
-      .subscribe()
+      }
+      setTypingUsers(typing)
+    })
+
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        // Marca estado inicial explícito para que otros clientes no vean typing "pegado".
+        void channel.track({ typing: false, name: user.name })
+      }
+    })
 
     return () => {
-      presenceChannelRef.current = null
+      if (presenceChannelRef.current === channel) {
+        presenceChannelRef.current = null
+      }
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+      setTypingUsers(new Set())
       void supabase.removeChannel(channel)
     }
-  }, [roomId, user, isExpired])
+  }, [roomId, user?.id, user?.name, isExpired])
 
   // ── Agrupación: fecha → grupos de sender consecutivos ─────────────────────
 
