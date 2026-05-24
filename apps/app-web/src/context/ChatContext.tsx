@@ -143,7 +143,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const cacheProfilesFromMessages = useCallback((msgs: ChatMessage[]) => {
     for (const msg of msgs) {
       if (!profileCache.current.has(msg.senderId)) {
-        profileCache.current.set(msg.senderId, { name: msg.senderName, avatar: msg.senderAvatar })
+        profileCache.current.set(msg.senderId, { name: msg.senderName, avatar: msg.senderAvatar ?? '' })
       }
     }
   }, [])

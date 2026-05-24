@@ -36,7 +36,7 @@ type MsgGroup = {
   key: string
   senderId: string
   senderName: string
-  senderAvatar: string
+  senderAvatar: string | null
   isOwn: boolean
   msgs: ChatMessage[]
 }

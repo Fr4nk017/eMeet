@@ -123,7 +123,7 @@ export interface ChatMessage {
   roomId: string
   senderId: string
   senderName: string
-  senderAvatar: string
+  senderAvatar: string | null
   text: string
   timestamp: string  // ISO 8601
   status?: 'sending' | 'sent' | 'failed'
@@ -138,8 +138,8 @@ export type ChatRoomStatus = 'active' | 'expired' | 'deleted'
 export interface ChatRoom {
   id: string            // igual al placeId / eventId
   eventTitle: string
-  eventImageUrl: string
-  eventAddress: string
+  eventImageUrl: string | null
+  eventAddress: string | null
   status: ChatRoomStatus
   expiresAt: string | null
   memberCount: number
