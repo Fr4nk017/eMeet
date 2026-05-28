@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "eMeet Frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000,
+      "autoPort": true
+    },
+    {
+      "name": "eMeet Backend",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd ..\\eMeet_Backend_SupaBase && npm run dev"],
+      "port": 4000
+    }
+  ]
+}

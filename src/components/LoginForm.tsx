@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
 import { FiMail, FiLock, FiEye, FiEyeOff, FiLogIn } from 'react-icons/fi'
@@ -96,9 +97,9 @@ export default function LoginForm() {
           <input type="checkbox" className="w-4 h-4 rounded accent-[hsl(262,80%,60%)]" />
           <span className="text-slate-300">Recordarme</span>
         </label>
-        <a href="#" className="text-sm text-[hsl(262,80%,60%)] hover:text-[hsl(262,80%,60%)]/80 transition-colors">
+        <Link href="/auth/forgot-password" className="text-sm text-[hsl(262,80%,60%)] hover:text-[hsl(262,80%,60%)]/80 transition-colors">
           ¿Olvidaste tu contraseña?
-        </a>
+        </Link>
       </div>
 
       {/* Botón submit */}
