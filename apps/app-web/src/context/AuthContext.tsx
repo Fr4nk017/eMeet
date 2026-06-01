@@ -319,11 +319,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return localUser.role
     }
 
-    const { data, error } = await getSupabaseBrowserClient().auth.signInWithPassword({ email, password })
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
 
-    if (error) {
-      const msg = error.message.toLowerCase()
-      if (msg.includes('rate limit') || msg.includes('too many requests')) {
+    const payload = (await response.json().catch(() => null)) as AuthResponsePayload & { error?: string } | null
+
+    if (!response.ok) {
+      const msg = (payload?.error ?? '').toLowerCase()
+      if (response.status === 429 || msg.includes('rate limit') || msg.includes('too many requests')) {
         throw new Error('Demasiados intentos. Espera unos minutos e inténtalo de nuevo.')
       }
       if (msg.includes('invalid login credentials') || msg.includes('invalid credentials')) {
@@ -335,19 +341,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (msg.includes('user not found')) {
         throw new Error('No existe una cuenta con ese correo.')
       }
-      throw new Error(error.message)
+      throw new Error(payload?.error ?? 'Error al iniciar sesión.')
+    }
+
+    if (!payload) throw new Error('Respuesta inesperada del servidor.')
+
+    if (payload.session?.access_token && payload.session?.refresh_token) {
+      await getSupabaseBrowserClient().auth.setSession({
+        access_token: payload.session.access_token,
+        refresh_token: payload.session.refresh_token,
+      })
     }
 
     return syncUserData(
-      data.user?.email ?? email,
-      resolveRoleFromClaims(data.user?.app_metadata?.role, data.user?.user_metadata?.role),
+      payload.user?.email ?? email,
+      resolveRoleFromClaims(payload.user?.app_metadata?.role, payload.user?.user_metadata?.role),
       {
         businessName:
-          (data.user?.app_metadata?.business_name as string | undefined) ??
-          (data.user?.user_metadata?.business_name as string | undefined),
+          (payload.user?.app_metadata?.business_name as string | undefined) ??
+          (payload.user?.user_metadata?.business_name as string | undefined),
         businessLocation:
-          (data.user?.app_metadata?.business_location as string | undefined) ??
-          (data.user?.user_metadata?.business_location as string | undefined),
+          (payload.user?.app_metadata?.business_location as string | undefined) ??
+          (payload.user?.user_metadata?.business_location as string | undefined),
       },
     )
   }, [syncUserData])
