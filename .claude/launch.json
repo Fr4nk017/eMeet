@@ -1,0 +1,59 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "app-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "apps/app-web"],
+      "port": 3000
+    },
+    {
+      "name": "app-auth",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "apps/app-auth"],
+      "port": 3001
+    },
+    {
+      "name": "app-profile",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "apps/app-profile"],
+      "port": 3002
+    },
+    {
+      "name": "app-events",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "apps/app-events"],
+      "port": 3003
+    },
+    {
+      "name": "app-saved",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "apps/app-saved"],
+      "port": 3004
+    },
+    {
+      "name": "app-chat",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "apps/app-chat"],
+      "port": 3005
+    },
+    {
+      "name": "app-places",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "apps/app-places"],
+      "port": 3006
+    },
+    {
+      "name": "app-admin",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "apps/app-admin"],
+      "port": 3007
+    }
+  ]
+}

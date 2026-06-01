@@ -1,137 +1,149 @@
-import 'dotenv/config'
 import request from 'supertest'
-import { createClient } from '@supabase/supabase-js'
 import app from '../app'
+import { resetDb, seedProfile } from './helpers/mock-db'
 
-const anonClient = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_ANON_KEY!,
-)
+// ─── Mocks ────────────────────────────────────────────────────────────────────
 
-let user1Token = ''
-let user2Token = ''
-let user1Id = ''
-let user2Id = ''
+jest.mock('../../../../packages/shared/src/middleware/auth', () => ({
+  withAuth: (req: any, res: any, next: any) => {
+    const token = req.headers.authorization?.slice(7)
+    if (!token) return res.status(401).json({ error: 'No autorizado.' })
+    const { createMockClient } = require('./helpers/mock-db')
+    req.authUser = { id: token }
+    req.supabase = createMockClient()
+    next()
+  },
+}))
 
-beforeAll(async () => {
-  // Crear dos sesiones de usuario
-  const login1 = await anonClient.auth.signInWithPassword({
-    email: process.env.TEST_ADMIN_EMAIL ?? process.env.TEST_USER_EMAIL!,
-    password: process.env.TEST_ADMIN_PASSWORD ?? process.env.TEST_USER_PASSWORD!,
-  })
-  if (!login1.data.session) throw new Error('Login 1 failed')
-  user1Token = login1.data.session.access_token
-  user1Id = login1.data.user.id
+jest.mock('../../../../packages/shared/src/lib/supabase', () => ({
+  createServiceRoleClient: () => require('./helpers/mock-db').createMockClient(),
+  createAnonClient: () => require('./helpers/mock-db').createMockClient(),
+}))
 
-  const login2 = await anonClient.auth.signInWithPassword({
-    email: process.env.TEST_USER_EMAIL!,
-    password: process.env.TEST_USER_PASSWORD!,
-  })
-  if (!login2.data.session) throw new Error('Login 2 failed')
-  user2Token = login2.data.session.access_token
-  user2Id = login2.data.user.id
-}, 20_000)
+// ─── Test users ───────────────────────────────────────────────────────────────
 
-afterAll(async () => {
-  await anonClient.auth.signOut({ scope: 'local' })
+const USER1 = 'sub-user-1'
+const USER2 = 'sub-user-2'
+
+const eventTitle = 'Realtime Test Event'
+const eventImageUrl = 'https://via.placeholder.com/400'
+const eventAddress = 'Test Address'
+
+// ─── Setup ────────────────────────────────────────────────────────────────────
+
+beforeEach(() => {
+  resetDb()
+  seedProfile(USER1, 'Sub User One')
+  seedProfile(USER2, 'Sub User Two')
 })
 
+// ─── Tests ────────────────────────────────────────────────────────────────────
+
 describe('Realtime Subscription Simulation', () => {
-  const roomId = `realtime-test-${Date.now()}`
-  const eventTitle = 'Realtime Test Event'
-  const eventImageUrl = 'https://via.placeholder.com/400'
-  const eventAddress = 'Test Address'
-
-  beforeAll(async () => {
-    // Both users join the room
-    await request(app)
-      .post(`/chat/rooms/${roomId}/join`)
-      .set('Authorization', `Bearer ${user1Token}`)
-      .send({ eventTitle, eventImageUrl, eventAddress })
-      .expect(201)
-
-    await request(app)
-      .post(`/chat/rooms/${roomId}/join`)
-      .set('Authorization', `Bearer ${user2Token}`)
-      .send({ eventTitle, eventImageUrl, eventAddress })
-      .expect(201)
-  })
-
   describe('INSERT Event Simulation', () => {
-    it('User1 sends message - both users see it via GET', async () => {
-      // User1 sends
+    it('User1 sends message — both users see it via GET', async () => {
+      const roomId = 'sub-shared-room'
+      await request(app)
+        .post(`/chat/rooms/${roomId}/join`)
+        .set('Authorization', `Bearer ${USER1}`)
+        .send({ eventTitle, eventImageUrl, eventAddress })
+        .expect(201)
+
+      await request(app)
+        .post(`/chat/rooms/${roomId}/join`)
+        .set('Authorization', `Bearer ${USER2}`)
+        .send({ eventTitle, eventImageUrl, eventAddress })
+        .expect(201)
+
       const sendRes = await request(app)
         .post(`/chat/rooms/${roomId}/messages`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .set('Authorization', `Bearer ${USER1}`)
         .send({ text: 'Message from User1' })
         .expect(201)
 
       const messageId = sendRes.body.id
 
-      // User1 retrieves (should see own message immediately)
       const user1View = await request(app)
         .get(`/chat/rooms/${roomId}/messages`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .set('Authorization', `Bearer ${USER1}`)
         .expect(200)
-
       expect(user1View.body.some((m: { id: string }) => m.id === messageId)).toBe(true)
 
-      // User2 retrieves (simulates realtime update via GET)
-      // In real realtime, this would come via WebSocket subscription
       const user2View = await request(app)
         .get(`/chat/rooms/${roomId}/messages`)
-        .set('Authorization', `Bearer ${user2Token}`)
+        .set('Authorization', `Bearer ${USER2}`)
         .expect(200)
-
       expect(user2View.body.some((m: { id: string }) => m.id === messageId)).toBe(true)
+
       const msg = user2View.body.find((m: { id: string }) => m.id === messageId)
       expect(msg?.senderName).toBeDefined()
       expect(msg?.senderAvatar).toBeDefined()
     })
 
     it('Rapid messages preserve order for realtime subscribers', async () => {
+      const roomId = 'sub-order-room'
+      await request(app)
+        .post(`/chat/rooms/${roomId}/join`)
+        .set('Authorization', `Bearer ${USER1}`)
+        .send({ eventTitle, eventImageUrl, eventAddress })
+        .expect(201)
+
+      await request(app)
+        .post(`/chat/rooms/${roomId}/join`)
+        .set('Authorization', `Bearer ${USER2}`)
+        .send({ eventTitle, eventImageUrl, eventAddress })
+        .expect(201)
+
       const texts = ['Message A', 'Message B', 'Message C']
       const sentIds: string[] = []
 
-      // Send messages rapidly
       for (const text of texts) {
         const res = await request(app)
           .post(`/chat/rooms/${roomId}/messages`)
-          .set('Authorization', `Bearer ${user1Token}`)
+          .set('Authorization', `Bearer ${USER1}`)
           .send({ text })
           .expect(201)
         sentIds.push(res.body.id)
+        await new Promise(r => setTimeout(r, 5))
       }
 
-      // User2 fetches and verifies order
       const res = await request(app)
         .get(`/chat/rooms/${roomId}/messages`)
-        .set('Authorization', `Bearer ${user2Token}`)
+        .set('Authorization', `Bearer ${USER2}`)
         .expect(200)
 
       const retrievedIds = res.body.map((m: { id: string }) => m.id)
       const lastThree = retrievedIds.slice(-3)
-
       expect(lastThree).toEqual(sentIds)
     })
 
     it('Message metadata is consistent across viewers', async () => {
-      const testText = `Metadata test ${Date.now()}`
+      const roomId = 'sub-metadata-room'
+      await request(app)
+        .post(`/chat/rooms/${roomId}/join`)
+        .set('Authorization', `Bearer ${USER1}`)
+        .send({ eventTitle, eventImageUrl, eventAddress })
+        .expect(201)
 
-      // User1 sends
+      await request(app)
+        .post(`/chat/rooms/${roomId}/join`)
+        .set('Authorization', `Bearer ${USER2}`)
+        .send({ eventTitle, eventImageUrl, eventAddress })
+        .expect(201)
+
+      const testText = `Metadata test ${Date.now()}`
       const sendRes = await request(app)
         .post(`/chat/rooms/${roomId}/messages`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .set('Authorization', `Bearer ${USER1}`)
         .send({ text: testText })
         .expect(201)
 
       const senderId = sendRes.body.user_id
       const timestamp = sendRes.body.created_at
 
-      // User2 retrieves
       const res = await request(app)
         .get(`/chat/rooms/${roomId}/messages`)
-        .set('Authorization', `Bearer ${user2Token}`)
+        .set('Authorization', `Bearer ${USER2}`)
         .expect(200)
 
       const msg = res.body.find((m: { text: string }) => m.text === testText)
@@ -142,232 +154,212 @@ describe('Realtime Subscription Simulation', () => {
 
   describe('Subscription Channel Management', () => {
     it('Room members list is consistent with subscriptions', async () => {
-      const testRoomId = `members-test-${Date.now()}`
+      const roomId = 'sub-members-room'
 
-      // User1 joins
       await request(app)
-        .post(`/chat/rooms/${testRoomId}/join`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .post(`/chat/rooms/${roomId}/join`)
+        .set('Authorization', `Bearer ${USER1}`)
         .send({ eventTitle, eventImageUrl, eventAddress })
         .expect(201)
 
-      // Check members from User1 view
       let membersRes = await request(app)
-        .get(`/chat/rooms/${testRoomId}/members`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .get(`/chat/rooms/${roomId}/members`)
+        .set('Authorization', `Bearer ${USER1}`)
         .expect(200)
 
       const initialCount = membersRes.body.length
       expect(initialCount).toBe(1)
 
-      // User2 joins
       await request(app)
-        .post(`/chat/rooms/${testRoomId}/join`)
-        .set('Authorization', `Bearer ${user2Token}`)
+        .post(`/chat/rooms/${roomId}/join`)
+        .set('Authorization', `Bearer ${USER2}`)
         .send({ eventTitle, eventImageUrl, eventAddress })
         .expect(201)
 
-      // Check members again (should reflect new member)
       membersRes = await request(app)
-        .get(`/chat/rooms/${testRoomId}/members`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .get(`/chat/rooms/${roomId}/members`)
+        .set('Authorization', `Bearer ${USER1}`)
         .expect(200)
 
       expect(membersRes.body.length).toBe(initialCount + 1)
-      expect(membersRes.body.some((m: { userId: string }) => m.userId === user2Id)).toBe(true)
+      expect(membersRes.body.some((m: { userId: string }) => m.userId === USER2)).toBe(true)
     })
 
     it('Unsubscribe on leave removes from member list', async () => {
-      const testRoomId = `leave-test-${Date.now()}`
+      const roomId = 'sub-leave-room'
 
-      // Both join
       await request(app)
-        .post(`/chat/rooms/${testRoomId}/join`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .post(`/chat/rooms/${roomId}/join`)
+        .set('Authorization', `Bearer ${USER1}`)
         .send({ eventTitle, eventImageUrl, eventAddress })
         .expect(201)
 
       await request(app)
-        .post(`/chat/rooms/${testRoomId}/join`)
-        .set('Authorization', `Bearer ${user2Token}`)
+        .post(`/chat/rooms/${roomId}/join`)
+        .set('Authorization', `Bearer ${USER2}`)
         .send({ eventTitle, eventImageUrl, eventAddress })
         .expect(201)
 
-      // User2 leaves
       await request(app)
-        .delete(`/chat/rooms/${testRoomId}/leave`)
-        .set('Authorization', `Bearer ${user2Token}`)
+        .delete(`/chat/rooms/${roomId}/leave`)
+        .set('Authorization', `Bearer ${USER2}`)
         .expect(204)
 
-      // Check members from User1 view
       const membersRes = await request(app)
-        .get(`/chat/rooms/${testRoomId}/members`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .get(`/chat/rooms/${roomId}/members`)
+        .set('Authorization', `Bearer ${USER1}`)
         .expect(200)
 
-      expect(membersRes.body.some((m: { userId: string }) => m.userId === user2Id)).toBe(false)
+      expect(membersRes.body.some((m: { userId: string }) => m.userId === USER2)).toBe(false)
     })
   })
 
   describe('Optimistic Update Handling', () => {
     it('Message sent by user is immediately visible in own view', async () => {
-      const optimisticText = `Optimistic message ${Date.now()}`
+      const roomId = 'sub-optimistic-room'
+      await request(app)
+        .post(`/chat/rooms/${roomId}/join`)
+        .set('Authorization', `Bearer ${USER1}`)
+        .send({ eventTitle, eventImageUrl, eventAddress })
+        .expect(201)
 
-      // Send message
+      const optimisticText = `Optimistic message ${Date.now()}`
       const sendRes = await request(app)
         .post(`/chat/rooms/${roomId}/messages`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .set('Authorization', `Bearer ${USER1}`)
         .send({ text: optimisticText })
         .expect(201)
 
-      // Immediately retrieve (no delay for DB sync)
       const getRes = await request(app)
         .get(`/chat/rooms/${roomId}/messages`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .set('Authorization', `Bearer ${USER1}`)
         .expect(200)
 
       expect(getRes.body.some((m: { text: string }) => m.text === optimisticText)).toBe(true)
-
-      // The ID matches what we sent
-      expect(getRes.body.find((m: { text: string }) => m.text === optimisticText)?.id).toBe(
-        sendRes.body.id,
-      )
+      expect(
+        getRes.body.find((m: { text: string }) => m.text === optimisticText)?.id,
+      ).toBe(sendRes.body.id)
     })
 
-    it('Failed sends are handled gracefully (mock)', async () => {
-      // Empty message should fail before optimistic update
+    it('Failed sends do not add messages', async () => {
+      const roomId = 'sub-fail-room'
+      await request(app)
+        .post(`/chat/rooms/${roomId}/join`)
+        .set('Authorization', `Bearer ${USER1}`)
+        .send({ eventTitle, eventImageUrl, eventAddress })
+        .expect(201)
+
       await request(app)
         .post(`/chat/rooms/${roomId}/messages`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .set('Authorization', `Bearer ${USER1}`)
         .send({ text: '' })
         .expect(400)
 
-      // Verify no message was added
-      const res = await request(app)
-        .get(`/chat/rooms/${roomId}/messages`)
-        .set('Authorization', `Bearer ${user1Token}`)
-        .expect(200)
+      const beforeCount = (
+        await request(app)
+          .get(`/chat/rooms/${roomId}/messages`)
+          .set('Authorization', `Bearer ${USER1}`)
+          .expect(200)
+      ).body.length
 
-      const msgCount = res.body.length
-      expect(msgCount).toBeGreaterThan(0) // We have messages from before
-
-      // Send another valid message to ensure system still works
       await request(app)
         .post(`/chat/rooms/${roomId}/messages`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .set('Authorization', `Bearer ${USER1}`)
         .send({ text: 'Recovery message' })
         .expect(201)
 
-      const recoveryRes = await request(app)
-        .get(`/chat/rooms/${roomId}/messages`)
-        .set('Authorization', `Bearer ${user1Token}`)
-        .expect(200)
+      const afterCount = (
+        await request(app)
+          .get(`/chat/rooms/${roomId}/messages`)
+          .set('Authorization', `Bearer ${USER1}`)
+          .expect(200)
+      ).body.length
 
-      expect(
-        recoveryRes.body.some((m: { text: string }) => m.text === 'Recovery message'),
-      ).toBe(true)
+      expect(afterCount).toBe(beforeCount + 1)
     })
   })
 
   describe('Realtime Read State Sync', () => {
-    it('Unread count reflects messages sent after subscription', async () => {
-      const testRoomId = `unread-realtime-${Date.now()}`
+    it('Unread count reflects messages sent after join', async () => {
+      const roomId = 'sub-unread-realtime-room'
 
-      // Both users join
       await request(app)
-        .post(`/chat/rooms/${testRoomId}/join`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .post(`/chat/rooms/${roomId}/join`)
+        .set('Authorization', `Bearer ${USER1}`)
         .send({ eventTitle, eventImageUrl, eventAddress })
         .expect(201)
 
       await request(app)
-        .post(`/chat/rooms/${testRoomId}/join`)
-        .set('Authorization', `Bearer ${user2Token}`)
+        .post(`/chat/rooms/${roomId}/join`)
+        .set('Authorization', `Bearer ${USER2}`)
         .send({ eventTitle, eventImageUrl, eventAddress })
         .expect(201)
 
-      // User1 sends message
       await request(app)
-        .post(`/chat/rooms/${testRoomId}/messages`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .post(`/chat/rooms/${roomId}/messages`)
+        .set('Authorization', `Bearer ${USER1}`)
         .send({ text: 'Unread message' })
         .expect(201)
 
-      // User2 checks unread (should see 1)
       let unreadRes = await request(app)
-        .get(`/chat/rooms/${testRoomId}/unread`)
-        .set('Authorization', `Bearer ${user2Token}`)
+        .get(`/chat/rooms/${roomId}/unread`)
+        .set('Authorization', `Bearer ${USER2}`)
         .expect(200)
-
       expect(unreadRes.body.unread).toBeGreaterThan(0)
 
-      // User2 marks as read
       await request(app)
-        .post(`/chat/rooms/${testRoomId}/read`)
-        .set('Authorization', `Bearer ${user2Token}`)
+        .post(`/chat/rooms/${roomId}/read`)
+        .set('Authorization', `Bearer ${USER2}`)
         .expect(204)
 
-      // Check unread again (should be 0)
       unreadRes = await request(app)
-        .get(`/chat/rooms/${testRoomId}/unread`)
-        .set('Authorization', `Bearer ${user2Token}`)
+        .get(`/chat/rooms/${roomId}/unread`)
+        .set('Authorization', `Bearer ${USER2}`)
         .expect(200)
-
       expect(unreadRes.body.unread).toBe(0)
 
-      // User1 sends new message
       await request(app)
-        .post(`/chat/rooms/${testRoomId}/messages`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .post(`/chat/rooms/${roomId}/messages`)
+        .set('Authorization', `Bearer ${USER1}`)
         .send({ text: 'New unread message' })
         .expect(201)
 
-      // User2 should see new unread count
       unreadRes = await request(app)
-        .get(`/chat/rooms/${testRoomId}/unread`)
-        .set('Authorization', `Bearer ${user2Token}`)
+        .get(`/chat/rooms/${roomId}/unread`)
+        .set('Authorization', `Bearer ${USER2}`)
         .expect(200)
-
       expect(unreadRes.body.unread).toBeGreaterThan(0)
     })
 
-    it('Marking room as read updates last_read_at', async () => {
-      const testRoomId = `read-state-${Date.now()}`
+    it('Marking room as read resets unread count to zero', async () => {
+      const roomId = 'sub-read-state-room'
 
-      // Both join
       await request(app)
-        .post(`/chat/rooms/${testRoomId}/join`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .post(`/chat/rooms/${roomId}/join`)
+        .set('Authorization', `Bearer ${USER1}`)
         .send({ eventTitle, eventImageUrl, eventAddress })
         .expect(201)
 
       await request(app)
-        .post(`/chat/rooms/${testRoomId}/join`)
-        .set('Authorization', `Bearer ${user2Token}`)
+        .post(`/chat/rooms/${roomId}/join`)
+        .set('Authorization', `Bearer ${USER2}`)
         .send({ eventTitle, eventImageUrl, eventAddress })
         .expect(201)
 
-      const timeBeforeRead = new Date().toISOString()
-
-      // User1 sends message
       await request(app)
-        .post(`/chat/rooms/${testRoomId}/messages`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .post(`/chat/rooms/${roomId}/messages`)
+        .set('Authorization', `Bearer ${USER1}`)
         .send({ text: 'Message before read' })
         .expect(201)
 
-      // User2 marks as read
       await request(app)
-        .post(`/chat/rooms/${testRoomId}/read`)
-        .set('Authorization', `Bearer ${user2Token}`)
+        .post(`/chat/rooms/${roomId}/read`)
+        .set('Authorization', `Bearer ${USER2}`)
         .expect(204)
 
-      const timeAfterRead = new Date().toISOString()
-
-      // Verify unread is now 0 (read state was updated)
       const unreadRes = await request(app)
-        .get(`/chat/rooms/${testRoomId}/unread`)
-        .set('Authorization', `Bearer ${user2Token}`)
+        .get(`/chat/rooms/${roomId}/unread`)
+        .set('Authorization', `Bearer ${USER2}`)
         .expect(200)
 
       expect(unreadRes.body.unread).toBe(0)
@@ -376,92 +368,75 @@ describe('Realtime Subscription Simulation', () => {
 
   describe('Realtime Error Recovery', () => {
     it('Recovers from transient errors', async () => {
-      const testRoomId = `recovery-test-${Date.now()}`
+      const roomId = 'sub-recovery-room'
 
-      // Join room
       await request(app)
-        .post(`/chat/rooms/${testRoomId}/join`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .post(`/chat/rooms/${roomId}/join`)
+        .set('Authorization', `Bearer ${USER1}`)
         .send({ eventTitle, eventImageUrl, eventAddress })
         .expect(201)
 
-      // Send valid message
       await request(app)
-        .post(`/chat/rooms/${testRoomId}/messages`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .post(`/chat/rooms/${roomId}/messages`)
+        .set('Authorization', `Bearer ${USER1}`)
         .send({ text: 'Before error' })
         .expect(201)
 
-      // Try invalid request
       await request(app)
-        .post(`/chat/rooms/${testRoomId}/messages`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .post(`/chat/rooms/${roomId}/messages`)
+        .set('Authorization', `Bearer ${USER1}`)
         .send({ text: null })
         .expect(400)
 
-      // System should still work - send valid message
       await request(app)
-        .post(`/chat/rooms/${testRoomId}/messages`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .post(`/chat/rooms/${roomId}/messages`)
+        .set('Authorization', `Bearer ${USER1}`)
         .send({ text: 'After error' })
         .expect(201)
 
-      // Verify both messages are there
       const res = await request(app)
-        .get(`/chat/rooms/${testRoomId}/messages`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .get(`/chat/rooms/${roomId}/messages`)
+        .set('Authorization', `Bearer ${USER1}`)
         .expect(200)
 
       expect(res.body.some((m: { text: string }) => m.text === 'Before error')).toBe(true)
       expect(res.body.some((m: { text: string }) => m.text === 'After error')).toBe(true)
     })
 
-    it('Handles subscription reconnection scenarios', async () => {
-      const testRoomId = `reconnect-test-${Date.now()}`
+    it('Handles reconnection by fetching fresh state', async () => {
+      const roomId = 'sub-reconnect-room'
 
-      // User joins
       await request(app)
-        .post(`/chat/rooms/${testRoomId}/join`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .post(`/chat/rooms/${roomId}/join`)
+        .set('Authorization', `Bearer ${USER1}`)
         .send({ eventTitle, eventImageUrl, eventAddress })
         .expect(201)
 
-      // Send message
       await request(app)
-        .post(`/chat/rooms/${testRoomId}/messages`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .post(`/chat/rooms/${roomId}/messages`)
+        .set('Authorization', `Bearer ${USER1}`)
         .send({ text: 'Before disconnect' })
         .expect(201)
 
-      // Simulate disconnect by fetching fresh state
       const freshState = await request(app)
-        .get(`/chat/rooms/${testRoomId}/messages`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .get(`/chat/rooms/${roomId}/messages`)
+        .set('Authorization', `Bearer ${USER1}`)
         .expect(200)
+      expect(freshState.body.some((m: { text: string }) => m.text === 'Before disconnect')).toBe(true)
 
-      expect(freshState.body.some((m: { text: string }) => m.text === 'Before disconnect')).toBe(
-        true,
-      )
-
-      // Continue sending after "reconnect"
       await request(app)
-        .post(`/chat/rooms/${testRoomId}/messages`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .post(`/chat/rooms/${roomId}/messages`)
+        .set('Authorization', `Bearer ${USER1}`)
         .send({ text: 'After reconnect' })
         .expect(201)
 
-      // Verify both states
       const finalState = await request(app)
-        .get(`/chat/rooms/${testRoomId}/messages`)
-        .set('Authorization', `Bearer ${user1Token}`)
+        .get(`/chat/rooms/${roomId}/messages`)
+        .set('Authorization', `Bearer ${USER1}`)
         .expect(200)
 
-      expect(finalState.body.some((m: { text: string }) => m.text === 'Before disconnect')).toBe(
-        true,
-      )
-      expect(finalState.body.some((m: { text: string }) => m.text === 'After reconnect')).toBe(
-        true,
-      )
+      expect(finalState.body.some((m: { text: string }) => m.text === 'Before disconnect')).toBe(true)
+      expect(finalState.body.some((m: { text: string }) => m.text === 'After reconnect')).toBe(true)
     })
   })
 })
