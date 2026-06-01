@@ -119,7 +119,7 @@ router.get('/rooms', async (req, res) => {
       .select('id, room_id, user_id, text, created_at')
       .in('room_id', roomIds)
       .order('created_at', { ascending: false }),
-    req.supabase!.from('room_members').select('room_id').in('room_id', roomIds),
+    svc.from('room_members').select('room_id').in('room_id', roomIds),
   ])
 
   if (roomError || messageError || membersCountError) {
