@@ -6,6 +6,52 @@ const router = Router()
 
 router.use(withAuth)
 
+/**
+ * @openapi
+ * /chat/rooms:
+ *   get:
+ *     tags: [Rooms]
+ *     summary: Listar salas del usuario
+ *     description: Devuelve todas las salas de chat en las que el usuario es miembro, con el último mensaje y el conteo de no leídos.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lista de salas
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/ChatRoom'
+ *             example:
+ *               - id: "b3d9a1c2-0001-4f3a-9e2d-000000000001"
+ *                 eventTitle: "Festival de Jazz 2025"
+ *                 eventImageUrl: "https://cdn.example.com/jazz.jpg"
+ *                 eventAddress: "Parque Simón Bolívar"
+ *                 memberCount: 8
+ *                 unreadCount: 2
+ *                 lastMessage:
+ *                   id: "msg-uuid-001"
+ *                   roomId: "b3d9a1c2-0001-4f3a-9e2d-000000000001"
+ *                   senderId: "user-uuid-001"
+ *                   senderName: "Ana García"
+ *                   senderAvatar: null
+ *                   text: "Nos vemos mañana!"
+ *                   timestamp: "2025-06-01T18:30:00.000Z"
+ *       401:
+ *         description: Token inválido o ausente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error401'
+ *       500:
+ *         description: Error interno
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error500'
+ */
 router.get('/rooms', async (req, res) => {
   const { data: memberships, error: memberError } = await req.supabase!
     .from('room_members')
@@ -40,7 +86,6 @@ router.get('/rooms', async (req, res) => {
     if (!lastMessageByRoom.has(msg.room_id)) lastMessageByRoom.set(msg.room_id, msg)
   })
 
-  // Fetch profiles for last-message senders to populate senderName/senderAvatar
   const lastMsgSenderIds = Array.from(new Set(Array.from(lastMessageByRoom.values()).map((m) => m.user_id)))
   let lastMsgProfileMap = new Map<string, { name: string; avatar_url: string | null }>()
   if (lastMsgSenderIds.length > 0) {
@@ -85,6 +130,73 @@ router.get('/rooms', async (req, res) => {
   return res.json(result)
 })
 
+/**
+ * @openapi
+ * /chat/rooms/{id}/join:
+ *   post:
+ *     tags: [Rooms]
+ *     summary: Crear o unirse a una sala
+ *     description: Crea la sala si no existe (upsert) y registra al usuario como miembro. Se llama tras hacer swipe derecho (like) en un evento.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: ID del evento (se usa como ID de la sala)
+ *         example: "b3d9a1c2-0001-4f3a-9e2d-000000000001"
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [eventTitle]
+ *             properties:
+ *               eventTitle:
+ *                 type: string
+ *                 example: "Festival de Jazz 2025"
+ *               eventImageUrl:
+ *                 type: string
+ *                 nullable: true
+ *                 example: "https://cdn.example.com/jazz.jpg"
+ *               eventAddress:
+ *                 type: string
+ *                 nullable: true
+ *                 example: "Parque Simón Bolívar, Bogotá"
+ *     responses:
+ *       201:
+ *         description: Sala creada o unión exitosa
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: true
+ *       400:
+ *         description: Falta eventTitle
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error400'
+ *       401:
+ *         description: No autorizado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error401'
+ *       500:
+ *         description: Error interno
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error500'
+ */
 router.post('/rooms/:id/join', async (req, res) => {
   const { id } = req.params
   const { eventTitle, eventImageUrl, eventAddress } = req.body as {
@@ -112,6 +224,50 @@ router.post('/rooms/:id/join', async (req, res) => {
   return res.status(201).json({ ok: true })
 })
 
+/**
+ * @openapi
+ * /chat/rooms/{id}/messages:
+ *   get:
+ *     tags: [Messages]
+ *     summary: Obtener mensajes de una sala
+ *     description: Devuelve el historial completo de mensajes ordenado cronológicamente, enriquecido con el perfil del remitente.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: ID de la sala
+ *         example: "b3d9a1c2-0001-4f3a-9e2d-000000000001"
+ *     responses:
+ *       200:
+ *         description: Lista de mensajes
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/ChatMessage'
+ *             example:
+ *               - id: "msg-uuid-001"
+ *                 roomId: "b3d9a1c2-0001-4f3a-9e2d-000000000001"
+ *                 senderId: "user-uuid-001"
+ *                 senderName: "Ana García"
+ *                 senderAvatar: null
+ *                 text: "Hola a todos!"
+ *                 timestamp: "2025-06-01T18:00:00.000Z"
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       500:
+ *         description: Error interno
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error500'
+ */
 router.get('/rooms/:id/messages', async (req, res) => {
   const { id } = req.params
 
@@ -152,6 +308,69 @@ router.get('/rooms/:id/messages', async (req, res) => {
   return res.json(messages)
 })
 
+/**
+ * @openapi
+ * /chat/rooms/{id}/messages:
+ *   post:
+ *     tags: [Messages]
+ *     summary: Enviar un mensaje
+ *     description: Inserta un nuevo mensaje en la sala. El remitente se infiere del token de autenticación.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: ID de la sala
+ *         example: "b3d9a1c2-0001-4f3a-9e2d-000000000001"
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [text]
+ *             properties:
+ *               text:
+ *                 type: string
+ *                 minLength: 1
+ *                 example: "Nos vemos mañana a las 7pm!"
+ *     responses:
+ *       201:
+ *         description: Mensaje creado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               description: Fila insertada en chat_messages (raw de Supabase)
+ *               properties:
+ *                 id: { type: string, format: uuid }
+ *                 room_id: { type: string, format: uuid }
+ *                 user_id: { type: string, format: uuid }
+ *                 text: { type: string }
+ *                 created_at: { type: string, format: date-time }
+ *       400:
+ *         description: Mensaje vacío
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error400'
+ *       401:
+ *         description: No autorizado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error401'
+ *       500:
+ *         description: Error interno
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error500'
+ */
 router.post('/rooms/:id/messages', async (req, res) => {
   const { id } = req.params
   const { text } = req.body as { text?: string }
@@ -169,6 +388,40 @@ router.post('/rooms/:id/messages', async (req, res) => {
   return res.status(201).json(data)
 })
 
+/**
+ * @openapi
+ * /chat/rooms/{id}/read:
+ *   post:
+ *     tags: [Messages]
+ *     summary: Marcar sala como leída
+ *     description: Actualiza `last_read_at` del usuario en la sala, reseteando el contador de no leídos.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: ID de la sala
+ *         example: "b3d9a1c2-0001-4f3a-9e2d-000000000001"
+ *     responses:
+ *       204:
+ *         description: Marcado como leído (sin cuerpo)
+ *       401:
+ *         description: No autorizado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error401'
+ *       500:
+ *         description: Error interno
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error500'
+ */
 router.post('/rooms/:id/read', async (req, res) => {
   const { id } = req.params
 
@@ -183,6 +436,47 @@ router.post('/rooms/:id/read', async (req, res) => {
   return res.status(204).send()
 })
 
+/**
+ * @openapi
+ * /chat/rooms/{id}/unread:
+ *   get:
+ *     tags: [Messages]
+ *     summary: No leídos de una sala
+ *     description: Devuelve el conteo de mensajes no leídos para el usuario en una sala específica.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: ID de la sala
+ *         example: "b3d9a1c2-0001-4f3a-9e2d-000000000001"
+ *     responses:
+ *       200:
+ *         description: Conteo de no leídos
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UnreadCount'
+ *             example:
+ *               roomId: "b3d9a1c2-0001-4f3a-9e2d-000000000001"
+ *               unread: 4
+ *       401:
+ *         description: No autorizado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error401'
+ *       500:
+ *         description: Error interno
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error500'
+ */
 router.get('/rooms/:id/unread', async (req, res) => {
   const { id } = req.params
 
@@ -207,6 +501,42 @@ router.get('/rooms/:id/unread', async (req, res) => {
   return res.json({ roomId: id, unread: messages.length })
 })
 
+/**
+ * @openapi
+ * /chat/unread:
+ *   get:
+ *     tags: [Messages]
+ *     summary: No leídos de todas las salas
+ *     description: Devuelve un array con el conteo de mensajes no leídos del usuario en cada sala donde es miembro.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lista de no leídos por sala
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/UnreadCount'
+ *             example:
+ *               - roomId: "b3d9a1c2-0001-4f3a-9e2d-000000000001"
+ *                 unread: 2
+ *               - roomId: "b3d9a1c2-0002-4f3a-9e2d-000000000002"
+ *                 unread: 0
+ *       401:
+ *         description: No autorizado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error401'
+ *       500:
+ *         description: Error interno
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error500'
+ */
 router.get('/unread', async (req, res) => {
   const { data: memberships, error: membershipError } = await req.supabase!
     .from('room_members')
