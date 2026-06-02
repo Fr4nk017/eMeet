@@ -6,9 +6,7 @@ import {
   DollarSign as FiDollarSign,
   ImageIcon as FiImage,
   Loader2 as FiLoader,
-  MapPin as FiMapPin,
   Music as FiMusic,
-  Navigation as FiNavigation,
   Video as FiVideo,
   X as FiX,
 } from 'lucide-react'
@@ -16,6 +14,7 @@ import type { CreateLocatarioEventInput } from '../context/LocatarioEventsContex
 import type { EventCategory } from '../types'
 import { uploadEventMedia } from '../lib/uploadEventMedia'
 import { hasSupabaseEnv } from '../lib/supabase'
+import { LocationPickerMap, type LocationValue } from './LocationPickerMap'
 
 const CATEGORIES: { value: EventCategory; label: string; emoji: string }[] = [
   { value: 'fiesta',      label: 'Fiesta',      emoji: '🎉' },
@@ -81,7 +80,7 @@ export function CreateEventModal({
   organizerAvatar,
   avatarUrl,
   initials,
-  userId,
+  userId: _userId,
   mode = 'create',
   initialValues,
 }: Props) {
@@ -91,17 +90,19 @@ export function CreateEventModal({
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [isFree, setIsFree] = useState(true)
-  const [gpsStatus, setGpsStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
-  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null)
-  const [geocodeStatus, setGeocodeStatus] = useState<'idle' | 'loading' | 'done'>('idle')
+  const [locationPick, setLocationPick] = useState<LocationValue | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
 
+  const [videoAudioMode, setVideoAudioMode] = useState<'video' | 'music'>('video')
+
   const [deezerQuery, setDeezerQuery] = useState('')
   const [deezerResults, setDeezerResults] = useState<DeezerTrack[]>([])
   const [deezerTrack, setDeezerTrack] = useState<DeezerTrack | null>(null)
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null)
   const [existingAudioUrl, setExistingAudioUrl] = useState<string | null>(null)
+  const [videoPreviewError, setVideoPreviewError] = useState(false)
   const [isSearchingDeezer, setIsSearchingDeezer] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -111,12 +112,13 @@ export function CreateEventModal({
       const dateVal = initialValues.date
         ? new Date(initialValues.date).toISOString().slice(0, 16)
         : ''
+      const addr = initialValues.address ?? defaultAddress
       setEventForm({
         title: initialValues.title ?? '',
         description: initialValues.description ?? '',
         date: dateVal,
         price: initialValues.price != null ? String(initialValues.price) : '',
-        address: initialValues.address ?? defaultAddress,
+        address: addr,
         imageUrl: initialValues.imageUrl ?? '',
         category: initialValues.category ?? 'fiesta',
       })
@@ -124,60 +126,42 @@ export function CreateEventModal({
       setMediaPreview(initialValues.videoUrl || initialValues.imageUrl || null)
       setMediaType(initialValues.videoUrl ? 'video' : initialValues.imageUrl ? 'image' : null)
       setSelectedFile(null)
-      setGpsCoords(null)
-      setGpsStatus('idle')
+      setLocationPick(null)
       setValidationError(null)
       setDeezerQuery('')
       setDeezerResults([])
       setDeezerTrack(null)
       setExistingAudioUrl(initialValues.audioUrl ?? null)
+      // Pre-center map on existing address
+      if (addr && addr.length > 4) {
+        fetch(`/api/geocode?address=${encodeURIComponent(addr)}`)
+          .then((r) => r.json())
+          .then((d: { lat: number | null; lng: number | null }) => {
+            if (d.lat !== null && d.lng !== null) {
+              setLocationPick({ lat: d.lat, lng: d.lng, address: addr })
+            }
+          })
+          .catch(() => {})
+      }
     } else if (!isOpen) {
       setEventForm({ ...EMPTY_FORM, address: defaultAddress })
       setMediaPreview(null)
       setSelectedFile(null)
       setMediaType(null)
-      setGpsCoords(null)
-      setGpsStatus('idle')
+      setLocationPick(null)
       setIsFree(true)
       setValidationError(null)
       setUploadProgress(null)
+      setVideoAudioMode('video')
+      setVideoPreviewError(false)
       setDeezerQuery('')
       setDeezerResults([])
       setDeezerTrack(null)
+      setAudioPreviewUrl(null)
       setExistingAudioUrl(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }, [isOpen, defaultAddress, mode, initialValues])
-
-  useEffect(() => {
-    if (gpsStatus === 'success') return
-    const address = eventForm.address.trim()
-    if (address.length < 8) {
-      setGpsCoords(null)
-      setGeocodeStatus('idle')
-      return
-    }
-
-    setGeocodeStatus('loading')
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/geocode?address=${encodeURIComponent(address)}`)
-        const data = await res.json() as { lat: number | null; lng: number | null }
-        if (data.lat !== null && data.lng !== null) {
-          setGpsCoords({ lat: data.lat, lng: data.lng })
-          setGeocodeStatus('done')
-        } else {
-          setGpsCoords(null)
-          setGeocodeStatus('idle')
-        }
-      } catch {
-        setGpsCoords(null)
-        setGeocodeStatus('idle')
-      }
-    }, 800)
-
-    return () => clearTimeout(timer)
-  }, [eventForm.address, gpsStatus])
 
   useEffect(() => {
     const q = deezerQuery.trim()
@@ -218,18 +202,30 @@ export function CreateEventModal({
   if (!isOpen) return null
 
   const handleMediaFile = (file: File) => {
-    const isVideo = file.type.startsWith('video/')
-    const isImage = file.type.startsWith('image/')
-    if (!isVideo && !isImage) return
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+    const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'bmp', 'tiff', 'heic', 'heif'])
+    const VIDEO_EXTS = new Set(['mp4', 'mov', 'webm', 'avi', 'mkv', 'flv', 'm4v', 'wmv', '3gp', 'ts', 'ogv'])
+    const BLOCKED_PREFIXES = ['text/', 'application/pdf', 'application/zip', 'application/msword', 'application/vnd']
+
+    const isImage = file.type.startsWith('image/') || IMAGE_EXTS.has(ext)
+    const isVideo = !isImage && (
+      file.type.startsWith('video/') ||
+      VIDEO_EXTS.has(ext) ||
+      // Formatos exportados por TikTok/apps con extensiones numéricas o MIME desconocido
+      !BLOCKED_PREFIXES.some((p) => file.type.startsWith(p))
+    )
+
+    if (!isVideo && !isImage) {
+      setValidationError('Formato no soportado. Usa MP4, MOV, WEBM, AVI o imágenes JPG/PNG/WEBP.')
+      return
+    }
 
     const MAX_IMAGE_MB = 10
-    const MAX_VIDEO_MB = 50
+    const MAX_VIDEO_MB = 100
     const maxMB = isVideo ? MAX_VIDEO_MB : MAX_IMAGE_MB
     const fileMB = (file.size / (1024 * 1024)).toFixed(1)
     if (file.size > maxMB * 1024 * 1024) {
-      setValidationError(
-        `El archivo pesa ${fileMB} MB y supera el límite de ${maxMB} MB permitido.`
-      )
+      setValidationError(`El archivo pesa ${fileMB} MB y supera el límite de ${maxMB} MB.`)
       return
     }
 
@@ -253,36 +249,17 @@ export function CreateEventModal({
     if (file) handleMediaFile(file)
   }
 
-  const handleGetGPS = () => {
-    if (!navigator.geolocation) return
-    setGpsStatus('loading')
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords
-        setGpsCoords({ lat: latitude, lng: longitude })
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=es`,
-          )
-          const data = (await res.json()) as { display_name?: string }
-          setEventForm((prev) => ({
-            ...prev,
-            address: data.display_name ?? `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
-          }))
-        } catch {
-          setEventForm((prev) => ({ ...prev, address: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}` }))
-        }
-        setGpsStatus('success')
-      },
-      () => setGpsStatus('error'),
-      { enableHighAccuracy: true, timeout: 10000 },
-    )
+  const handleLocationChange = (val: LocationValue) => {
+    setLocationPick(val)
+    setEventForm((prev) => ({ ...prev, address: val.address }))
   }
 
   const clearMedia = () => {
     setMediaPreview(null)
     setSelectedFile(null)
     setMediaType(null)
+    setVideoAudioMode('video')
+    setVideoPreviewError(false)
     setValidationError(null)
     setEventForm((prev) => ({ ...prev, imageUrl: '' }))
     if (fileInputRef.current) fileInputRef.current.value = ''
@@ -293,11 +270,14 @@ export function CreateEventModal({
     setExistingAudioUrl(null)
     setDeezerResults([])
     setDeezerQuery('')
+    // Proxy route streams audio directly — works on all devices including mobile
+    setAudioPreviewUrl(`/api/deezer/preview/${track.id}`)
   }
 
   const clearAudio = () => {
     setDeezerTrack(null)
     setExistingAudioUrl(null)
+    setAudioPreviewUrl(null)
     setDeezerQuery('')
     setDeezerResults([])
   }
@@ -311,24 +291,30 @@ export function CreateEventModal({
     setIsSubmitting(true)
 
     try {
+      const finalCoords = locationPick ? { lat: locationPick.lat, lng: locationPick.lng } : null
+
       let finalImageUrl = eventForm.imageUrl
       let finalVideoUrl: string | undefined
 
-      if (selectedFile && userId && hasSupabaseEnv) {
-        setUploadProgress(mediaType === 'video' ? 'Subiendo video...' : 'Subiendo imagen...')
+      if (selectedFile && hasSupabaseEnv) {
+        const label = mediaType === 'video' ? 'video' : 'imagen'
+        setUploadProgress(`Subiendo ${label}... 0%`)
         try {
-          const publicUrl = await uploadEventMedia(selectedFile, userId)
+          const publicUrl = await uploadEventMedia(selectedFile, (pct) => {
+            setUploadProgress(`Subiendo ${label}... ${pct}%`)
+          })
           if (mediaType === 'video') {
             finalVideoUrl = publicUrl
           } else {
             finalImageUrl = publicUrl
           }
-        } catch {
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : ''
           setUploadProgress(null)
           setValidationError(
             mediaType === 'video'
-              ? 'No se pudo subir el video. Intenta de nuevo o usa una URL.'
-              : 'No se pudo subir la imagen. Intenta de nuevo o usa una URL.'
+              ? `No se pudo subir el video. ${errorMessage || 'Intenta de nuevo o usa una URL.'}`
+              : `No se pudo subir la imagen. ${errorMessage || 'Intenta de nuevo o usa una URL.'}`
           )
           setIsSubmitting(false)
           return
@@ -336,7 +322,11 @@ export function CreateEventModal({
         setUploadProgress(null)
       }
 
-      const finalAudioUrl = deezerTrack?.previewUrl ?? existingAudioUrl ?? undefined
+      const finalAudioUrl = (mediaType === 'video' && videoAudioMode === 'video')
+        ? undefined
+        : deezerTrack
+          ? (audioPreviewUrl ?? undefined)
+          : existingAudioUrl ?? undefined
 
       await onSubmit({
         title: eventForm.title,
@@ -350,11 +340,13 @@ export function CreateEventModal({
         audioUrl: finalAudioUrl,
         organizerName,
         organizerAvatar,
-        lat: gpsCoords?.lat,
-        lng: gpsCoords?.lng,
+        lat: finalCoords?.lat,
+        lng: finalCoords?.lng,
       })
     } catch (err) {
       setUploadProgress(null)
+      const msg = err instanceof Error ? err.message : 'No se pudo guardar el evento.'
+      setValidationError(msg)
       throw err
     } finally {
       setIsSubmitting(false)
@@ -366,11 +358,11 @@ export function CreateEventModal({
       ? (mode === 'edit' ? 'Guardando...' : 'Publicando...')
       : (mode === 'edit' ? 'Guardar' : 'Publicar'))
 
-  const hasAudio = deezerTrack || existingAudioUrl
+  const hasAudio = (deezerTrack || existingAudioUrl) && (mediaType !== 'video' || videoAudioMode === 'music')
 
   return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-[#1a1a2e] rounded-2xl w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col shadow-2xl ring-1 ring-white/10">
+    <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4">
+      <div className="bg-[#1a1a2e] rounded-t-2xl sm:rounded-2xl w-full sm:max-w-4xl max-h-[92dvh] sm:max-h-[92vh] overflow-hidden flex flex-col shadow-2xl ring-1 ring-white/10">
 
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/10 flex-shrink-0">
           <button
@@ -391,9 +383,9 @@ export function CreateEventModal({
           </button>
         </div>
 
-        <div className="flex flex-1 overflow-hidden min-h-0">
+        <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
           <div
-            className={`relative flex-1 bg-black flex items-center justify-center transition-colors min-w-0 ${isDragging ? 'bg-violet-900/20' : ''}`}
+            className={`relative h-32 sm:h-40 md:h-auto md:flex-1 bg-black flex items-center justify-center transition-colors flex-shrink-0 md:min-w-0 ${isDragging ? 'bg-violet-900/20' : ''}`}
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
@@ -401,18 +393,28 @@ export function CreateEventModal({
             {mediaPreview ? (
               <>
                 {mediaType === 'video' ? (
-                  <video
-                    src={mediaPreview}
-                    controls
-                    className="w-full h-full object-contain"
-                    style={{ maxHeight: 'calc(92vh - 56px)' }}
-                  />
+                  <>
+                    <video
+                      src={mediaPreview}
+                      controls
+                      muted={videoAudioMode === 'music'}
+                      className="w-full h-full object-contain"
+                      onLoadStart={() => setVideoPreviewError(false)}
+                      onError={() => setVideoPreviewError(true)}
+                    />
+                    {videoPreviewError && (
+                      <div className="absolute inset-x-0 bottom-14 flex justify-center px-4">
+                        <span className="rounded-full bg-black/75 px-3 py-1.5 text-center text-xs text-yellow-300">
+                          Este formato no se puede previsualizar en el navegador, pero el video se subirá igual
+                        </span>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <img
                     src={mediaPreview}
                     alt="preview"
                     className="w-full h-full object-contain"
-                    style={{ maxHeight: 'calc(92vh - 56px)' }}
                     onError={clearMedia}
                   />
                 )}
@@ -433,31 +435,36 @@ export function CreateEventModal({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex flex-col items-center gap-4 p-10 text-center w-full h-full justify-center group"
+                className="flex flex-col items-center gap-3 md:gap-4 p-6 md:p-10 text-center w-full h-full justify-center group"
               >
-                <div className={`w-20 h-20 rounded-2xl flex items-center justify-center transition-all ${isDragging ? 'bg-violet-500/30 scale-110' : 'bg-white/5 group-hover:bg-white/10'}`}>
+                <div className={`w-14 h-14 md:w-20 md:h-20 rounded-2xl flex items-center justify-center transition-all ${isDragging ? 'bg-violet-500/30 scale-110' : 'bg-white/5 group-hover:bg-white/10'}`}>
                   <div className={`flex gap-2 transition-colors ${isDragging ? 'text-violet-300' : 'text-white/30 group-hover:text-white/50'}`}>
-                    <FiImage size={28} />
-                    <FiVideo size={28} />
+                    <FiImage size={22} className="md:hidden" />
+                    <FiVideo size={22} className="md:hidden" />
+                    <FiImage size={28} className="hidden md:block" />
+                    <FiVideo size={28} className="hidden md:block" />
                   </div>
                 </div>
                 <div>
-                  <p className="text-white font-medium mb-1">Arrastra una foto o video aquí</p>
-                  <p className="text-white/40 text-sm">o haz clic para seleccionar</p>
+                  <p className="text-white font-medium mb-1 text-sm md:text-base">
+                    <span className="hidden md:inline">Arrastra una foto o video aquí</span>
+                    <span className="md:hidden">Foto o video</span>
+                  </p>
+                  <p className="text-white/40 text-xs md:text-sm">Toca para seleccionar</p>
                 </div>
-                <span className="text-xs text-white/20">PNG, JPG, GIF, WEBP, AVIF, BMP, TIFF, HEIC · MP4, MOV, WEBM</span>
+                <span className="hidden md:inline text-xs text-white/20">JPG, PNG, WEBP, HEIC · MP4, MOV, WEBM, AVI, MKV y más</span>
               </button>
             )}
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/bmp,image/tiff,image/svg+xml,image/heic,image/heif,video/mp4,video/quicktime,video/webm,video/x-msvideo"
+              accept="image/*,video/*"
               className="hidden"
               onChange={handleFileSelect}
             />
           </div>
 
-          <div className="w-[320px] flex-shrink-0 flex flex-col border-l border-white/10 overflow-y-auto">
+          <div className="w-full md:w-[320px] flex flex-col min-h-0 flex-1 md:flex-none border-t md:border-t-0 md:border-l border-white/10">
             <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10 flex-shrink-0">
               {avatarUrl ? (
                 <img src={avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
@@ -472,7 +479,7 @@ export function CreateEventModal({
               </div>
             </div>
 
-            <div className="flex-1 p-4 space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
               <input
                 type="text"
                 placeholder="Nombre del evento *"
@@ -521,46 +528,10 @@ export function CreateEventModal({
 
               <div>
                 <p className="text-xs text-white/35 mb-1.5 font-medium">Dirección</p>
-                <div className="relative">
-                  <FiMapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-white/25 pointer-events-none" size={13} />
-                  <input
-                    type="text"
-                    placeholder="Dirección del evento"
-                    value={eventForm.address}
-                    onChange={(e) => {
-                      setEventForm((prev) => ({ ...prev, address: e.target.value }))
-                      setGpsCoords(null)
-                      setGpsStatus('idle')
-                      setGeocodeStatus('idle')
-                    }}
-                    className="w-full bg-white/5 border border-white/10 focus:border-violet-500/50 outline-none py-2.5 pl-9 pr-[4.5rem] rounded-xl text-white text-sm placeholder-white/30 transition-colors"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleGetGPS}
-                    disabled={gpsStatus === 'loading'}
-                    className={`absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${
-                      gpsStatus === 'success'
-                        ? 'bg-green-500/20 text-green-400'
-                        : 'bg-white/10 hover:bg-white/15 text-white/50'
-                    }`}
-                  >
-                    {gpsStatus === 'loading'
-                      ? <FiLoader className="animate-spin" size={11} />
-                      : gpsStatus === 'success'
-                        ? <FiCheck size={11} />
-                        : <FiNavigation size={11} />}
-                    GPS
-                  </button>
-                </div>
-                {gpsStatus !== 'success' && (
-                  <p className={`mt-1 text-[11px] transition-opacity ${
-                    geocodeStatus === 'loading' ? 'text-white/30 opacity-100' :
-                    geocodeStatus === 'done' ? 'text-green-400/80 opacity-100' :
-                    'opacity-0'
-                  }`}>
-                    {geocodeStatus === 'loading' && '⏳ Buscando coordenadas...'}
-                    {geocodeStatus === 'done' && '📍 Ubicación detectada — el evento aparecerá en el mapa'}
+                <LocationPickerMap value={locationPick} onChange={handleLocationChange} height={210} />
+                {locationPick && (
+                  <p className="mt-1 text-[11px] text-green-400/80">
+                    📍 Ubicación seleccionada — el evento aparecerá en el mapa
                   </p>
                 )}
               </div>
@@ -596,7 +567,51 @@ export function CreateEventModal({
                 )}
               </div>
 
-              {/* Música del evento — Deezer */}
+              {/* Toggle audio: solo cuando hay video */}
+              {mediaType === 'video' && (
+                <div>
+                  <p className="text-xs text-white/35 mb-1.5 font-medium">Audio del evento</p>
+                  <div className="flex rounded-xl border border-white/10 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVideoAudioMode('video')
+                        setDeezerTrack(null)
+                        setAudioPreviewUrl(null)
+                        setDeezerQuery('')
+                        setDeezerResults([])
+                      }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all ${
+                        videoAudioMode === 'video'
+                          ? 'bg-violet-600/25 text-violet-300'
+                          : 'bg-white/5 text-white/35 hover:bg-white/8 hover:text-white/55'
+                      }`}
+                    >
+                      🎬 Sonido del video
+                    </button>
+                    <div className="w-px bg-white/10" />
+                    <button
+                      type="button"
+                      onClick={() => setVideoAudioMode('music')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all ${
+                        videoAudioMode === 'music'
+                          ? 'bg-violet-600/25 text-violet-300'
+                          : 'bg-white/5 text-white/35 hover:bg-white/8 hover:text-white/55'
+                      }`}
+                    >
+                      🎵 Música
+                    </button>
+                  </div>
+                  {videoAudioMode === 'video' && (
+                    <p className="mt-1 text-[10px] text-white/20">
+                      El video se reproducirá con su audio original
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Música del evento — Deezer (oculto si video usa su propio audio) */}
+              {(mediaType !== 'video' || videoAudioMode === 'music') && (
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-xs text-white/35 font-medium">Música del evento</p>
@@ -624,11 +639,15 @@ export function CreateEventModal({
                         <p className="text-xs text-white/40 truncate">{deezerTrack.artist}</p>
                       </div>
                     </div>
-                    <audio
-                      src={deezerTrack.previewUrl}
-                      controls
-                      className="w-full h-8 rounded-lg [color-scheme:dark]"
-                    />
+                    {audioPreviewUrl ? (
+                      <audio
+                        src={audioPreviewUrl}
+                        controls
+                        className="w-full h-8 rounded-lg [color-scheme:dark]"
+                      />
+                    ) : (
+                      <p className="text-[11px] text-white/30 text-center py-1">Cargando…</p>
+                    )}
                     <p className="text-[10px] text-white/20 text-center">Preview de 30 seg · Deezer</p>
                   </div>
                 ) : existingAudioUrl ? (
@@ -679,6 +698,7 @@ export function CreateEventModal({
                   </div>
                 )}
               </div>
+              )}
 
               {!mediaPreview && (
                 <div>

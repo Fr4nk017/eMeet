@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import { MapPin, Bookmark, Calendar } from 'lucide-react'
-import Layout from '../../src/components/Layout'
-import { useAuth } from '../../src/context/AuthContext'
-import { getSupabaseBrowserClient, hasSupabaseEnv } from '../../src/lib/supabase'
+import Layout from '@/src/components/Layout'
+import { useAuth } from '@/src/context/AuthContext'
+import { callSavedApi } from '@/src/lib/savedApi'
 
 type SavedEventRow = {
   event_id: string
@@ -16,40 +16,6 @@ type SavedEventRow = {
   created_at: string
 }
 
-
-async function getAccessToken(): Promise<string | null> {
-  if (!hasSupabaseEnv) return null
-  const supabase = getSupabaseBrowserClient()
-  const { data } = await supabase.auth.getSession()
-  if (data.session?.access_token) return data.session.access_token
-  const { data: refreshed, error } = await supabase.auth.refreshSession()
-  if (error) return null
-  return refreshed.session?.access_token ?? null
-}
-
-async function callSavedApi<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers = new Headers({ 'Content-Type': 'application/json' })
-
-  if (hasSupabaseEnv) {
-    const token = await getAccessToken()
-    if (!token) throw new Error('Sesión expirada. Vuelve a iniciar sesión.')
-    headers.set('Authorization', `Bearer ${token}`)
-  }
-
-  const res = await fetch(`/api/saved${path}`, {
-    credentials: 'include',
-    ...init,
-    headers,
-  })
-
-  if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { error?: string } | null
-    throw new Error(body?.error ?? 'Error al comunicarse con el servicio de guardados.')
-  }
-
-  if (res.status === 204) return undefined as T
-  return res.json()
-}
 
 function formatSavedDate(isoDate: string) {
   return new Date(isoDate).toLocaleDateString('es-CL', {
@@ -150,13 +116,14 @@ export default function SavedRoutePage() {
             <AnimatePresence>
               <div className="flex flex-col gap-3">
                 {savedEvents.map((event) => (
-                  <motion.div
+                  <motion.button
                     key={event.event_id}
                     layout
                     initial={{ opacity: 0, y: 16 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="flex overflow-hidden rounded-2xl border border-white/5 bg-card"
+                    onClick={() => router.push(`/event/${encodeURIComponent(event.event_id)}`)}
+                    className="flex w-full overflow-hidden rounded-2xl border border-white/5 bg-card text-left transition-colors hover:border-white/10 hover:bg-card/90"
                   >
                     {event.event_image_url ? (
                       <img
@@ -190,7 +157,10 @@ export default function SavedRoutePage() {
 
                       <div className="mt-2 flex items-center justify-end">
                         <button
-                          onClick={() => handleRemove(event.event_id)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleRemove(event.event_id)
+                          }}
                           className="flex h-8 w-8 items-center justify-center rounded-full bg-surface text-primary transition-colors hover:bg-red-500/20 hover:text-red-400"
                           aria-label="Quitar guardado"
                         >
@@ -198,7 +168,7 @@ export default function SavedRoutePage() {
                         </button>
                       </div>
                     </div>
-                  </motion.div>
+                  </motion.button>
                 ))}
               </div>
             </AnimatePresence>

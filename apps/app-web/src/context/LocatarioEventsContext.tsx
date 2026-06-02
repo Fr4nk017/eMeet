@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react'
 import type { Event, EventCategory } from '../types'
 import { getSupabaseBrowserClient, hasSupabaseEnv } from '../lib/supabase'
+import { resolveServiceUrl } from '../lib/serviceUrl'
 
 export interface CreateLocatarioEventInput {
   title: string
@@ -34,7 +35,7 @@ const LocatarioEventsContext = createContext<LocatarioEventsContextValue | undef
 
 const STORAGE_KEY = 'emeet-locatario-events'
 const FALLBACK_EVENT_IMAGE = 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=1200&q=80'
-const EVENTS_URL = (process.env.NEXT_PUBLIC_EVENTS_URL ?? '').trim().replace(/\/$/, '')
+const EVENTS_URL = resolveServiceUrl(process.env.NEXT_PUBLIC_EVENTS_URL, 'EVENTS_URL')
 
 // ── localStorage helpers (modo local sin Supabase) ───────────────────────────
 
@@ -139,14 +140,35 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    if (!hasSupabaseEnv) return
-    getSupabaseBrowserClient()
-      .from('locatario_events')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        if (data) setPublicLocatarioEvents((data as unknown as LocatarioEventRow[]).map(dbRowToEvent))
-      })
+    let mounted = true
+
+    ;(async () => {
+      try {
+        if (EVENTS_URL) {
+          // Usa el endpoint público de la API (service role, bypass RLS — más fiable)
+          const rows = await apiFetch<LocatarioEventRow[]>(EVENTS_URL, '/events/public')
+          if (mounted && Array.isArray(rows)) {
+            setPublicLocatarioEvents(rows.map(dbRowToEvent))
+          }
+          return
+        }
+
+        // Fallback: query anon directo a Supabase (requiere política RLS lectura pública)
+        if (!hasSupabaseEnv) return
+        const { data } = await getSupabaseBrowserClient()
+          .from('locatario_events')
+          .select('*')
+          .gte('event_date', new Date().toISOString())
+          .order('event_date', { ascending: true })
+        if (mounted && data) {
+          setPublicLocatarioEvents((data as unknown as LocatarioEventRow[]).map(dbRowToEvent))
+        }
+      } catch {
+        // Fallo silencioso — el feed sigue funcionando sin eventos de locatarios
+      }
+    })()
+
+    return () => { mounted = false }
   }, [])
 
   // Carga inicial
@@ -174,7 +196,8 @@ export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
           .from('locatario_events')
           .select('*')
           .eq('creator_id', data.session.user.id)
-          .order('created_at', { ascending: false })
+          .gte('event_date', new Date().toISOString())
+          .order('event_date', { ascending: true })
         if (!mounted) return
         if (error || !rows) {
           setLocatarioEvents(loadEventsFromStorage())

@@ -97,6 +97,9 @@ create table if not exists public.chat_rooms (
   event_title     text not null,
   event_image_url text,
   event_address   text,
+  status          text not null default 'active'
+    check (status in ('active', 'expired', 'deleted')),
+  expires_at      timestamptz,
   created_at      timestamptz not null default now()
 );
 
@@ -126,6 +129,9 @@ create index if not exists idx_profile_followers_follower on public.profile_foll
 create index if not exists idx_locatario_creator      on public.locatario_events(creator_id);
 create index if not exists idx_chat_messages_room     on public.chat_messages(room_id);
 create index if not exists idx_chat_messages_created  on public.chat_messages(created_at);
+create index if not exists idx_chat_rooms_status_expires
+  on public.chat_rooms(status, expires_at)
+  where status = 'active';
 
 -- ─── ROW LEVEL SECURITY ──────────────────────────────────────
 
@@ -244,8 +250,27 @@ create policy "chat_messages: insertar en sala propia"
     )
   );
 
+-- ─── AUTO-EXPIRACIÓN DE EVENTOS ─────────────────────────────
+-- Requiere la extensión pg_cron (habilitarla en Supabase Dashboard → Extensions).
+-- Borra diariamente los eventos cuya fecha ya pasó.
+create extension if not exists pg_cron;
+
+select cron.schedule(
+  'delete-expired-locatario-events',
+  '0 3 * * *',
+  $$
+    delete from public.locatario_events
+    where event_date < now();
+  $$
+);
+
 -- ─── REALTIME ────────────────────────────────────────────────
--- Habilitar publicaciones para chat en tiempo real
+-- Habilitar publicaciones para chat en tiempo real.
+-- REPLICA IDENTITY FULL es necesario para que los filtros en
+-- postgres_changes funcionen correctamente en Supabase Realtime.
+
+alter table public.chat_messages replica identity full;
+
 do $$
 begin
   if not exists (

@@ -1,18 +1,74 @@
 import { getSupabaseBrowserClient } from './supabase'
 
-export async function uploadEventMedia(file: File, userId: string): Promise<string> {
+const EVENTS_URL = (
+  process.env.NEXT_PUBLIC_EVENTS_URL ?? ''
+).trim().replace(/\/$/, '')
+
+export async function uploadEventMedia(
+  file: File,
+  onProgress?: (pct: number) => void,
+): Promise<string> {
   const supabase = getSupabaseBrowserClient()
-  const isVideo = file.type.startsWith('video/')
-  const bucket = isVideo ? 'event-videos' : 'event-images'
-  const ext = file.name.split('.').pop() ?? 'bin'
-  const path = `${userId}/${Date.now()}.${ext}`
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
 
-  const { error } = await supabase.storage
-    .from(bucket)
-    .upload(path, file, { upsert: false })
+  if (!token) {
+    throw new Error('Debes iniciar sesión para subir archivos.')
+  }
 
-  if (error) throw new Error(`No se pudo subir el archivo: ${error.message}`)
+  if (!EVENTS_URL) {
+    throw new Error('No está configurada la URL del servicio de eventos.')
+  }
 
-  const { data } = supabase.storage.from(bucket).getPublicUrl(path)
-  return data.publicUrl
+  // Paso 1: pedir una URL firmada al backend (request JSON liviano)
+  const urlRes = await fetch(`${EVENTS_URL}/events/upload-url`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ fileName: file.name, mimeType: file.type }),
+  })
+
+  const urlPayload = (await urlRes.json().catch(() => null)) as {
+    signedUrl?: string
+    token?: string
+    path?: string
+    publicUrl?: string
+    error?: string
+  } | null
+
+  if (!urlRes.ok || !urlPayload?.signedUrl || !urlPayload?.publicUrl) {
+    throw new Error(urlPayload?.error ?? 'No se pudo iniciar la subida.')
+  }
+
+  // Paso 2: subir directo a Supabase Storage con XHR para tener progreso real.
+  // Esto bypasea el límite de 4.5 MB de Vercel Functions.
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', urlPayload.signedUrl!)
+    xhr.setRequestHeader('Content-Type', file.type)
+
+    if (onProgress) {
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          onProgress(Math.round((e.loaded / e.total) * 100))
+        }
+      })
+    }
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve()
+      } else {
+        reject(new Error(xhr.responseText || `Error ${xhr.status} al subir el archivo.`))
+      }
+    })
+    xhr.addEventListener('error', () => reject(new Error('No se pudo subir el archivo.')))
+    xhr.addEventListener('abort', () => reject(new Error('Subida cancelada.')))
+
+    xhr.send(file)
+  })
+
+  return urlPayload.publicUrl
 }

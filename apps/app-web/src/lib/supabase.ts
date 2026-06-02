@@ -214,8 +214,12 @@ export interface Database {
           price: number | null
           image_url: string | null
           video_url: string | null
+          audio_url: string | null
+          lat: number | null
+          lng: number | null
           organizer_name: string
           organizer_avatar: string | null
+          status: string
           created_at: string
         }
         Insert: {
@@ -229,8 +233,12 @@ export interface Database {
           price?: number | null
           image_url?: string | null
           video_url?: string | null
+          audio_url?: string | null
+          lat?: number | null
+          lng?: number | null
           organizer_name?: string
           organizer_avatar?: string | null
+          status?: string
           created_at?: string
         }
         Update: {
@@ -244,8 +252,12 @@ export interface Database {
           price?: number | null
           image_url?: string | null
           video_url?: string | null
+          audio_url?: string | null
+          lat?: number | null
+          lng?: number | null
           organizer_name?: string
           organizer_avatar?: string | null
+          status?: string
           created_at?: string
         }
         Relationships: [

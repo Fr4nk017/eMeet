@@ -10,6 +10,7 @@ import {
   LogOut, Users, BarChart3, Calendar, AlertCircle, Trash2,
   RefreshCw, Search, ShieldOff, Shield, Heart, Home, X,
   ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight,
+  MapPin,
 } from 'lucide-react'
 
 const USERS_PER_PAGE = 10
@@ -47,7 +48,7 @@ function UserAvatar({ name, role }: { name: string; role: AdminUser['role'] }) {
     user: 'bg-white/10 text-slate-300',
   }[role]
   return (
-    <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${cls}`}>
+    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${cls}`}>
       {name.charAt(0).toUpperCase()}
     </div>
   )
@@ -79,18 +80,18 @@ function StatCard({
   label: string; value: number; icon: React.ElementType; accentClass: string; loading: boolean
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-[rgba(15,23,42,0.75)] p-5">
+    <div className="rounded-2xl border border-white/10 bg-[rgba(15,23,42,0.75)] p-4 sm:p-5">
       <div className="flex items-start justify-between">
         <div>
           <p className="text-xs font-medium text-slate-400">{label}</p>
           {loading ? (
-            <div className="mt-2 h-8 w-14 animate-pulse rounded-lg bg-white/10" />
+            <div className="mt-2 h-7 w-12 animate-pulse rounded-lg bg-white/10" />
           ) : (
-            <p className="mt-1 text-3xl font-bold text-white">{value}</p>
+            <p className="mt-1 text-2xl font-bold text-white sm:text-3xl">{value}</p>
           )}
         </div>
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${accentClass}`}>
-          <Icon size={19} />
+        <div className={`flex h-9 w-9 items-center justify-center rounded-xl sm:h-10 sm:w-10 ${accentClass}`}>
+          <Icon size={18} />
         </div>
       </div>
     </div>
@@ -108,7 +109,7 @@ function SortTh({
   return (
     <th
       onClick={() => onSort(col)}
-      className="cursor-pointer select-none px-5 py-3 text-left text-xs font-medium text-slate-500 transition-colors hover:text-slate-300"
+      className="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium text-slate-500 transition-colors hover:text-slate-300"
     >
       <div className="flex items-center gap-1">
         {label}
@@ -133,13 +134,13 @@ function Pagination({
   const end = Math.min(page * perPage, total)
 
   return (
-    <div className="flex items-center justify-between border-t border-white/8 px-5 py-3">
+    <div className="flex items-center justify-between border-t border-white/8 px-4 py-3 sm:px-5">
       <span className="text-xs text-slate-500">{start}–{end} de {total}</span>
       <div className="flex items-center gap-1">
         <button
           onClick={() => onPageChange(page - 1)}
           disabled={page === 1}
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/8 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/8 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
         >
           <ChevronLeft size={14} />
         </button>
@@ -147,7 +148,7 @@ function Pagination({
         <button
           onClick={() => onPageChange(page + 1)}
           disabled={page === totalPages}
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/8 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/8 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
         >
           <ChevronRight size={14} />
         </button>
@@ -171,23 +172,18 @@ function AdminPageContent() {
 
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'events'>('overview')
 
-  // Search
   const [userSearch, setUserSearch] = useState('')
   const [eventSearch, setEventSearch] = useState('')
 
-  // Filters
   const [roleFilter, setRoleFilter] = useState<'all' | 'user' | 'locatario'>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'banned'>('all')
 
-  // Sort
   const [userSort, setUserSort] = useState<{ col: string; dir: SortDir }>({ col: 'created_at', dir: 'desc' })
   const [eventSort, setEventSort] = useState<{ col: string; dir: SortDir }>({ col: 'date', dir: 'desc' })
 
-  // Pagination
   const [userPage, setUserPage] = useState(1)
   const [eventPage, setEventPage] = useState(1)
 
-  // Actions
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<string | null>(null)
   const [confirmDeleteEvent, setConfirmDeleteEvent] = useState<string | null>(null)
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null)
@@ -198,11 +194,17 @@ function AdminPageContent() {
     fetchStatistics()
   }, [fetchUsers, fetchEvents, fetchStatistics])
 
-  // Reset page on filter/search change
+  // Refresca datos al cambiar de pestaña para reflejar cambios externos (ej. borrados en Supabase)
+  useEffect(() => {
+    if (activeTab === 'users') fetchUsers()
+    else if (activeTab === 'events') fetchEvents()
+    else if (activeTab === 'overview') fetchStatistics()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab])
+
   useEffect(() => { setUserPage(1) }, [userSearch, roleFilter, statusFilter, userSort])
   useEffect(() => { setEventPage(1) }, [eventSearch, eventSort])
 
-  // ── Filtered + sorted + paginated users ──────────────────────────────────
   const filteredUsers = useMemo(() => {
     let result = users.filter((u) =>
       u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
@@ -225,7 +227,6 @@ function AdminPageContent() {
     return filteredUsers.slice(start, start + USERS_PER_PAGE)
   }, [filteredUsers, userPage])
 
-  // ── Filtered + sorted + paginated events ─────────────────────────────────
   const filteredEvents = useMemo(() => {
     const result = events.filter((e) =>
       e.title.toLowerCase().includes(eventSearch.toLowerCase()) ||
@@ -246,14 +247,12 @@ function AdminPageContent() {
     return filteredEvents.slice(start, start + EVENTS_PER_PAGE)
   }, [filteredEvents, eventPage])
 
-  // ── Role distribution ─────────────────────────────────────────────────────
   const roleDistribution = useMemo(() => ({
     user: users.filter((u) => u.role === 'user').length,
     locatario: users.filter((u) => u.role === 'locatario').length,
     admin: users.filter((u) => u.role === 'admin').length,
   }), [users])
 
-  // ── Handlers ─────────────────────────────────────────────────────────────
   const handleLogout = async () => {
     await logout()
     router.push('/auth')
@@ -281,7 +280,6 @@ function AdminPageContent() {
 
   const refreshAll = () => { fetchUsers(); fetchEvents(); fetchStatistics() }
 
-  // ── Loading / access guards ───────────────────────────────────────────────
   if (!user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[hsl(222,47%,6%)]">
@@ -292,7 +290,7 @@ function AdminPageContent() {
 
   if (user.role !== 'admin') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[hsl(222,47%,6%)]">
+      <div className="flex min-h-screen items-center justify-center bg-[hsl(222,47%,6%)] px-4">
         <div className="text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/15 ring-1 ring-red-500/25">
             <AlertCircle size={30} className="text-red-400" />
@@ -422,15 +420,15 @@ function AdminPageContent() {
         </aside>
 
         {/* Main area */}
-        <main className="flex-1 px-4 py-6 lg:px-8 lg:py-8">
+        <main className="min-w-0 flex-1 px-3 py-5 sm:px-4 sm:py-6 lg:px-8 lg:py-8">
 
           {/* Page title bar */}
-          <div className="mb-6 flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold text-white lg:text-2xl">
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-bold text-white sm:text-xl lg:text-2xl">
                 {activeTab === 'overview' ? 'Resumen general' : activeTab === 'users' ? 'Usuarios' : 'Eventos'}
               </h1>
-              <p className="mt-0.5 text-sm text-slate-400">
+              <p className="mt-0.5 truncate text-xs text-slate-400 sm:text-sm">
                 {activeTab === 'overview'
                   ? `Bienvenido, ${user.name}`
                   : activeTab === 'users'
@@ -440,7 +438,7 @@ function AdminPageContent() {
             </div>
             <button
               onClick={refreshAll}
-              className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-sm text-slate-300 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
+              className="flex shrink-0 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
             >
               <RefreshCw size={14} />
               <span className="hidden sm:inline">Actualizar</span>
@@ -455,7 +453,7 @@ function AdminPageContent() {
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ duration: 0.15 }}
-                className="mb-5 overflow-hidden"
+                className="mb-4 overflow-hidden"
               >
                 <div className="flex items-center gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
                   <AlertCircle size={16} className="shrink-0" />
@@ -466,7 +464,7 @@ function AdminPageContent() {
           </AnimatePresence>
 
           {/* Stats — always visible */}
-          <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="mb-5 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <StatCard label="Total usuarios" value={statistics?.totalUsers ?? 0} icon={Users} accentClass="bg-[hsl(262,80%,60%)]/15 text-[hsl(262,80%,65%)]" loading={isLoadingStats} />
             <StatCard label="Total eventos" value={statistics?.totalEvents ?? 0} icon={Calendar} accentClass="bg-[hsl(38,95%,55%)]/15 text-[hsl(38,95%,65%)]" loading={isLoadingStats} />
             <StatCard label="Interacciones" value={statistics?.totalLikes ?? 0} icon={Heart} accentClass="bg-emerald-500/15 text-emerald-400" loading={isLoadingStats} />
@@ -485,10 +483,10 @@ function AdminPageContent() {
 
               {/* ── OVERVIEW ── */}
               {activeTab === 'overview' && (
-                <div className="grid gap-5 lg:grid-cols-2">
+                <div className="grid gap-4 sm:gap-5 lg:grid-cols-2">
 
                   {/* Recent users */}
-                  <div className="rounded-2xl border border-white/10 bg-[rgba(15,23,42,0.75)] p-5">
+                  <div className="rounded-2xl border border-white/10 bg-[rgba(15,23,42,0.75)] p-4 sm:p-5">
                     <div className="mb-4 flex items-center justify-between">
                       <h3 className="font-semibold text-white">Usuarios recientes</h3>
                       <button onClick={() => setActiveTab('users')} className="text-xs text-[hsl(262,80%,65%)] transition-colors hover:text-[hsl(262,80%,75%)]">
@@ -499,7 +497,7 @@ function AdminPageContent() {
                       <div className="space-y-3.5">
                         {[1, 2, 3].map((i) => (
                           <div key={i} className="flex items-center gap-3">
-                            <div className="h-8 w-8 animate-pulse rounded-full bg-white/10" />
+                            <div className="h-9 w-9 animate-pulse rounded-full bg-white/10" />
                             <div className="flex-1 space-y-1.5">
                               <div className="h-3 w-28 animate-pulse rounded bg-white/10" />
                               <div className="h-2.5 w-40 animate-pulse rounded bg-white/7" />
@@ -526,7 +524,7 @@ function AdminPageContent() {
                   </div>
 
                   {/* Recent events */}
-                  <div className="rounded-2xl border border-white/10 bg-[rgba(15,23,42,0.75)] p-5">
+                  <div className="rounded-2xl border border-white/10 bg-[rgba(15,23,42,0.75)] p-4 sm:p-5">
                     <div className="mb-4 flex items-center justify-between">
                       <h3 className="font-semibold text-white">Eventos recientes</h3>
                       <button onClick={() => setActiveTab('events')} className="text-xs text-[hsl(262,80%,65%)] transition-colors hover:text-[hsl(262,80%,75%)]">
@@ -564,7 +562,7 @@ function AdminPageContent() {
                   </div>
 
                   {/* Role distribution */}
-                  <div className="rounded-2xl border border-white/10 bg-[rgba(15,23,42,0.75)] p-5">
+                  <div className="rounded-2xl border border-white/10 bg-[rgba(15,23,42,0.75)] p-4 sm:p-5">
                     <h3 className="mb-4 font-semibold text-white">Distribución de roles</h3>
                     {isLoadingUsers ? (
                       <div className="grid grid-cols-3 gap-3">
@@ -573,7 +571,7 @@ function AdminPageContent() {
                         ))}
                       </div>
                     ) : (
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className="grid grid-cols-3 gap-2 sm:gap-3">
                         {([
                           { key: 'user', label: 'Usuarios', count: roleDistribution.user, textCls: 'text-slate-200', barCls: 'bg-white/20' },
                           { key: 'locatario', label: 'Locatarios', count: roleDistribution.locatario, textCls: 'text-[hsl(38,95%,65%)]', barCls: 'bg-[hsl(38,95%,55%)]/50' },
@@ -581,10 +579,10 @@ function AdminPageContent() {
                         ] as const).map(({ key, label, count, textCls, barCls }) => {
                           const pct = users.length > 0 ? Math.round((count / users.length) * 100) : 0
                           return (
-                            <div key={key} className="flex flex-col items-center rounded-xl bg-white/5 px-3 py-4">
-                              <p className={`text-2xl font-bold ${textCls}`}>{count}</p>
-                              <p className="mt-1 text-xs text-slate-500">{label}</p>
-                              <div className="mt-2.5 h-1 w-full rounded-full bg-white/10">
+                            <div key={key} className="flex flex-col items-center rounded-xl bg-white/5 px-2 py-3 sm:px-3 sm:py-4">
+                              <p className={`text-xl font-bold sm:text-2xl ${textCls}`}>{count}</p>
+                              <p className="mt-0.5 text-[10px] text-slate-500 sm:mt-1 sm:text-xs">{label}</p>
+                              <div className="mt-2 h-1 w-full rounded-full bg-white/10">
                                 <div className={`h-full rounded-full transition-all ${barCls}`} style={{ width: `${pct}%` }} />
                               </div>
                               <p className="mt-1 text-[10px] text-slate-600">{pct}%</p>
@@ -596,7 +594,7 @@ function AdminPageContent() {
                   </div>
 
                   {/* System info */}
-                  <div className="rounded-2xl border border-white/10 bg-[rgba(15,23,42,0.75)] p-5">
+                  <div className="rounded-2xl border border-white/10 bg-[rgba(15,23,42,0.75)] p-4 sm:p-5">
                     <h3 className="mb-4 font-semibold text-white">Información del sistema</h3>
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       {[
@@ -624,9 +622,8 @@ function AdminPageContent() {
               {activeTab === 'users' && (
                 <div className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(15,23,42,0.75)]">
                   {/* Toolbar */}
-                  <div className="space-y-3 border-b border-white/8 px-5 py-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                      {/* Search */}
+                  <div className="space-y-3 border-b border-white/8 px-4 py-4 sm:px-5">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                       <div className="relative flex-1 sm:max-w-sm">
                         <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
                         <input
@@ -634,7 +631,7 @@ function AdminPageContent() {
                           placeholder="Buscar por nombre o email…"
                           value={userSearch}
                           onChange={(e) => setUserSearch(e.target.value)}
-                          className="w-full rounded-xl border border-white/10 bg-[hsl(222,30%,13%)] py-2 pl-9 pr-8 text-sm text-white placeholder-slate-600 outline-none transition-colors focus:border-[hsl(262,80%,60%)] focus:ring-1 focus:ring-[hsl(262,80%,60%)]/30"
+                          className="w-full rounded-xl border border-white/10 bg-[hsl(222,30%,13%)] py-2.5 pl-9 pr-8 text-sm text-white placeholder-slate-600 outline-none transition-colors focus:border-[hsl(262,80%,60%)] focus:ring-1 focus:ring-[hsl(262,80%,60%)]/30"
                         />
                         {userSearch && (
                           <button onClick={() => setUserSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
@@ -645,7 +642,7 @@ function AdminPageContent() {
                       <button
                         onClick={fetchUsers}
                         disabled={isLoadingUsers}
-                        className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-sm text-slate-300 transition-all hover:bg-white/10 disabled:opacity-50"
+                        className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm text-slate-300 transition-all hover:bg-white/10 disabled:opacity-50 sm:justify-start"
                       >
                         <RefreshCw size={13} className={isLoadingUsers ? 'animate-spin' : ''} />
                         Actualizar
@@ -653,8 +650,7 @@ function AdminPageContent() {
                     </div>
 
                     {/* Filters */}
-                    <div className="flex flex-wrap gap-3">
-                      {/* Role filter */}
+                    <div className="flex flex-wrap gap-2">
                       <div className="flex items-center gap-1 rounded-lg bg-white/5 p-1">
                         {(['all', 'user', 'locatario'] as const).map((r) => (
                           <button
@@ -671,7 +667,6 @@ function AdminPageContent() {
                         ))}
                       </div>
 
-                      {/* Status filter */}
                       <div className="flex items-center gap-1 rounded-lg bg-white/5 p-1">
                         {(['all', 'active', 'banned'] as const).map((s) => (
                           <button
@@ -694,63 +689,60 @@ function AdminPageContent() {
                     </div>
                   </div>
 
-                  <div className="overflow-x-auto">
-                    {isLoadingUsers ? (
-                      <div className="space-y-4 p-5">
-                        {[1, 2, 3, 4, 5].map((i) => (
-                          <div key={i} className="flex items-center gap-4">
-                            <div className="h-8 w-8 animate-pulse rounded-full bg-white/10" />
-                            <div className="flex-1 space-y-1.5">
-                              <div className="h-3 w-32 animate-pulse rounded bg-white/10" />
-                              <div className="h-2.5 w-48 animate-pulse rounded bg-white/7" />
-                            </div>
-                            <div className="h-5 w-14 animate-pulse rounded-full bg-white/8" />
-                            <div className="h-5 w-16 animate-pulse rounded-full bg-white/8" />
+                  {/* Loading skeleton */}
+                  {isLoadingUsers ? (
+                    <div className="space-y-4 p-4 sm:p-5">
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <div key={i} className="flex items-center gap-3">
+                          <div className="h-9 w-9 animate-pulse rounded-full bg-white/10" />
+                          <div className="flex-1 space-y-1.5">
+                            <div className="h-3 w-32 animate-pulse rounded bg-white/10" />
+                            <div className="h-2.5 w-48 animate-pulse rounded bg-white/7" />
                           </div>
-                        ))}
-                      </div>
-                    ) : filteredUsers.length === 0 ? (
-                      <div className="flex flex-col items-center gap-2 py-16 text-center">
-                        <Users size={30} className="text-slate-600" />
-                        <p className="text-sm text-slate-400">
-                          {userSearch || roleFilter !== 'all' || statusFilter !== 'all'
-                            ? 'Sin resultados para esos filtros'
-                            : 'No hay usuarios'}
-                        </p>
-                        {(userSearch || roleFilter !== 'all' || statusFilter !== 'all') && (
-                          <button
-                            onClick={() => { setUserSearch(''); setRoleFilter('all'); setStatusFilter('all') }}
-                            className="mt-1 text-xs text-[hsl(262,80%,65%)] hover:underline"
-                          >
-                            Limpiar filtros
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b border-white/6 text-left">
-                            <SortTh col="name" label="Usuario" sortCol={userSort.col} sortDir={userSort.dir} onSort={handleUserSort} />
-                            <SortTh col="role" label="Rol" sortCol={userSort.col} sortDir={userSort.dir} onSort={handleUserSort} />
-                            <SortTh col="is_banned" label="Estado" sortCol={userSort.col} sortDir={userSort.dir} onSort={handleUserSort} />
-                            <SortTh col="created_at" label="Registrado" sortCol={userSort.col} sortDir={userSort.dir} onSort={handleUserSort} />
-                            <th className="px-5 py-3 text-xs font-medium text-slate-500">Acciones</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
-                          {paginatedUsers.map((u) => (
-                            <tr key={u.id} className="transition-colors hover:bg-white/3">
-                              <td className="px-5 py-3.5">
-                                <div className="flex items-center gap-3">
-                                  <UserAvatar name={u.name} role={u.role} />
-                                  <div className="min-w-0">
-                                    <p className="max-w-[140px] truncate text-sm font-medium text-white">{u.name}</p>
-                                    <p className="max-w-[180px] truncate text-xs text-slate-500">{u.email}</p>
-                                  </div>
+                          <div className="h-5 w-14 animate-pulse rounded-full bg-white/8" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : filteredUsers.length === 0 ? (
+                    <div className="flex flex-col items-center gap-2 py-16 text-center">
+                      <Users size={30} className="text-slate-600" />
+                      <p className="text-sm text-slate-400">
+                        {userSearch || roleFilter !== 'all' || statusFilter !== 'all'
+                          ? 'Sin resultados para esos filtros'
+                          : 'No hay usuarios'}
+                      </p>
+                      {(userSearch || roleFilter !== 'all' || statusFilter !== 'all') && (
+                        <button
+                          onClick={() => { setUserSearch(''); setRoleFilter('all'); setStatusFilter('all') }}
+                          className="mt-1 text-xs text-[hsl(262,80%,65%)] hover:underline"
+                        >
+                          Limpiar filtros
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      {/* ── Mobile: card list (< md) ── */}
+                      <div className="divide-y divide-white/5 md:hidden">
+                        {paginatedUsers.map((u) => (
+                          <div key={u.id} className="px-4 py-4">
+                            {/* Row 1: avatar + name + date */}
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex min-w-0 items-center gap-3">
+                                <UserAvatar name={u.name} role={u.role} />
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-medium text-white">{u.name}</p>
+                                  <p className="truncate text-xs text-slate-500">{u.email}</p>
                                 </div>
-                              </td>
+                              </div>
+                              <span className="shrink-0 text-[10px] text-slate-600">
+                                {new Date(u.created_at).toLocaleDateString('es-CL')}
+                              </span>
+                            </div>
 
-                              <td className="px-5 py-3.5">
+                            {/* Row 2: role selector + status + actions */}
+                            <div className="mt-3 flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
                                 {u.role === 'admin' ? (
                                   <RoleBadge role="admin" />
                                 ) : (
@@ -758,37 +750,27 @@ function AdminPageContent() {
                                     value={u.role}
                                     disabled={updatingUserId === u.id}
                                     onChange={(e) => handleRoleChange(u, e.target.value)}
-                                    className="cursor-pointer rounded-lg border border-white/10 bg-[hsl(222,30%,13%)] px-2 py-1 text-xs text-white outline-none transition-colors focus:border-[hsl(262,80%,60%)] disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="cursor-pointer rounded-lg border border-white/10 bg-[hsl(222,30%,13%)] px-2 py-1 text-xs text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
                                   >
                                     <option value="user">user</option>
                                     <option value="locatario">locatario</option>
                                   </select>
                                 )}
-                              </td>
-
-                              <td className="px-5 py-3.5">
                                 <StatusBadge banned={u.is_banned} />
-                              </td>
+                              </div>
 
-                              <td className="px-5 py-3.5 text-xs text-slate-500">
-                                {new Date(u.created_at).toLocaleDateString('es-CL')}
-                              </td>
-
-                              <td className="px-5 py-3.5">
-                                {u.role === 'admin' ? (
-                                  <span className="text-xs text-slate-600">—</span>
-                                ) : confirmDeleteUser === u.id ? (
+                              {u.role !== 'admin' && (
+                                confirmDeleteUser === u.id ? (
                                   <ConfirmDelete
                                     onConfirm={async () => { await deleteUser(u.id); setConfirmDeleteUser(null) }}
                                     onCancel={() => setConfirmDeleteUser(null)}
                                   />
                                 ) : (
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-1.5">
                                     <button
                                       onClick={() => handleToggleBan(u)}
                                       disabled={updatingUserId === u.id}
-                                      title={u.is_banned ? 'Reactivar usuario' : 'Suspender usuario'}
-                                      className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                                      className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
                                         u.is_banned
                                           ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
                                           : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
@@ -805,20 +787,109 @@ function AdminPageContent() {
                                     </button>
                                     <button
                                       onClick={() => setConfirmDeleteUser(u.id)}
-                                      title="Eliminar usuario"
                                       className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
                                     >
                                       <Trash2 size={14} />
                                     </button>
                                   </div>
-                                )}
-                              </td>
+                                )
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* ── Desktop: table (md+) ── */}
+                      <div className="hidden overflow-x-auto md:block">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-white/6 text-left">
+                              <SortTh col="name" label="Usuario" sortCol={userSort.col} sortDir={userSort.dir} onSort={handleUserSort} />
+                              <SortTh col="role" label="Rol" sortCol={userSort.col} sortDir={userSort.dir} onSort={handleUserSort} />
+                              <SortTh col="is_banned" label="Estado" sortCol={userSort.col} sortDir={userSort.dir} onSort={handleUserSort} />
+                              <SortTh col="created_at" label="Registrado" sortCol={userSort.col} sortDir={userSort.dir} onSort={handleUserSort} />
+                              <th className="px-4 py-3 text-xs font-medium text-slate-500">Acciones</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {paginatedUsers.map((u) => (
+                              <tr key={u.id} className="transition-colors hover:bg-white/3">
+                                <td className="px-4 py-3.5">
+                                  <div className="flex items-center gap-3">
+                                    <UserAvatar name={u.name} role={u.role} />
+                                    <div className="min-w-0">
+                                      <p className="max-w-[140px] truncate text-sm font-medium text-white">{u.name}</p>
+                                      <p className="max-w-[180px] truncate text-xs text-slate-500">{u.email}</p>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3.5">
+                                  {u.role === 'admin' ? (
+                                    <RoleBadge role="admin" />
+                                  ) : (
+                                    <select
+                                      value={u.role}
+                                      disabled={updatingUserId === u.id}
+                                      onChange={(e) => handleRoleChange(u, e.target.value)}
+                                      className="cursor-pointer rounded-lg border border-white/10 bg-[hsl(222,30%,13%)] px-2 py-1 text-xs text-white outline-none transition-colors focus:border-[hsl(262,80%,60%)] disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      <option value="user">user</option>
+                                      <option value="locatario">locatario</option>
+                                    </select>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3.5">
+                                  <StatusBadge banned={u.is_banned} />
+                                </td>
+                                <td className="px-4 py-3.5 text-xs text-slate-500">
+                                  {new Date(u.created_at).toLocaleDateString('es-CL')}
+                                </td>
+                                <td className="px-4 py-3.5">
+                                  {u.role === 'admin' ? (
+                                    <span className="text-xs text-slate-600">—</span>
+                                  ) : confirmDeleteUser === u.id ? (
+                                    <ConfirmDelete
+                                      onConfirm={async () => { await deleteUser(u.id); setConfirmDeleteUser(null) }}
+                                      onCancel={() => setConfirmDeleteUser(null)}
+                                    />
+                                  ) : (
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => handleToggleBan(u)}
+                                        disabled={updatingUserId === u.id}
+                                        title={u.is_banned ? 'Reactivar usuario' : 'Suspender usuario'}
+                                        className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                                          u.is_banned
+                                            ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                                            : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
+                                        }`}
+                                      >
+                                        {updatingUserId === u.id ? (
+                                          <RefreshCw size={11} className="animate-spin" />
+                                        ) : u.is_banned ? (
+                                          <Shield size={11} />
+                                        ) : (
+                                          <ShieldOff size={11} />
+                                        )}
+                                        {u.is_banned ? 'Reactivar' : 'Suspender'}
+                                      </button>
+                                      <button
+                                        onClick={() => setConfirmDeleteUser(u.id)}
+                                        title="Eliminar usuario"
+                                        className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
 
                   {filteredUsers.length > USERS_PER_PAGE && (
                     <Pagination
@@ -834,7 +905,8 @@ function AdminPageContent() {
               {/* ── EVENTS ── */}
               {activeTab === 'events' && (
                 <div className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(15,23,42,0.75)]">
-                  <div className="flex flex-col gap-3 border-b border-white/8 px-5 py-4 sm:flex-row sm:items-center">
+                  {/* Toolbar */}
+                  <div className="flex flex-col gap-2 border-b border-white/8 px-4 py-4 sm:flex-row sm:items-center sm:px-5">
                     <div className="relative flex-1 sm:max-w-sm">
                       <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
                       <input
@@ -842,7 +914,7 @@ function AdminPageContent() {
                         placeholder="Buscar por título, lugar u organizador…"
                         value={eventSearch}
                         onChange={(e) => setEventSearch(e.target.value)}
-                        className="w-full rounded-xl border border-white/10 bg-[hsl(222,30%,13%)] py-2 pl-9 pr-8 text-sm text-white placeholder-slate-600 outline-none transition-colors focus:border-[hsl(262,80%,60%)] focus:ring-1 focus:ring-[hsl(262,80%,60%)]/30"
+                        className="w-full rounded-xl border border-white/10 bg-[hsl(222,30%,13%)] py-2.5 pl-9 pr-8 text-sm text-white placeholder-slate-600 outline-none transition-colors focus:border-[hsl(262,80%,60%)] focus:ring-1 focus:ring-[hsl(262,80%,60%)]/30"
                       />
                       {eventSearch && (
                         <button onClick={() => setEventSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
@@ -853,86 +925,136 @@ function AdminPageContent() {
                     <button
                       onClick={fetchEvents}
                       disabled={isLoadingEvents}
-                      className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-sm text-slate-300 transition-all hover:bg-white/10 disabled:opacity-50"
+                      className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm text-slate-300 transition-all hover:bg-white/10 disabled:opacity-50 sm:justify-start"
                     >
                       <RefreshCw size={13} className={isLoadingEvents ? 'animate-spin' : ''} />
                       Actualizar
                     </button>
                   </div>
 
-                  <div className="overflow-x-auto">
-                    {isLoadingEvents ? (
-                      <div className="space-y-4 p-5">
-                        {[1, 2, 3, 4, 5].map((i) => (
-                          <div key={i} className="space-y-1.5">
-                            <div className="h-3 w-52 animate-pulse rounded bg-white/10" />
-                            <div className="h-2.5 w-32 animate-pulse rounded bg-white/7" />
-                          </div>
-                        ))}
-                      </div>
-                    ) : filteredEvents.length === 0 ? (
-                      <div className="flex flex-col items-center gap-2 py-16 text-center">
-                        <Calendar size={30} className="text-slate-600" />
-                        <p className="text-sm text-slate-400">
-                          {eventSearch ? 'Sin resultados para esa búsqueda' : 'No hay eventos'}
-                        </p>
-                        {eventSearch && (
-                          <button onClick={() => setEventSearch('')} className="mt-1 text-xs text-[hsl(262,80%,65%)] hover:underline">
-                            Limpiar búsqueda
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b border-white/6 text-left">
-                            <SortTh col="title" label="Evento" sortCol={eventSort.col} sortDir={eventSort.dir} onSort={handleEventSort} />
-                            <SortTh col="location" label="Ubicación" sortCol={eventSort.col} sortDir={eventSort.dir} onSort={handleEventSort} />
-                            <SortTh col="date" label="Fecha" sortCol={eventSort.col} sortDir={eventSort.dir} onSort={handleEventSort} />
-                            <SortTh col="created_by" label="Organizador" sortCol={eventSort.col} sortDir={eventSort.dir} onSort={handleEventSort} />
-                            <th className="px-5 py-3 text-xs font-medium text-slate-500">Acciones</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
-                          {paginatedEvents.map((e) => (
-                            <tr key={e.id} className="transition-colors hover:bg-white/3">
-                              <td className="px-5 py-3.5">
-                                <p className="max-w-[200px] truncate text-sm font-medium text-white">{e.title}</p>
+                  {/* Loading skeleton */}
+                  {isLoadingEvents ? (
+                    <div className="space-y-4 p-4 sm:p-5">
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <div key={i} className="space-y-1.5">
+                          <div className="h-3 w-52 animate-pulse rounded bg-white/10" />
+                          <div className="h-2.5 w-32 animate-pulse rounded bg-white/7" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : filteredEvents.length === 0 ? (
+                    <div className="flex flex-col items-center gap-2 py-16 text-center">
+                      <Calendar size={30} className="text-slate-600" />
+                      <p className="text-sm text-slate-400">
+                        {eventSearch ? 'Sin resultados para esa búsqueda' : 'No hay eventos'}
+                      </p>
+                      {eventSearch && (
+                        <button onClick={() => setEventSearch('')} className="mt-1 text-xs text-[hsl(262,80%,65%)] hover:underline">
+                          Limpiar búsqueda
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      {/* ── Mobile: card list (< md) ── */}
+                      <div className="divide-y divide-white/5 md:hidden">
+                        {paginatedEvents.map((e) => (
+                          <div key={e.id} className="px-4 py-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium text-white">{e.title}</p>
                                 {e.description && (
-                                  <p className="mt-0.5 max-w-[200px] truncate text-xs text-slate-500">{e.description}</p>
+                                  <p className="mt-0.5 truncate text-xs text-slate-500">{e.description}</p>
                                 )}
-                              </td>
-                              <td className="px-5 py-3.5">
-                                <p className="max-w-[140px] truncate text-sm text-slate-300">{e.location || '—'}</p>
-                              </td>
-                              <td className="px-5 py-3.5 text-xs text-slate-400">
-                                {new Date(e.date).toLocaleDateString('es-CL', {
-                                  day: '2-digit', month: 'short', year: 'numeric',
-                                })}
-                              </td>
-                              <td className="px-5 py-3.5 text-xs text-slate-400">{e.created_by || '—'}</td>
-                              <td className="px-5 py-3.5">
-                                {confirmDeleteEvent === e.id ? (
+                              </div>
+                              {confirmDeleteEvent === e.id ? (
+                                <div className="shrink-0">
                                   <ConfirmDelete
                                     onConfirm={async () => { await deleteEvent(e.id); setConfirmDeleteEvent(null) }}
                                     onCancel={() => setConfirmDeleteEvent(null)}
                                   />
-                                ) : (
-                                  <button
-                                    onClick={() => setConfirmDeleteEvent(e.id)}
-                                    title="Eliminar evento"
-                                    className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                )}
-                              </td>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setConfirmDeleteEvent(e.id)}
+                                  className="shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+                              <span className="flex items-center gap-1 text-xs text-slate-500">
+                                <Calendar size={11} />
+                                {new Date(e.date).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </span>
+                              {e.location && (
+                                <span className="flex items-center gap-1 text-xs text-slate-500">
+                                  <MapPin size={11} />
+                                  {e.location}
+                                </span>
+                              )}
+                              {e.created_by && (
+                                <span className="text-xs text-slate-600">por {e.created_by}</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* ── Desktop: table (md+) ── */}
+                      <div className="hidden overflow-x-auto md:block">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-white/6 text-left">
+                              <SortTh col="title" label="Evento" sortCol={eventSort.col} sortDir={eventSort.dir} onSort={handleEventSort} />
+                              <SortTh col="location" label="Ubicación" sortCol={eventSort.col} sortDir={eventSort.dir} onSort={handleEventSort} />
+                              <SortTh col="date" label="Fecha" sortCol={eventSort.col} sortDir={eventSort.dir} onSort={handleEventSort} />
+                              <SortTh col="created_by" label="Organizador" sortCol={eventSort.col} sortDir={eventSort.dir} onSort={handleEventSort} />
+                              <th className="px-4 py-3 text-xs font-medium text-slate-500">Acciones</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {paginatedEvents.map((e) => (
+                              <tr key={e.id} className="transition-colors hover:bg-white/3">
+                                <td className="px-4 py-3.5">
+                                  <p className="max-w-[200px] truncate text-sm font-medium text-white">{e.title}</p>
+                                  {e.description && (
+                                    <p className="mt-0.5 max-w-[200px] truncate text-xs text-slate-500">{e.description}</p>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3.5">
+                                  <p className="max-w-[140px] truncate text-sm text-slate-300">{e.location || '—'}</p>
+                                </td>
+                                <td className="px-4 py-3.5 text-xs text-slate-400">
+                                  {new Date(e.date).toLocaleDateString('es-CL', {
+                                    day: '2-digit', month: 'short', year: 'numeric',
+                                  })}
+                                </td>
+                                <td className="px-4 py-3.5 text-xs text-slate-400">{e.created_by || '—'}</td>
+                                <td className="px-4 py-3.5">
+                                  {confirmDeleteEvent === e.id ? (
+                                    <ConfirmDelete
+                                      onConfirm={async () => { await deleteEvent(e.id); setConfirmDeleteEvent(null) }}
+                                      onCancel={() => setConfirmDeleteEvent(null)}
+                                    />
+                                  ) : (
+                                    <button
+                                      onClick={() => setConfirmDeleteEvent(e.id)}
+                                      title="Eliminar evento"
+                                      className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
 
                   {filteredEvents.length > EVENTS_PER_PAGE && (
                     <Pagination

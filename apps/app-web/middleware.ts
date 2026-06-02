@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createSupabaseServerClient, hasSupabaseEnv } from './src/lib/supabase'
 
 // Rutas que requieren sesión activa. El usuario sin sesión es redirigido a /auth.
-const PROTECTED_ROUTES = ['/profile', '/chat', '/saved', '/search']
+const PROTECTED_ROUTES = ['/profile', '/chat', '/saved', '/search', '/locatario', '/admin']
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -24,12 +24,13 @@ export async function middleware(request: NextRequest) {
     },
   })
 
-  // getUser() valida el JWT contra Supabase y refresca la sesión si es necesario.
-  // Si falla por error de red o timeout, dejamos pasar y el cliente maneja el auth.
+  // getSession() lee la sesión desde la cookie sin hacer llamada de red — mucho más rápido.
+  // La validación criptográfica del JWT la hace el cliente; el middleware solo necesita
+  // saber si existe una sesión para decidir redirigir o no.
   let user = null
   try {
-    const { data } = await supabase.auth.getUser()
-    user = data.user
+    const { data } = await supabase.auth.getSession()
+    user = data.session?.user ?? null
   } catch {
     return response
   }

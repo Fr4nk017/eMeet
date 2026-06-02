@@ -35,7 +35,19 @@
       "cache": false
     },
     "test": {
-      "outputs": []
+      "outputs": [],
+      "cache": false,
+      "env": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "TEST_USER_EMAIL",
+        "TEST_USER_PASSWORD",
+        "TEST_ADMIN_EMAIL",
+        "TEST_ADMIN_PASSWORD",
+        "CRON_SECRET",
+        "GOOGLE_MAPS_API_KEY"
+      ]
     },
     "db:generate": {
       "cache": false

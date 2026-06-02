@@ -93,10 +93,12 @@ const SwipeCard = memo(function SwipeCard({
   const [isImageLoading, setIsImageLoading] = useState(true)
   const [isVideoReady, setIsVideoReady] = useState(false)
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
+  const [audioFailed, setAudioFailed] = useState(false)
 
   const isBlob = imgSrc.startsWith('blob:')
   const hasVideo = Boolean(event.videoUrl)
   const hasAudio = Boolean(event.audioUrl)
+  const canUseAudio = hasAudio && !audioFailed
   const audioRef = useRef<HTMLAudioElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
 
@@ -137,6 +139,7 @@ const SwipeCard = memo(function SwipeCard({
   // Pausar audio al cambiar de evento
   useEffect(() => {
     setIsPlayingAudio(false)
+    setAudioFailed(false)
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current.currentTime = 0
@@ -145,7 +148,7 @@ const SwipeCard = memo(function SwipeCard({
 
   // Auto-play audio cuando la card se vuelve activa
   useEffect(() => {
-    if (!audioRef.current || !hasAudio) return
+    if (!audioRef.current || !canUseAudio) return
     if (isActive) {
       audioRef.current.play()
         .then(() => setIsPlayingAudio(true))
@@ -155,7 +158,7 @@ const SwipeCard = memo(function SwipeCard({
       audioRef.current.currentTime = 0
       setIsPlayingAudio(false)
     }
-  }, [isActive, hasAudio])
+  }, [isActive, canUseAudio])
 
   function toggleAudio(e: React.MouseEvent) {
     e.stopPropagation()
@@ -273,7 +276,7 @@ const SwipeCard = memo(function SwipeCard({
         )}
 
         {/* Botón de audio con rueda giratoria */}
-        {hasAudio && (
+        {canUseAudio && (
           <>
             <button
               onClick={isActive ? toggleAudio : undefined}
@@ -297,8 +300,13 @@ const SwipeCard = memo(function SwipeCard({
             </button>
             <audio
               ref={audioRef}
-              src={event.audioUrl!}
+              src={isActive ? event.audioUrl! : undefined}
+              preload="none"
               onEnded={() => setIsPlayingAudio(false)}
+              onError={() => {
+                setIsPlayingAudio(false)
+                setAudioFailed(true)
+              }}
             />
           </>
         )}

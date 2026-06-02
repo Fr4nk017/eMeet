@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import {
@@ -12,12 +12,12 @@ import {
   Eye as FiEye,
   EyeOff as FiEyeOff,
   Briefcase as FiBriefcase,
-  MapPin,
   AlignLeft,
   CheckCircle2,
   XCircle,
   CircleAlert as FiAlertCircle,
 } from 'lucide-react'
+import { LocationPickerMap, type LocationValue } from './LocationPickerMap'
 
 function getPasswordStrength(pwd: string) {
   if (!pwd) return null
@@ -37,7 +37,6 @@ const INPUT_CLASS =
 
 export default function SignUpForm() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { register } = useAuth()
 
   const [role, setRole] = useState<'user' | 'locatario'>('user')
@@ -55,10 +54,16 @@ export default function SignUpForm() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [emailTouched, setEmailTouched] = useState(false)
+  const [locationPick, setLocationPick] = useState<LocationValue | null>(null)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleLocationChange = (val: LocationValue) => {
+    setLocationPick(val)
+    setFormData((prev) => ({ ...prev, location: val.address }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -89,12 +94,9 @@ export default function SignUpForm() {
         businessName: role === 'locatario' ? formData.businessName : undefined,
         businessLocation: role === 'locatario' ? formData.location : undefined,
       })
-
-      // Si llegamos aquí con sesión activa, el useEffect en AuthPage redirigirá automáticamente.
-      // Igual hacemos push explícito como respaldo.
-      const next = searchParams.get('next')
-      if (next && next.startsWith('/')) { router.push(next); return }
-      router.push(role === 'locatario' ? '/locatario' : '/')
+      // Cuando register() tiene éxito, AuthContext seteó isAuthenticated: true.
+      // El useEffect de AuthPage detecta el cambio y redirige — no navegar aquí
+      // para evitar doble navegación que bloquea el router de Next.js.
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al registrarte'
       // Supabase requiere confirmación de email — redirigir a la página correspondiente
@@ -333,18 +335,13 @@ export default function SignUpForm() {
               </div>
 
               <div className="space-y-1.5">
-                <label htmlFor="location" className="block text-sm font-medium text-slate-300">
+                <label className="block text-sm font-medium text-slate-300">
                   Ubicación <span className="text-slate-500">(opcional)</span>
                 </label>
-                <div className="relative">
-                  <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-                  <input
-                    id="location" name="location" type="text"
-                    value={formData.location} onChange={handleChange}
-                    placeholder="Santiago, Chile"
-                    className={INPUT_CLASS}
-                  />
-                </div>
+                <LocationPickerMap value={locationPick} onChange={handleLocationChange} height={190} />
+                {locationPick && (
+                  <p className="text-xs text-emerald-400">📍 Ubicación seleccionada</p>
+                )}
               </div>
 
               <div className="space-y-1.5">

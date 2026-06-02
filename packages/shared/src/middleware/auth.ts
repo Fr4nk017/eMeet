@@ -1,6 +1,10 @@
+import type { User } from '@supabase/supabase-js'
 import type { NextFunction, Request, Response } from 'express'
 import { createAnonClient } from '../lib/supabase'
 import { unauthorized, serverError } from '../utils/http'
+
+const AUTH_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+const authCache = new Map<string, { user: User; expiresAt: number }>()
 
 export async function withAuth(req: Request, res: Response, next: NextFunction) {
   try {
@@ -11,6 +15,13 @@ export async function withAuth(req: Request, res: Response, next: NextFunction) 
       return unauthorized(res, 'Falta token de autorización.')
     }
 
+    const cached = authCache.get(token)
+    if (cached && cached.expiresAt > Date.now()) {
+      req.supabase = createAnonClient(token)
+      req.authUser = cached.user
+      return next()
+    }
+
     const supabase = createAnonClient(token)
     const { data, error } = await supabase.auth.getUser()
 
@@ -18,6 +29,7 @@ export async function withAuth(req: Request, res: Response, next: NextFunction) 
       return unauthorized(res, 'Sesión inválida o expirada.')
     }
 
+    authCache.set(token, { user: data.user, expiresAt: Date.now() + AUTH_CACHE_TTL_MS })
     req.supabase = supabase
     req.authUser = data.user
     next()

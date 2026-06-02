@@ -5,5 +5,11 @@
       "source": "/(.*)",
       "destination": "/api/index"
     }
+  ],
+  "crons": [
+    {
+      "path": "/events/cleanup",
+      "schedule": "0 3 * * *"
+    }
   ]
 }

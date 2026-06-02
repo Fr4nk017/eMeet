@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowRight as FiArrowRight, CircleAlert as FiAlertCircle, MapPin, Calendar, Users } from 'lucide-react'
-import LoginForm from '../../src/components/LoginForm'
-import SignUpForm from '../../src/components/SignUpForm'
-import { useAuth } from '../../src/context/AuthContext'
+import LoginForm from '@/src/components/LoginForm'
+import SignUpForm from '@/src/components/SignUpForm'
+import { useAuth } from '@/src/context/AuthContext'
 
 function SplashScreen({ onDone }: { onDone: () => void }) {
   useEffect(() => {
@@ -91,13 +91,6 @@ function GoogleIcon() {
   )
 }
 
-function FacebookIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" aria-hidden>
-      <path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-    </svg>
-  )
-}
 
 const FEATURES = [
   {
@@ -125,18 +118,21 @@ const STATS = [
 
 export default function AuthPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
-  const [oauthLoading, setOauthLoading] = useState<'google' | 'facebook' | null>(null)
+  const [oauthLoading, setOauthLoading] = useState<'google' | null>(null)
   const [oauthError, setOauthError] = useState('')
   const [showSplash, setShowSplash] = useState(false)
   const { loginWithOAuth, isAuthenticated, isAuthReady, user } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
 
-  // Redirigir al home si el usuario ya está autenticado (post-login o post-register)
+  // Redirigir al home si el usuario ya está autenticado (post-login, post-register, o ya tenía sesión)
   useEffect(() => {
     if (!isAuthReady || !isAuthenticated) return
+    const next = searchParams.get('next')
+    if (next && next.startsWith('/')) { router.replace(next); return }
     const role = user?.role
     router.replace(role === 'locatario' ? '/locatario' : role === 'admin' ? '/admin' : '/')
-  }, [isAuthReady, isAuthenticated, router, user?.role])
+  }, [isAuthReady, isAuthenticated, router, user?.role, searchParams])
 
   useEffect(() => {
     if (!sessionStorage.getItem('emeet-splash')) {
@@ -149,7 +145,7 @@ export default function AuthPage() {
     setShowSplash(false)
   }, [])
 
-  const handleOAuth = async (provider: 'google' | 'facebook') => {
+  const handleOAuth = async (provider: 'google') => {
     setOauthError('')
     setOauthLoading(provider)
     try {
@@ -270,19 +266,6 @@ export default function AuthPage() {
                     <GoogleIcon />
                   )}
                   Continuar con Google
-                </button>
-
-                <button
-                  onClick={() => handleOAuth('facebook')}
-                  disabled={oauthLoading !== null}
-                  className="flex w-full items-center justify-center gap-3 rounded-xl border border-[#1877F2]/30 bg-[#1877F2]/8 py-3 text-sm font-medium text-white transition-all hover:border-[#1877F2]/50 hover:bg-[#1877F2]/15 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {oauthLoading === 'facebook' ? (
-                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-[#1877F2]/40 border-t-[#1877F2]" />
-                  ) : (
-                    <FacebookIcon />
-                  )}
-                  Continuar con Facebook
                 </button>
 
                 <AnimatePresence>

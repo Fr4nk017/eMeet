@@ -90,6 +90,8 @@ export interface Database {
           event_title: string
           event_image_url: string | null
           event_address: string | null
+          status: 'active' | 'expired' | 'deleted'
+          expires_at: string | null
           created_at: string
         }
         Insert: {
@@ -97,12 +99,16 @@ export interface Database {
           event_title: string
           event_image_url?: string | null
           event_address?: string | null
+          status?: 'active' | 'expired' | 'deleted'
+          expires_at?: string | null
           created_at?: string
         }
         Update: {
           event_title?: string
           event_image_url?: string | null
           event_address?: string | null
+          status?: 'active' | 'expired' | 'deleted'
+          expires_at?: string | null
         }
         Relationships: []
       }

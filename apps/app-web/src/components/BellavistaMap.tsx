@@ -104,6 +104,7 @@ export default function BellavistaMap({ focusedPlaceId }: BellavistaMapProps) {
   const [travelMode, setTravelMode] = useState<TravelModeOption>('WALKING')
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null)
   const [directionsError, setDirectionsError] = useState<string | null>(null)
+  const [geocodedTarget, setGeocodedTarget] = useState<{ lat: number; lng: number; name: string } | null>(null)
   // Ref para userLocation: onMapLoad es estable y no se recrea en cada cambio de ubicación
   const userLocationRef = useRef(userLocation)
   useEffect(() => { userLocationRef.current = userLocation }, [userLocation])
@@ -161,6 +162,47 @@ export default function BellavistaMap({ focusedPlaceId }: BellavistaMapProps) {
     [places, selectedPlaceId],
   )
 
+  const selectedLocatarioEvent = useMemo(
+    () =>
+      !selectedPlace && selectedPlaceId
+        ? publicLocatarioEvents.find((e) => e.id === selectedPlaceId) ?? null
+        : null,
+    [publicLocatarioEvents, selectedPlace, selectedPlaceId],
+  )
+
+  // Geocodifica el address del evento locatario cuando no tiene lat/lng
+  useEffect(() => {
+    if (!selectedLocatarioEvent || (selectedLocatarioEvent.lat != null && selectedLocatarioEvent.lng != null)) {
+      setGeocodedTarget(null)
+      return
+    }
+    const address = selectedLocatarioEvent.address
+    if (!address) {
+      setGeocodedTarget(null)
+      return
+    }
+    let cancelled = false
+    fetch(`/api/geocode?address=${encodeURIComponent(address)}`)
+      .then((res) => res.json())
+      .then((data: { lat: number | null; lng: number | null }) => {
+        if (cancelled || !data.lat || !data.lng) return
+        setGeocodedTarget({ lat: data.lat, lng: data.lng, name: selectedLocatarioEvent.title })
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [selectedLocatarioEvent])
+
+  const selectedTarget = useMemo(() => {
+    if (selectedPlace) return { position: selectedPlace.position, name: selectedPlace.name }
+    if (selectedLocatarioEvent?.lat != null && selectedLocatarioEvent?.lng != null) {
+      return { position: { lat: selectedLocatarioEvent.lat, lng: selectedLocatarioEvent.lng }, name: selectedLocatarioEvent.title }
+    }
+    if (geocodedTarget) {
+      return { position: { lat: geocodedTarget.lat, lng: geocodedTarget.lng }, name: geocodedTarget.name }
+    }
+    return null
+  }, [selectedPlace, selectedLocatarioEvent, geocodedTarget])
+
   const routeSummary = useMemo(() => {
     if (!directions) return null
     const firstRoute = directions.routes[0]
@@ -183,13 +225,13 @@ export default function BellavistaMap({ focusedPlaceId }: BellavistaMapProps) {
   }, [directions])
 
   useEffect(() => {
-    if (!selectedPlace || !mapRef.current) return
-    mapRef.current.panTo(selectedPlace.position)
+    if (!selectedTarget || !mapRef.current) return
+    mapRef.current.panTo(selectedTarget.position)
     mapRef.current.setZoom(16)
-  }, [selectedPlace])
+  }, [selectedTarget])
 
   useEffect(() => {
-    if (!userLocation || !selectedPlace || !window.google?.maps) {
+    if (!userLocation || !selectedTarget || !window.google?.maps) {
       setDirections(null)
       return
     }
@@ -198,7 +240,7 @@ export default function BellavistaMap({ focusedPlaceId }: BellavistaMapProps) {
     service.route(
       {
         origin: userLocation,
-        destination: selectedPlace.position,
+        destination: selectedTarget.position,
         travelMode: window.google.maps.TravelMode[travelMode],
       },
       (result, status) => {
@@ -212,7 +254,7 @@ export default function BellavistaMap({ focusedPlaceId }: BellavistaMapProps) {
         }
       },
     )
-  }, [selectedPlace, travelMode, userLocation])
+  }, [selectedTarget, travelMode, userLocation])
 
   // Memoizado: sin esto, se crea un nuevo array en cada render
   // y nearestPlaceIds (que depende de visiblePlaces) recalcula constantemente
@@ -385,10 +427,10 @@ export default function BellavistaMap({ focusedPlaceId }: BellavistaMapProps) {
         </div>
       )}
 
-      {selectedPlace && (
+      {selectedTarget && (
         <div className="absolute top-20 left-4 z-30 max-w-[240px] rounded-xl border border-blue-400/25 bg-slate-950/90 px-3 py-2 backdrop-blur-md">
           <p className="text-[11px] font-semibold text-blue-200">Ruta activa</p>
-          <p className="text-[11px] leading-5 text-slate-300">Cómo llegar a {selectedPlace.name}</p>
+          <p className="text-[11px] leading-5 text-slate-300">Cómo llegar a {selectedTarget.name}</p>
           <div className="mt-2 flex items-center gap-1.5">
             <button
               type="button"
