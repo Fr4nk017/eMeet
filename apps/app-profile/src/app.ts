@@ -2,8 +2,10 @@ import cors from 'cors'
 import express from 'express'
 import helmet from 'helmet'
 import morgan from 'morgan'
+import swaggerUi from 'swagger-ui-express'
 import { env } from './config/env.js'
 import profileRouter from './routes/profile.routes.js'
+import { swaggerSpec } from './swagger.js'
 
 const app = express()
 
@@ -36,6 +38,11 @@ app.use(morgan('dev'))
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'emeet-app-profile', timestamp: new Date().toISOString() })
 })
+
+app.use('/docs', ((_req: express.Request, res: express.Response, next: express.NextFunction) => {
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'")
+  next()
+}) as express.RequestHandler, swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 
 app.use('/profile', profileRouter)
 
