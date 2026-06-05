@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { createServiceRoleClient } from '../../../../packages/shared/src/lib/supabase.js'
 import { withAuth } from '../../../../packages/shared/src/middleware/auth.js'
 import { serverError } from '../../../../packages/shared/src/utils/http.js'
+import type { UserRole } from '../../../../packages/shared/src/types/supabase.js'
 
 const router = Router()
 
@@ -102,7 +103,7 @@ router.put('/users/:id', withAuth, adminOnly, async (req, res) => {
     const { role, is_banned } = req.body
     const supabase = createServiceRoleClient()
 
-    const updates: { role?: string; is_banned?: boolean } = {}
+    const updates: { role?: UserRole; is_banned?: boolean } = {}
     if (role !== undefined) updates.role = role
     if (is_banned !== undefined) updates.is_banned = is_banned
 
