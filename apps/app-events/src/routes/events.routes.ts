@@ -10,7 +10,7 @@ const router = Router()
 // Limpieza programada — llamado diariamente por Vercel Cron
 router.get('/cleanup', async (req, res) => {
   const secret = process.env.CRON_SECRET
-  if (secret && req.headers.authorization !== `Bearer ${secret}`) {
+  if (!secret || req.headers.authorization !== `Bearer ${secret}`) {
     return res.status(401).json({ error: 'No autorizado.' })
   }
 
