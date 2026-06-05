@@ -23,7 +23,7 @@ function log(scope: string, msg: string, extra?: Record<string, unknown>) {
 
 router.post('/cleanup', async (req, res) => {
   const secret = process.env.CLEANUP_SECRET
-  if (secret && req.headers['x-cleanup-secret'] !== secret) {
+  if (!secret || req.headers['x-cleanup-secret'] !== secret) {
     return res.status(401).json({ error: 'No autorizado.' })
   }
 
