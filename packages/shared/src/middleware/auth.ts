@@ -1,6 +1,6 @@
 import type { User } from '@supabase/supabase-js'
 import type { NextFunction, Request, Response } from 'express'
-import { createAnonClient } from '../lib/supabase'
+import { createAnonClient, createServiceRoleClient } from '../lib/supabase'
 import { unauthorized, serverError } from '../utils/http'
 
 const AUTH_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
@@ -17,6 +17,17 @@ export async function withAuth(req: Request, res: Response, next: NextFunction) 
 
     const cached = authCache.get(token)
     if (cached && cached.expiresAt > Date.now()) {
+      const { data: profile } = await createServiceRoleClient()
+        .from('profiles')
+        .select('is_banned')
+        .eq('id', cached.user.id)
+        .single()
+
+      if ((profile as any)?.is_banned) {
+        authCache.delete(token)
+        return unauthorized(res, 'Cuenta suspendida.')
+      }
+
       req.supabase = createAnonClient(token)
       req.authUser = cached.user
       return next()
