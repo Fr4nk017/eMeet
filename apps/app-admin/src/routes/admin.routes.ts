@@ -67,7 +67,7 @@ router.get('/users', withAuth, adminOnly, async (_req, res) => {
         name: p.name,
         email: emailMap.get(p.id) ?? '',
         role: p.role ?? 'user',
-        is_banned: (p as any).is_banned ?? false,
+        is_banned: p.is_banned ?? false,
         created_at: p.created_at,
       }))
 
@@ -102,7 +102,7 @@ router.put('/users/:id', withAuth, adminOnly, async (req, res) => {
     const { role, is_banned } = req.body
     const supabase = createServiceRoleClient()
 
-    const updates: Record<string, unknown> = {}
+    const updates: { role?: string; is_banned?: boolean } = {}
     if (role !== undefined) updates.role = role
     if (is_banned !== undefined) updates.is_banned = is_banned
 
@@ -112,7 +112,7 @@ router.put('/users/:id', withAuth, adminOnly, async (req, res) => {
 
     const { data, error } = await supabase
       .from('profiles')
-      .update(updates as any)
+      .update(updates)
       .eq('id', id)
       .select()
       .single()
@@ -202,7 +202,7 @@ router.get('/statistics', withAuth, adminOnly, async (_req, res) => {
       supabase.auth.admin.listUsers({ perPage: 1000 }),
       supabase.from('locatario_events').select('*', { count: 'exact', head: true }),
       supabase.from('user_events').select('*', { count: 'exact', head: true }).eq('action', 'like'),
-      supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_banned' as any, true),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_banned', true),
     ])
 
     // totalUsers desde auth.users para no contar perfiles huérfanos

@@ -1,3 +1,5 @@
+export type UserRole = 'user' | 'locatario' | 'admin'
+
 export type EventCategory =
   | 'gastronomia'
   | 'musica'
@@ -19,9 +21,10 @@ export interface Database {
           avatar_url: string | null
           location: string
           interests: EventCategory[]
-          role: string
+          role: UserRole
           business_name: string | null
           business_location: string | null
+          is_banned: boolean
           created_at: string
         }
         Insert: {
@@ -31,9 +34,10 @@ export interface Database {
           avatar_url?: string | null
           location?: string
           interests?: EventCategory[]
-          role?: string
+          role?: UserRole
           business_name?: string | null
           business_location?: string | null
+          is_banned?: boolean
           created_at?: string
         }
         Update: {
@@ -42,11 +46,46 @@ export interface Database {
           avatar_url?: string | null
           location?: string
           interests?: EventCategory[]
-          role?: string
+          role?: UserRole
           business_name?: string | null
           business_location?: string | null
+          is_banned?: boolean
         }
         Relationships: []
+      }
+      profile_followers: {
+        Row: {
+          id: string
+          follower_id: string
+          followed_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          follower_id: string
+          followed_id: string
+          created_at?: string
+        }
+        Update: {
+          follower_id?: string
+          followed_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'profile_followers_follower_id_fkey'
+            columns: ['follower_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'profile_followers_followed_id_fkey'
+            columns: ['followed_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
       }
       user_events: {
         Row: {

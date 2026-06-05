@@ -23,7 +23,7 @@ export async function withAuth(req: Request, res: Response, next: NextFunction) 
         .eq('id', cached.user.id)
         .single()
 
-      if ((profile as any)?.is_banned) {
+      if (profile?.is_banned) {
         authCache.delete(token)
         return unauthorized(res, 'Cuenta suspendida.')
       }
