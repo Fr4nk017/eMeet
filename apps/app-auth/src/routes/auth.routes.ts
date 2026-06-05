@@ -85,6 +85,8 @@ router.post('/register', async (req, res) => {
 
     if (profileError) {
       console.error('[app-auth] profile upsert after register failed:', JSON.stringify(profileError))
+      await adminClient.auth.admin.deleteUser(data.user.id)
+      return serverError(res, 'No se pudo completar el registro. Inténtalo de nuevo.')
     }
   }
 
