@@ -20,17 +20,24 @@ const adminOnly = async (req: any, res: any, next: any) => {
   // Fallback: consultar la tabla profiles
   try {
     const supabase = createServiceRoleClient()
-    const { data: profile } = await supabase
+    const { data: profile, error: dbError } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', req.authUser.id)
       .single()
 
+    if (dbError) {
+      console.error('[adminOnly] db error:', dbError.message)
+      return res.status(500).json({ error: 'Error interno al verificar permisos.' })
+    }
+
     if (profile?.role === 'admin') return next()
 
     return res.status(403).json({ error: 'Acceso denegado' })
-  } catch {
-    return res.status(403).json({ error: 'Acceso denegado' })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error desconocido'
+    console.error('[adminOnly] unexpected error:', message)
+    return res.status(500).json({ error: 'Error interno al verificar permisos.' })
   }
 }
 
