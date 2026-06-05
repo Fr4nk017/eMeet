@@ -30,13 +30,17 @@ router.post('/register', async (req, res) => {
     name?: string
     email?: string
     password?: string
-    role?: 'user' | 'locatario' | 'admin'
+    role?: 'user' | 'locatario'
     businessName?: string
     businessLocation?: string
   }
 
   if (!name || !email || !password) {
     return badRequest(res, 'Nombre, email y contraseña son obligatorios.')
+  }
+
+  if (role !== undefined && role !== 'user' && role !== 'locatario') {
+    return badRequest(res, 'Rol no válido.')
   }
 
   if (password.length < 6) {
@@ -63,7 +67,7 @@ router.post('/register', async (req, res) => {
 
   // Create profile row immediately so GET /profile works right after registration.
   if (data.user) {
-    const effectiveRole = (role ?? 'user') as 'user' | 'locatario' | 'admin'
+    const effectiveRole = (role ?? 'user') as 'user' | 'locatario'
     const profilePayload: Record<string, unknown> = {
       id: data.user.id,
       name: name.trim(),
