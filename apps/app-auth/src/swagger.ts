@@ -79,7 +79,7 @@ export const swaggerSpec = {
                   name: { type: 'string' },
                   email: { type: 'string', format: 'email' },
                   password: { type: 'string', minLength: 6 },
-                  role: { type: 'string', enum: ['user', 'locatario', 'admin'] },
+                  role: { type: 'string', enum: ['user', 'locatario'] },
                   businessName: { type: 'string' },
                   businessLocation: { type: 'string' },
                 },

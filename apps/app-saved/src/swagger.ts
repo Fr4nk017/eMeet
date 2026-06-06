@@ -5,7 +5,7 @@ export const swaggerSpec = {
     version: '1.0.0',
     description: 'Likes, guardados y recomendaciones de eventos',
   },
-  servers: [{ url: '/saved', description: 'Saved service' }],
+  servers: [{ url: '/events', description: 'Saved service' }],
   components: {
     securitySchemes: {
       bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
