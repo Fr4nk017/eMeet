@@ -10,58 +10,66 @@ export type EventCategory =
   | 'teatro'
   | 'arte'
 
+export type EventAction = 'like' | 'save'
+
+export type ChatRoomStatus = 'active' | 'expired' | 'deleted'
+
 export interface Database {
   public: {
     Tables: {
+
+      // ─── profiles ────────────────────────────────────────────────────────────
       profiles: {
         Row: {
-          id: string
-          name: string
-          bio: string
-          avatar_url: string | null
-          location: string
-          interests: EventCategory[]
-          role: UserRole
-          business_name: string | null
+          id:                string
+          name:              string
+          bio:               string
+          avatar_url:        string | null
+          location:          string
+          interests:         EventCategory[]
+          role:              UserRole
+          business_name:     string | null
           business_location: string | null
-          is_banned: boolean
-          created_at: string
+          is_banned:         boolean
+          created_at:        string
         }
         Insert: {
-          id: string
-          name: string
-          bio?: string
-          avatar_url?: string | null
-          location?: string
-          interests?: EventCategory[]
-          role?: UserRole
-          business_name?: string | null
+          id:                string
+          name?:             string
+          bio?:              string
+          avatar_url?:       string | null
+          location?:         string
+          interests?:        EventCategory[]
+          role?:             UserRole
+          business_name?:    string | null
           business_location?: string | null
-          is_banned?: boolean
-          created_at?: string
+          is_banned?:        boolean
+          created_at?:       string
         }
         Update: {
-          name?: string
-          bio?: string
-          avatar_url?: string | null
-          location?: string
-          interests?: EventCategory[]
-          role?: UserRole
-          business_name?: string | null
+          name?:             string
+          bio?:              string
+          avatar_url?:       string | null
+          location?:         string
+          interests?:        EventCategory[]
+          role?:             UserRole
+          business_name?:    string | null
           business_location?: string | null
-          is_banned?: boolean
+          is_banned?:        boolean
         }
         Relationships: []
       }
+
+      // ─── profile_followers ───────────────────────────────────────────────────
       profile_followers: {
         Row: {
-          id: string
+          id:          string
           follower_id: string
           followed_id: string
-          created_at: string
+          created_at:  string
         }
         Insert: {
-          id?: string
+          id?:         string
           follower_id: string
           followed_id: string
           created_at?: string
@@ -87,31 +95,98 @@ export interface Database {
           },
         ]
       }
-      user_events: {
+
+      // ─── locatario_events ────────────────────────────────────────────────────
+      locatario_events: {
         Row: {
-          id: string
-          user_id: string
-          event_id: string
-          event_title: string | null
-          event_image_url: string | null
-          event_address: string | null
-          action: 'like' | 'save'
-          created_at: string
+          id:               string
+          creator_id:       string
+          title:            string
+          description:      string
+          category:         EventCategory
+          event_date:       string
+          address:          string
+          price:            number | null
+          image_url:        string | null
+          video_url:        string | null
+          audio_url:        string | null
+          organizer_name:   string
+          organizer_avatar: string | null
+          lat:              number | null
+          lng:              number | null
+          created_at:       string
         }
         Insert: {
-          id?: string
-          user_id?: string
-          event_id: string
-          event_title?: string | null
-          event_image_url?: string | null
-          event_address?: string | null
-          action: 'like' | 'save'
-          created_at?: string
+          id?:              string
+          creator_id?:      string
+          title:            string
+          description?:     string
+          category:         EventCategory
+          event_date:       string
+          address?:         string
+          price?:           number | null
+          image_url?:       string | null
+          video_url?:       string | null
+          audio_url?:       string | null
+          organizer_name?:  string
+          organizer_avatar?: string | null
+          lat?:             number | null
+          lng?:             number | null
+          created_at?:      string
         }
         Update: {
-          event_title?: string | null
+          title?:           string
+          description?:     string
+          category?:        EventCategory
+          event_date?:      string
+          address?:         string
+          price?:           number | null
+          image_url?:       string | null
+          video_url?:       string | null
+          audio_url?:       string | null
+          organizer_name?:  string
+          organizer_avatar?: string | null
+          lat?:             number | null
+          lng?:             number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'locatario_events_creator_id_fkey'
+            columns: ['creator_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+
+      // ─── user_events ─────────────────────────────────────────────────────────
+      // event_id es TEXT (no UUID): soporta IDs de Google Places y UUIDs de locatario
+      user_events: {
+        Row: {
+          id:              string
+          user_id:         string
+          event_id:        string
+          event_title:     string | null
+          event_image_url: string | null
+          event_address:   string | null
+          action:          EventAction
+          created_at:      string
+        }
+        Insert: {
+          id?:             string
+          user_id?:        string
+          event_id:        string
+          event_title?:    string | null
           event_image_url?: string | null
-          event_address?: string | null
+          event_address?:  string | null
+          action:          EventAction
+          created_at?:     string
+        }
+        Update: {
+          event_title?:    string | null
+          event_image_url?: string | null
+          event_address?:  string | null
         }
         Relationships: [
           {
@@ -123,45 +198,50 @@ export interface Database {
           },
         ]
       }
+
+      // ─── chat_rooms ──────────────────────────────────────────────────────────
+      // id = event_id o place_id (TEXT para soportar IDs de Google Places)
       chat_rooms: {
         Row: {
-          id: string
-          event_title: string
+          id:              string
+          event_title:     string
           event_image_url: string | null
-          event_address: string | null
-          status: 'active' | 'expired' | 'deleted'
-          expires_at: string | null
-          created_at: string
+          event_address:   string | null
+          status:          ChatRoomStatus
+          expires_at:      string | null
+          created_at:      string
         }
         Insert: {
-          id: string
-          event_title: string
+          id:              string
+          event_title:     string
           event_image_url?: string | null
-          event_address?: string | null
-          status?: 'active' | 'expired' | 'deleted'
-          expires_at?: string | null
-          created_at?: string
+          event_address?:  string | null
+          status?:         ChatRoomStatus
+          expires_at?:     string | null
+          created_at?:     string
         }
         Update: {
-          event_title?: string
+          event_title?:    string
           event_image_url?: string | null
-          event_address?: string | null
-          status?: 'active' | 'expired' | 'deleted'
-          expires_at?: string | null
+          event_address?:  string | null
+          status?:         ChatRoomStatus
+          expires_at?:     string | null
         }
         Relationships: []
       }
+
+      // ─── room_members ────────────────────────────────────────────────────────
       room_members: {
         Row: {
-          room_id: string
-          user_id: string
-          joined_at: string
+          room_id:      string
+          user_id:      string
+          joined_at:    string
           last_read_at: string
         }
         Insert: {
-          room_id: string
-          user_id?: string
-          joined_at?: string
+          room_id:       string
+          user_id?:      string
+          joined_at?:    string
           last_read_at?: string
         }
         Update: {
@@ -184,19 +264,21 @@ export interface Database {
           },
         ]
       }
+
+      // ─── chat_messages ───────────────────────────────────────────────────────
       chat_messages: {
         Row: {
-          id: string
-          room_id: string
-          user_id: string
-          text: string
+          id:         string
+          room_id:    string
+          user_id:    string
+          text:       string
           created_at: string
         }
         Insert: {
-          id?: string
-          room_id: string
-          user_id?: string
-          text: string
+          id?:        string
+          room_id:    string
+          user_id?:   string
+          text:       string
           created_at?: string
         }
         Update: {
@@ -219,72 +301,16 @@ export interface Database {
           },
         ]
       }
-      locatario_events: {
-        Row: {
-          id: string
-          creator_id: string
-          title: string
-          description: string
-          category: EventCategory
-          event_date: string
-          address: string
-          price: number | null
-          image_url: string | null
-          video_url: string | null
-          organizer_name: string
-          organizer_avatar: string | null
-          lat: number | null
-          lng: number | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          creator_id?: string
-          title: string
-          description?: string
-          category: EventCategory
-          event_date: string
-          address?: string
-          price?: number | null
-          image_url?: string | null
-          video_url?: string | null
-          organizer_name?: string
-          organizer_avatar?: string | null
-          lat?: number | null
-          lng?: number | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          creator_id?: string
-          title?: string
-          description?: string
-          category?: EventCategory
-          event_date?: string
-          address?: string
-          price?: number | null
-          image_url?: string | null
-          video_url?: string | null
-          organizer_name?: string
-          organizer_avatar?: string | null
-          lat?: number | null
-          lng?: number | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: 'locatario_events_creator_id_fkey'
-            columns: ['creator_id']
-            isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['id']
-          },
-        ]
-      }
+
     }
     Views: Record<string, never>
     Functions: Record<string, never>
-    Enums: Record<string, never>
+    Enums: {
+      user_role:        UserRole
+      event_category:   EventCategory
+      event_action:     EventAction
+      chat_room_status: ChatRoomStatus
+    }
     CompositeTypes: Record<string, never>
   }
 }

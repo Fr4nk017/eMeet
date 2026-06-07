@@ -17,7 +17,7 @@ export type EventCategory =
 /**
  * Representa un evento publicado en la plataforma.
  */
-export type EventSource = 'ticketmaster' | 'places' | 'locatario'
+export type EventSource = 'places' | 'locatario'
 
 export interface Event {
   id: string

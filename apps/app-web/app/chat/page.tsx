@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { forwardRef, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -41,21 +41,21 @@ function RoomStatusBadge({ status }: { status: ChatRoom['status'] }) {
   )
 }
 
-function RoomRow({
-  room,
-  onOpen,
-  onLeave,
-  selectionMode,
-  selected,
-  onToggle,
-}: {
+const RoomRow = forwardRef<HTMLDivElement, {
   room: ChatRoom
   onOpen: () => void
   onLeave: () => void
   selectionMode: boolean
   selected: boolean
   onToggle: () => void
-}) {
+}>(function RoomRow({
+  room,
+  onOpen,
+  onLeave,
+  selectionMode,
+  selected,
+  onToggle,
+}, ref) {
   const [confirmLeave, setConfirmLeave] = useState(false)
   const isActive = room.status === 'active'
 
@@ -69,6 +69,7 @@ function RoomRow({
 
   return (
     <motion.div
+      ref={ref}
       layout
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
@@ -184,7 +185,7 @@ function RoomRow({
       )}
     </motion.div>
   )
-}
+})
 
 export default function ChatPage() {
   const router = useRouter()
