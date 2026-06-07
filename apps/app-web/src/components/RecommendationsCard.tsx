@@ -104,7 +104,7 @@ function RecommendationItem({
             placeholder="blur"
             blurDataURL={THUMB_BLUR_DATA_URL}
             unoptimized={shouldBypassImageOptimization(imgSrc)}
-            onLoadingComplete={() => setIsImageLoading(false)}
+            onLoad={() => setIsImageLoading(false)}
             onError={() => {
               if (imgSrc !== FALLBACK_THUMB) {
                 setImgSrc(optimizeThumbUrl(FALLBACK_THUMB))

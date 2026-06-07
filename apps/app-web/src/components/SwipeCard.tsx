@@ -236,7 +236,7 @@ const SwipeCard = memo(function SwipeCard({
             placeholder="blur"
             blurDataURL={CARD_BLUR_DATA_URL}
             unoptimized={isBlob || shouldBypassImageOptimization(imgSrc)}
-            onLoadingComplete={() => setIsImageLoading(false)}
+            onLoad={() => setIsImageLoading(false)}
             onError={() => {
               if (imgSrc !== FALLBACK_IMAGE) {
                 setImgSrc(optimizeCardImageUrl(FALLBACK_IMAGE))

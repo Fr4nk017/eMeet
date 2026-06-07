@@ -20,10 +20,13 @@ jest.mock('../../../../packages/shared/src/lib/supabase', () => ({
   createAnonClient: () => require('./helpers/mock-db').createMockClient(),
 }))
 
-// ─── Test users ───────────────────────────────────────────────────────────────
+// ─── Test users / secrets ─────────────────────────────────────────────────────
 
-const USER1 = 'user-1'
-const USER2 = 'user-2'
+const USER1          = 'user-1'
+const USER2          = 'user-2'
+const CLEANUP_SECRET = 'mock-cleanup-secret'
+
+process.env.CLEANUP_SECRET = CLEANUP_SECRET
 
 // ─── Setup / Teardown ─────────────────────────────────────────────────────────
 
@@ -327,7 +330,7 @@ describe('POST /chat/cleanup', () => {
 
     const res = await request(app)
       .post('/chat/cleanup')
-      .set('x-cleanup-secret', '')
+      .set('x-cleanup-secret', CLEANUP_SECRET)
     expect(res.status).toBe(200)
     expect(typeof res.body.expired).toBe('number')
     expect(res.body.expired).toBeGreaterThanOrEqual(1)

@@ -25,13 +25,12 @@ export const swaggerSpec = {
       },
     },
   },
-  security: [{ bearerAuth: [] }],
   paths: {
     '/search-nearby': {
       post: {
         tags: ['Places'],
         summary: 'Buscar lugares cercanos (Google Places Nearby Search)',
-        security: [{ bearerAuth: [] }],
+        security: [],
         requestBody: {
           required: true,
           content: {
@@ -69,7 +68,7 @@ export const swaggerSpec = {
       get: {
         tags: ['Places'],
         summary: 'Obtener detalles de un lugar',
-        security: [{ bearerAuth: [] }],
+        security: [],
         parameters: [
           {
             name: 'placeId',
@@ -100,7 +99,7 @@ export const swaggerSpec = {
       get: {
         tags: ['Places'],
         summary: 'Proxy de foto de Google Places',
-        security: [{ bearerAuth: [] }],
+        security: [],
         parameters: [
           { name: 'photoReference', in: 'query', required: true, schema: { type: 'string' } },
           { name: 'maxWidth', in: 'query', schema: { type: 'integer', default: 400 } },

@@ -8,7 +8,6 @@ import Layout from '@/src/components/Layout'
 import SwipeCard from '@/src/components/SwipeCard'
 import { NearbyPlacesProvider, useNearbyPlacesContext } from '@/src/context/NearbyPlacesContext'
 import { useLocatarioEvents } from '@/src/context/LocatarioEventsContext'
-import { useFeedEvents } from '@/src/hooks/useFeedEvents'
 import { placeToEvent } from '@/src/data/placeFeedAdapter'
 import { haversineKm } from '@/src/utils/geo'
 import { CATEGORY_EMOJI, formatEventDate, formatPrice } from '@/src/utils/eventUtils'
@@ -28,13 +27,11 @@ const CATEGORIES: { key: EventCategory; label: string }[] = [
 ]
 
 const SOURCE_LABELS: Record<EventSource, string> = {
-  ticketmaster: 'Ticketmaster',
   places: 'Lugares',
   locatario: 'Locales',
 }
 
 const SOURCE_ACTIVE_CLASS: Record<EventSource, string> = {
-  ticketmaster: 'border-blue-400/60 bg-blue-500/20 text-blue-200',
   places: 'border-emerald-400/60 bg-emerald-500/20 text-emerald-200',
   locatario: 'border-primary/60 bg-primary/20 text-primary-light',
 }
@@ -221,8 +218,6 @@ function SearchPageContent() {
   } = useNearbyPlacesContext()
 
   const { locatarioEvents } = useLocatarioEvents()
-  const { events: externalEvents, failedSources } = useFeedEvents(userLocation, 20)
-
   // ── Estado de filtros ────────────────────────────────────────────────────
   const [isFiltersOpen, setIsFiltersOpen] = useState(false)
   const [activeCategory, setActiveCategory] = useState<EventCategory | null>(null)
@@ -265,9 +260,8 @@ function SearchPageContent() {
           return e
         }),
       )
-      .concat(externalEvents)
       .sort((a, b) => a.distance - b.distance)
-  }, [externalEvents, locatarioEvents, places, userLocation])
+  }, [locatarioEvents, places, userLocation])
 
   // Fuentes presentes en los resultados (para mostrar solo las que aplican)
   const availableSources = useMemo(
@@ -585,15 +579,6 @@ function SearchPageContent() {
           </>
         ) : (
           <>
-            {failedSources.length > 0 && (
-              <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2.5">
-                <span className="mt-px text-sm">⚠️</span>
-                <p className="text-xs leading-5 text-amber-200">
-                  Algunos servicios no respondieron ({failedSources.join(', ')}). Los resultados pueden estar incompletos.
-                </p>
-              </div>
-            )}
-
             <p className="mb-3 text-xs text-muted">
               {filtered.length} evento{filtered.length !== 1 ? 's' : ''} encontrado{filtered.length !== 1 ? 's' : ''}
             </p>

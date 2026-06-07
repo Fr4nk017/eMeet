@@ -1,10 +1,7 @@
 import { Router, Request, Response } from 'express'
-import { withAuth } from '../../../../packages/shared/src/middleware/auth.js'
 import { env } from '../config/env.js'
 
 const router = Router()
-
-router.use(withAuth)
 
 const GOOGLE_API_KEY = env.GOOGLE_MAPS_API_KEY
 

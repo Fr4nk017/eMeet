@@ -133,6 +133,7 @@ model LocatarioEvent {
   price          Decimal?      @db.Decimal(10, 2)
   imageUrl       String?       @map("image_url")
   videoUrl       String?       @map("video_url")
+  audioUrl       String?       @map("audio_url")
   organizerName  String        @default("") @map("organizer_name")
   organizerAvatar String?      @map("organizer_avatar")
   lat            Float?
