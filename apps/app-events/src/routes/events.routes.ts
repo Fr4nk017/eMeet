@@ -10,7 +10,7 @@ const router = Router()
 // Limpieza programada — llamado diariamente por Vercel Cron
 router.get('/cleanup', async (req, res) => {
   const secret = process.env.CRON_SECRET
-  if (secret && req.headers.authorization !== `Bearer ${secret}`) {
+  if (!secret || req.headers.authorization !== `Bearer ${secret}`) {
     return res.status(401).json({ error: 'No autorizado.' })
   }
 
@@ -76,7 +76,6 @@ router.post('/locatario', async (req, res) => {
 
   const { data, error } = await req.supabase!
     .from('locatario_events')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .insert({
       creator_id: req.authUser!.id,
       title: body.title.trim(),
@@ -92,7 +91,7 @@ router.post('/locatario', async (req, res) => {
       organizer_avatar: body.organizer_avatar ?? null,
       lat: typeof body.lat === 'number' ? body.lat : null,
       lng: typeof body.lng === 'number' ? body.lng : null,
-    } as any)
+    })
     .select('*')
     .single()
 
@@ -121,7 +120,7 @@ router.patch('/locatario/:id', async (req, res) => {
     lng?: number | null
   }
 
-  type LocatarioUpdate = {
+  const updates: {
     title?: string
     description?: string
     category?: EventCategory
@@ -135,9 +134,7 @@ router.patch('/locatario/:id', async (req, res) => {
     organizer_avatar?: string | null
     lat?: number | null
     lng?: number | null
-  }
-
-  const updates: LocatarioUpdate = {}
+  } = {}
   if (body.title !== undefined) updates.title = body.title.trim()
   if (body.description !== undefined) updates.description = body.description.trim()
   if (body.category !== undefined) updates.category = body.category
@@ -158,8 +155,7 @@ router.patch('/locatario/:id', async (req, res) => {
 
   const { data, error } = await req.supabase!
     .from('locatario_events')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update(updates as any)
+    .update(updates)
     .eq('id', id)
     .eq('creator_id', req.authUser!.id)
     .select('*')

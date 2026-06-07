@@ -16,7 +16,6 @@ import { useAuth } from '@/src/context/AuthContext'
 import { useLocatarioEvents } from '@/src/context/LocatarioEventsContext'
 import { callSavedApi } from '@/src/lib/savedApi'
 import { hasSupabaseEnv } from '@/src/lib/supabase'
-import { useFeedEvents } from '@/src/hooks/useFeedEvents'
 import { haversineKm } from '@/src/utils/geo'
 import type { PlaceType, EventCategory, Event } from '@/src/types'
 
@@ -200,8 +199,6 @@ function HomePageContent() {
   const [toast, setToast] = useState<{ message: string; type: 'like' | 'nope' | 'save' } | null>(null)
   const [focusedPlaceId, setFocusedPlaceId] = useState<string | null>(null)
   const [showMobileMap, setShowMobileMap] = useState(false)
-  const { events: externalEvents } = useFeedEvents(userLocation, selectedDistanceKm)
-
   useEffect(() => {
     if (!user) {
       setLikedIds(new Set())
@@ -249,9 +246,8 @@ function HomePageContent() {
 
     return placeEvents
       .concat(locatarioMapped)
-      .concat(externalEvents.filter((e) => e.distance <= selectedDistanceKm))
       .sort((a, b) => a.distance - b.distance)
-  }, [externalEvents, allLocatarioEvents, places, selectedDistanceKm, selectedPlaceTypes, userLocation])
+  }, [allLocatarioEvents, places, selectedDistanceKm, selectedPlaceTypes, userLocation])
 
   const events = useMemo(() => {
     return baseEvents

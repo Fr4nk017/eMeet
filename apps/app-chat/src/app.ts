@@ -76,19 +76,10 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'emeet-app-chat', timestamp: new Date().toISOString() })
 })
 
-app.use(
-  '/api-docs',
-  swaggerUi.serve,
-  swaggerUi.setup(swaggerSpec, {
-    customSiteTitle: 'eMeet Chat API Docs',
-    swaggerOptions: { persistAuthorization: true },
-  }),
-)
-
-app.get('/api-docs.json', (_req, res) => {
-  res.setHeader('Content-Type', 'application/json')
-  res.send(swaggerSpec)
-})
+app.use('/docs', ((_req: express.Request, res: express.Response, next: express.NextFunction) => {
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'")
+  next()
+}) as express.RequestHandler, swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 
 app.use('/chat', chatRouter)
 

@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { createServiceRoleClient } from '../../../../packages/shared/src/lib/supabase.js'
 import { withAuth } from '../../../../packages/shared/src/middleware/auth.js'
 import { serverError } from '../../../../packages/shared/src/utils/http.js'
+import type { UserRole } from '../../../../packages/shared/src/types/supabase.js'
 
 const router = Router()
 
@@ -20,17 +21,24 @@ const adminOnly = async (req: any, res: any, next: any) => {
   // Fallback: consultar la tabla profiles
   try {
     const supabase = createServiceRoleClient()
-    const { data: profile } = await supabase
+    const { data: profile, error: dbError } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', req.authUser.id)
       .single()
 
+    if (dbError) {
+      console.error('[adminOnly] db error:', dbError.message)
+      return res.status(500).json({ error: 'Error interno al verificar permisos.' })
+    }
+
     if (profile?.role === 'admin') return next()
 
     return res.status(403).json({ error: 'Acceso denegado' })
-  } catch {
-    return res.status(403).json({ error: 'Acceso denegado' })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error desconocido'
+    console.error('[adminOnly] unexpected error:', message)
+    return res.status(500).json({ error: 'Error interno al verificar permisos.' })
   }
 }
 
@@ -60,7 +68,7 @@ router.get('/users', withAuth, adminOnly, async (_req, res) => {
         name: p.name,
         email: emailMap.get(p.id) ?? '',
         role: p.role ?? 'user',
-        is_banned: (p as any).is_banned ?? false,
+        is_banned: p.is_banned ?? false,
         created_at: p.created_at,
       }))
 
@@ -95,7 +103,7 @@ router.put('/users/:id', withAuth, adminOnly, async (req, res) => {
     const { role, is_banned } = req.body
     const supabase = createServiceRoleClient()
 
-    const updates: Record<string, unknown> = {}
+    const updates: { role?: UserRole; is_banned?: boolean } = {}
     if (role !== undefined) updates.role = role
     if (is_banned !== undefined) updates.is_banned = is_banned
 
@@ -105,7 +113,7 @@ router.put('/users/:id', withAuth, adminOnly, async (req, res) => {
 
     const { data, error } = await supabase
       .from('profiles')
-      .update(updates as any)
+      .update(updates)
       .eq('id', id)
       .select()
       .single()
@@ -195,7 +203,7 @@ router.get('/statistics', withAuth, adminOnly, async (_req, res) => {
       supabase.auth.admin.listUsers({ perPage: 1000 }),
       supabase.from('locatario_events').select('*', { count: 'exact', head: true }),
       supabase.from('user_events').select('*', { count: 'exact', head: true }).eq('action', 'like'),
-      supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_banned' as any, true),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_banned', true),
     ])
 
     // totalUsers desde auth.users para no contar perfiles huérfanos

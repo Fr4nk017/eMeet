@@ -29,59 +29,20 @@ const PLACE_TYPE_MAPPING: Record<PlaceType, string> = {
 }
 
 const GOOGLE_TYPE_TO_PLACE_TYPE: Record<string, PlaceType> = {
-  restaurant: 'restaurant',
-  bar: 'bar',
-  night_club: 'night_club',
-  cafe: 'cafe',
+  restaurant:   'restaurant',
+  bar:          'bar',
+  night_club:   'night_club',
+  cafe:         'cafe',
   liquor_store: 'liquor_store',
-  food: 'food',
+  food:         'food',
 }
 
 function hasGooglePlacesBrowserApi() {
   return (
     typeof window !== 'undefined' &&
     typeof google !== 'undefined' &&
-    Boolean(google.maps?.places?.PlacesService)
+    Boolean(google.maps?.places?.Place)
   )
-}
-
-function createBrowserPlacesService() {
-  const container = document.createElement('div')
-  return new google.maps.places.PlacesService(container)
-}
-
-function nearbySearchBrowser(
-  service: google.maps.places.PlacesService,
-  request: google.maps.places.PlaceSearchRequest,
-) {
-  return new Promise<google.maps.places.PlaceResult[]>((resolve, reject) => {
-    service.nearbySearch(request, (results, status) => {
-      if (status === google.maps.places.PlacesServiceStatus.OK) {
-        resolve(results ?? [])
-        return
-      }
-      if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-        resolve([])
-        return
-      }
-      reject(new Error(`Google Places nearbySearch failed: ${status}`))
-    })
-  })
-}
-
-function detailsSearchBrowser(
-  service: google.maps.places.PlacesService,
-  request: google.maps.places.PlaceDetailsRequest,
-) {
-  return new Promise<google.maps.places.PlaceResult>((resolve, reject) => {
-    service.getDetails(request, (result, status) => {
-      if (status === google.maps.places.PlacesServiceStatus.OK && result) {
-        resolve(result)
-        return
-      }
-      reject(new Error(`Google Places getDetails failed: ${status}`))
-    })
-  })
 }
 
 async function searchNearbyPlacesWithBrowserApi(
@@ -90,47 +51,54 @@ async function searchNearbyPlacesWithBrowserApi(
   maxPerType = 8,
 ): Promise<ScrapedPlace[]> {
   const { center, radius } = boundsToCircle(bounds)
-  const service = createBrowserPlacesService()
   const allPlaces: ScrapedPlace[] = []
   const seen = new Set<string>()
 
   const searches = types.map(async (type) => {
     const googleType = PLACE_TYPE_MAPPING[type]
-    const places = await nearbySearchBrowser(service, {
-      location: center,
-      radius,
-      type: googleType,
-    })
-
-    places.forEach((place) => {
-      const name = place.name || 'Sin nombre'
-      const nameKey = name.toLowerCase()
-      if (seen.has(nameKey)) return
-      seen.add(nameKey)
-
-      const lat = place.geometry?.location?.lat()
-      const lng = place.geometry?.location?.lng()
-      if (typeof lat !== 'number' || typeof lng !== 'number') return
-
-      const mappedType = GOOGLE_TYPE_TO_PLACE_TYPE[googleType] ?? type
-
-      allPlaces.push({
-        placeId: place.place_id || '',
-        name,
-        address: place.vicinity || place.formatted_address || '',
-        type: mappedType,
-        category: PLACE_TYPE_CONFIG[mappedType].category,
-        rating: place.rating || 0,
-        totalRatings: place.user_ratings_total || 0,
-        priceLevel: place.price_level ?? null,
-        isOpen: place.opening_hours?.isOpen?.() ?? null,
-        position: { lat, lng },
-        photoUrl: place.photos?.[0]?.getUrl({ maxWidth: 800 }),
-        website: undefined,
-        phone: undefined,
-        openingHours: undefined,
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const PlaceClass = (google.maps.places as any).Place
+      const { places = [] } = await PlaceClass.searchNearby({
+        fields: ['id', 'displayName', 'formattedAddress', 'location', 'rating', 'userRatingCount', 'regularOpeningHours', 'photos'],
+        locationRestriction: { center, radius },
+        includedTypes: [googleType],
+        maxResultCount: maxPerType,
       })
-    })
+
+      for (const place of places) {
+        const name = place.displayName || 'Sin nombre'
+        const nameKey = name.toLowerCase()
+        if (seen.has(nameKey)) continue
+        seen.add(nameKey)
+
+        const loc = place.location
+        const lat = typeof loc?.lat === 'function' ? loc.lat() : loc?.lat
+        const lng = typeof loc?.lng === 'function' ? loc.lng() : loc?.lng
+        if (typeof lat !== 'number' || typeof lng !== 'number') continue
+
+        const mappedType = GOOGLE_TYPE_TO_PLACE_TYPE[googleType] ?? type
+
+        allPlaces.push({
+          placeId: place.id || '',
+          name,
+          address: place.formattedAddress || '',
+          type: mappedType,
+          category: PLACE_TYPE_CONFIG[mappedType].category,
+          rating: place.rating || 0,
+          totalRatings: place.userRatingCount || 0,
+          priceLevel: null,
+          isOpen: place.regularOpeningHours?.isOpen?.() ?? null,
+          position: { lat, lng },
+          photoUrl: place.photos?.[0]?.getURI?.({ maxWidth: 800 }) ?? undefined,
+          website: undefined,
+          phone: undefined,
+          openingHours: undefined,
+        })
+      }
+    } catch (err) {
+      console.error(`Error searching ${type} with Places API:`, err)
+    }
   })
 
   await Promise.allSettled(searches)
@@ -157,7 +125,7 @@ function boundsToCircle(
 ): { center: { lat: number; lng: number }; radius: number } {
   const center = bounds.getCenter()
   const ne = bounds.getNorthEast()
-  const R = 6371000 // Radio de la Tierra en metros
+  const R = 6371000
   const lat1 = center.lat() * (Math.PI / 180)
   const lat2 = ne.lat() * (Math.PI / 180)
   const dLat = lat2 - lat1
@@ -173,12 +141,8 @@ function boundsToCircle(
   }
 }
 
-// ─── API pública (ahora llamando al backend) ─────────────────────────────────
+// ─── API pública ─────────────────────────────────────────────────────────────
 
-/**
- * Busca lugares cercanos usando el backend como intermediario
- * El backend llama a Google Places API y retorna los resultados
- */
 export async function searchNearbyPlaces(
   bounds: google.maps.LatLngBounds,
   types: PlaceType[],
@@ -197,7 +161,6 @@ export async function searchNearbyPlaces(
     const seen = new Set<string>()
     let hadBackendErrors = false
 
-    // Buscar cada tipo en paralelo
     const searches = types.map((type) =>
       fetch(`${PLACES_URL}/places/search-nearby`, {
         method: 'POST',
@@ -225,7 +188,6 @@ export async function searchNearbyPlaces(
 
     const results = await Promise.all(searches)
 
-    // Procesar y deduplicar resultados
     results.forEach(({ places = [] }, index) => {
       const placeType = types[index]
       places.forEach((place: any) => {
@@ -243,7 +205,7 @@ export async function searchNearbyPlaces(
         allPlaces.push({
           placeId: place.place_id || '',
           name,
-          address: place.formatted_address || '',
+          address: place.formatted_address || place.vicinity || '',
           type: placeType,
           category: PLACE_TYPE_CONFIG[placeType].category,
           rating: place.rating || 0,
@@ -275,31 +237,31 @@ export async function searchNearbyPlaces(
   }
 }
 
-/**
- * Obtiene detalles enriquecidos de un lugar desde el backend
- */
 export async function fetchPlaceDetails(placeId: string): Promise<Partial<ScrapedPlace>> {
+  const fetchFromBrowserApi = async (): Promise<Partial<ScrapedPlace>> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const PlaceClass = (google.maps.places as any).Place
+    const place = new PlaceClass({ id: placeId })
+    await place.fetchFields({
+      fields: ['photos', 'websiteURI', 'nationalPhoneNumber', 'internationalPhoneNumber', 'regularOpeningHours', 'rating'],
+    })
+    return {
+      photoUrl: place.photos?.[0]?.getURI?.({ maxWidth: 400 }) ?? null,
+      website: place.websiteURI ?? null,
+      phone: place.nationalPhoneNumber || place.internationalPhoneNumber || null,
+      openingHours: place.regularOpeningHours?.weekdayDescriptions ?? null,
+      rating: place.rating || undefined,
+    }
+  }
+
   if (!PLACES_URL) {
     if (!hasGooglePlacesBrowserApi()) {
       throw new Error('NEXT_PUBLIC_PLACES_URL no está configurada y Google Places no está disponible en el navegador')
     }
-
     try {
-      const service = createBrowserPlacesService()
-      const details = await detailsSearchBrowser(service, {
-        placeId,
-        fields: ['photos', 'website', 'formatted_phone_number', 'international_phone_number', 'opening_hours', 'rating'],
-      })
-
-      return {
-        photoUrl: details.photos?.[0]?.getUrl({ maxWidth: 400 }) ?? null,
-        website: details.website ?? null,
-        phone: details.formatted_phone_number || details.international_phone_number || null,
-        openingHours: details.opening_hours?.weekday_text ?? null,
-        rating: details.rating || undefined,
-      }
+      return await fetchFromBrowserApi()
     } catch (error) {
-      console.error('Error in fetchPlaceDetails (browser fallback):', error)
+      console.error('Error in fetchPlaceDetails (browser API):', error)
       return { photoUrl: null, website: null, phone: null, openingHours: null }
     }
   }
@@ -329,21 +291,9 @@ export async function fetchPlaceDetails(placeId: string): Promise<Partial<Scrape
     console.error('Error in fetchPlaceDetails:', error)
     if (hasGooglePlacesBrowserApi()) {
       try {
-        const service = createBrowserPlacesService()
-        const details = await detailsSearchBrowser(service, {
-          placeId,
-          fields: ['photos', 'website', 'formatted_phone_number', 'international_phone_number', 'opening_hours', 'rating'],
-        })
-
-        return {
-          photoUrl: details.photos?.[0]?.getUrl({ maxWidth: 400 }) ?? null,
-          website: details.website ?? null,
-          phone: details.formatted_phone_number || details.international_phone_number || null,
-          openingHours: details.opening_hours?.weekday_text ?? null,
-          rating: details.rating || undefined,
-        }
+        return await fetchFromBrowserApi()
       } catch (fallbackError) {
-        console.error('Error in fetchPlaceDetails (browser fallback):', fallbackError)
+        console.error('Error in fetchPlaceDetails (browser API fallback):', fallbackError)
       }
     }
     return { photoUrl: null, website: null, phone: null, openingHours: null }

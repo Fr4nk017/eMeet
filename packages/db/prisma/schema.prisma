@@ -15,7 +15,15 @@ datasource db {
   schemas   = ["public", "auth"]
 }
 
-// ─── ENUM ────────────────────────────────────────────────────────────────────
+// ─── ENUMS ───────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  user
+  locatario
+  admin
+
+  @@schema("public")
+}
 
 enum EventCategory {
   gastronomia
@@ -45,21 +53,43 @@ model AuthUser {
 // ─── PROFILES ────────────────────────────────────────────────────────────────
 
 model Profile {
-  id        String          @id @db.Uuid
-  name      String          @default("")
-  bio       String          @default("")
-  avatarUrl String?         @map("avatar_url")
-  location  String          @default("")
-  interests EventCategory[]
-  createdAt DateTime        @default(now()) @map("created_at")
+  id               String          @id @db.Uuid
+  name             String          @default("")
+  bio              String          @default("")
+  avatarUrl        String?         @map("avatar_url")
+  location         String          @default("")
+  interests        EventCategory[]
+  role             UserRole        @default(user)
+  businessName     String?         @map("business_name")
+  businessLocation String?         @map("business_location")
+  isBanned         Boolean         @default(false) @map("is_banned")
+  createdAt        DateTime        @default(now()) @map("created_at")
 
-  authUser        AuthUser         @relation(fields: [id], references: [id], onDelete: Cascade)
+  authUser        AuthUser          @relation(fields: [id], references: [id], onDelete: Cascade)
   userEvents      UserEvent[]
   locatarioEvents LocatarioEvent[]
   roomMembers     RoomMember[]
   chatMessages    ChatMessage[]
+  following       ProfileFollower[] @relation("follower")
+  followers       ProfileFollower[] @relation("followed")
 
   @@map("profiles")
+  @@schema("public")
+}
+
+// ─── PROFILE_FOLLOWERS ───────────────────────────────────────────────────────
+
+model ProfileFollower {
+  id         String   @id @default(uuid()) @db.Uuid
+  followerId String   @map("follower_id") @db.Uuid
+  followedId String   @map("followed_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  follower Profile @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followed Profile @relation("followed", fields: [followedId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followedId])
+  @@map("profile_followers")
   @@schema("public")
 }
 
@@ -103,6 +133,7 @@ model LocatarioEvent {
   price          Decimal?      @db.Decimal(10, 2)
   imageUrl       String?       @map("image_url")
   videoUrl       String?       @map("video_url")
+  audioUrl       String?       @map("audio_url")
   organizerName  String        @default("") @map("organizer_name")
   organizerAvatar String?      @map("organizer_avatar")
   lat            Float?
