@@ -1,0 +1,50 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+      "env": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "FRONTEND_ORIGIN",
+        "FRONTEND_ORIGINS",
+        "GOOGLE_MAPS_API_KEY"
+      ]
+    },
+    "dev": {
+      "persistent": true,
+      "cache": false
+    },
+    "start": {
+      "dependsOn": ["build"],
+      "persistent": true,
+      "cache": false
+    },
+    "test": {
+      "outputs": [],
+      "cache": false,
+      "env": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "TEST_USER_EMAIL",
+        "TEST_USER_PASSWORD",
+        "TEST_ADMIN_EMAIL",
+        "TEST_ADMIN_PASSWORD",
+        "CRON_SECRET",
+        "GOOGLE_MAPS_API_KEY"
+      ]
+    },
+    "db:generate": {
+      "cache": false
+    },
+    "db:push": {
+      "cache": false
+    },
+    "db:migrate:deploy": {
+      "cache": false
+    }
+  }
+}

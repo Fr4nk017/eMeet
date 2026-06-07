@@ -1,311 +1,146 @@
-# 🧪 Guía de Testing - Sistema de Autenticación eMeet
+# Guía de Pruebas Unitarias — eMeet
 
-## ✅ Checks Antes de Empezar
+## Estructura de tests
+
+Cada microservicio tiene sus pruebas en `src/__tests__/` usando **Jest + Supertest**.
+Todos los tests usan **mocks en memoria** — no se conectan a ninguna base de datos real.
+
+```
+apps/
+├── app-auth/src/__tests__/auth.routes.test.ts
+├── app-profile/src/__tests__/profile.routes.test.ts
+├── app-events/src/__tests__/events.routes.test.ts
+├── app-saved/src/__tests__/saved.routes.test.ts
+├── app-chat/src/__tests__/chat.routes.test.ts
+├── app-places/          (sin rutas con lógica propia — proxy directo a Google)
+└── app-admin/src/__tests__/admin.routes.test.ts
+```
+
+---
+
+## Ejecutar todos los tests
+
+Desde la raíz del monorepo:
 
 ```bash
-# 1. Asegúrate de estar en la carpeta correcta
-cd c:\Users\anton\Desktop\EMEET\eMeet_frontend
+npm test
+```
 
-# 2. Instala las dependencias (ya lo hiciste)
-npm install
+Esto ejecuta `turbo run test` en paralelo sobre todos los workspaces.
 
-# 3. Inicia el servidor de desarrollo
+---
+
+## Ejecutar tests de un microservicio específico
+
+```bash
+cd apps/app-events
+npm test
+```
+
+O directamente con Jest:
+
+```bash
+cd apps/app-events
+npx jest --no-coverage
+```
+
+---
+
+## Generar reporte de cobertura
+
+Cada microservicio tiene el script `test:coverage`:
+
+```bash
+cd apps/app-events
+npm run test:coverage
+```
+
+El reporte HTML se genera en:
+
+```
+apps/app-events/coverage/lcov-report/index.html
+```
+
+Abre ese archivo en el navegador para ver la cobertura línea por línea.
+
+### Cobertura de todos los servicios a la vez
+
+```bash
+# Desde la raíz
+npm run test -- --coverage
+```
+
+O service por service:
+
+```bash
+for app in app-auth app-profile app-events app-saved app-chat app-admin; do
+  echo "=== $app ===" && cd apps/$app && npm run test:coverage && cd ../..
+done
+```
+
+---
+
+## Resumen de tests por servicio
+
+| Servicio    | Archivo de test                  | Tests |
+|-------------|----------------------------------|-------|
+| app-auth    | auth.routes.test.ts              | ~10   |
+| app-profile | profile.routes.test.ts           | 9     |
+| app-events  | events.routes.test.ts            | 11    |
+| app-saved   | saved.routes.test.ts             | 12    |
+| app-chat    | chat.routes.test.ts              | 47    |
+| app-admin   | admin.routes.test.ts             | 13    |
+
+---
+
+## Configuración de Jest
+
+Cada microservicio usa `jest.config.js` con:
+
+- **Preset**: `ts-jest` (TypeScript nativo)
+- **Entorno**: `node`
+- **Transformación**: TypeScript → CommonJS en tiempo de test
+- **Mocks**: middleware `withAuth` y cliente Supabase mockeados por jest.mock()
+- **Sin base de datos real**: todos los datos viven en arrays en memoria
+
+### Variables de entorno para tests
+
+Definidas directamente en el archivo de test (no requieren `.env`):
+
+```ts
+process.env.SUPABASE_URL              = 'https://mock.supabase.co'
+process.env.SUPABASE_ANON_KEY         = 'mock-anon-key'
+process.env.SUPABASE_SERVICE_ROLE_KEY = 'mock-service-key'
+```
+
+---
+
+## Ver el reporte de cobertura en HTML
+
+1. Ejecutar `npm run test:coverage` en el servicio deseado
+2. Abrir `coverage/lcov-report/index.html` en el navegador
+3. El reporte muestra:
+   - Porcentaje de statements, branches, functions y lines cubiertos
+   - Cada archivo del proyecto con líneas cubiertas (verde) y no cubiertas (rojo)
+
+---
+
+## Documentación Swagger (API REST)
+
+Cada microservicio expone su especificación OpenAPI en `/docs` cuando está corriendo:
+
+| Servicio    | URL                              |
+|-------------|----------------------------------|
+| app-auth    | http://localhost:3001/docs       |
+| app-profile | http://localhost:3002/docs       |
+| app-events  | http://localhost:3003/docs       |
+| app-saved   | http://localhost:3004/docs       |
+| app-chat    | http://localhost:3005/docs       |
+| app-places  | http://localhost:3006/docs       |
+| app-admin   | http://localhost:3007/docs       |
+
+Para levantar todos los servicios:
+
+```bash
 npm run dev
 ```
-
-El servidor estará en: **http://localhost:3000**
-
----
-
-## 🎯 Test Cases
-
-### 1️⃣ Test: Login como Usuario Regular
-
-**Paso a paso:**
-
-1. Abre http://localhost:3000/auth
-2. Haz clic en el botón **"Usuario"** (tipo de cuenta)
-3. Verás las opciones pre-llenadas:
-   - Email: `user@emeet.com`
-   - Cualquier contraseña funciona
-4. Haz clic en **"Inicia Sesión"**
-
-**Resultados esperados:**
-- ✅ Se redirige a `/chat`
-- ✅ La NavBar muestra "Juan Pérez" como usuario
-- ✅ Rol mostrado: "Usuario"
-- ✅ Sin acceso a panels de admin o locatario
-
----
-
-### 2️⃣ Test: Login como Administrador
-
-**Paso a paso:**
-
-1. Abre http://localhost:3000/auth
-2. Haz clic en **"Admin"** (tipo de cuenta)
-3. Ingresa:
-   - Email: `admin@emeet.com`
-   - Contraseña: cualquiera
-4. Haz clic en **"Inicia Sesión"**
-
-**Resultados esperados:**
-- ✅ Se redirige a `/admin`
-- ✅ Ves el dashboard de administración
-- ✅ Tabla de usuarios, eventos, reportes
-- ✅ NavBar muestra "Admin eMeet"
-- ✅ Opción "Panel Admin" visible en NavBar
-
----
-
-### 3️⃣ Test: Login como Locatario
-
-**Paso a paso:**
-
-1. Abre http://localhost:3000/auth
-2. Haz clic en **"Locatario"** (tipo de cuenta)
-3. Ingresa:
-   - Email: `locatario@emeet.com`
-   - Contraseña: cualquiera
-4. Haz clic en **"Inicia Sesión"**
-
-**Resultados esperados:**
-- ✅ Se redirige a `/locatario`
-- ✅ Ves panel de eventos, cupones analytics
-- ✅ Botón "Crear Evento" disponible
-- ✅ NavBar muestra "Carlos Restaurant"
-- ✅ Rol mostrado: "Locatario"
-
----
-
-### 4️⃣ Test: Registro como Usuario
-
-**Paso a paso:**
-
-1. Abre http://localhost:3000/auth
-2. Haz clic en la tab **"Registrarse"**
-3. Selecciona **"Usuario Regular"**
-4. Llena el formulario:
-   - Nombre: `Test User`
-   - Email: `test@email.com`
-   - Teléfono: `+56912345678`
-   - Contraseña: `Password123`
-   - Confirmar: `Password123`
-5. Marca "Acepto los términos"
-6. Haz clic en **"Crear Cuenta"**
-
-**Resultados esperados:**
-- ✅ Se crea el usuario
-- ✅ Se redirige a `/chat`
-- ✅ NavBar muestra el nuevo usuario
-
----
-
-### 5️⃣ Test: Registro como Locatario
-
-**Paso a paso:**
-
-1. Abre http://localhost:3000/auth
-2. Haz clic en **"Registrarse"**
-3. Selecciona **"Soy Locatario"** (botón naranja)
-4. Llena el formulario:
-   - Nombre: `Carlos Pérez`
-   - Email: `carlos@restaurant.com`
-   - Teléfono: `+56987654321`
-   - Nombre del negocio: `La Cantina Gourmet`
-   - Ubicación: `Bellavista, Santiago`
-   - Bio: `Restaurante con 10 años de experiencia`
-   - Contraseña: `SecurePass123`
-5. Marca términos y crea cuenta
-
-**Resultados esperados:**
-- ✅ Nuevos campos aparecen (negocio, ubicación)
-- ✅ Botón es naranja/dorado
-- ✅ Se redirige a `/locatario`
-- ✅ Datos del negocio se muestran en panel
-
----
-
-### 6️⃣ Test: NavBar y Navegación
-
-**Paso a paso:**
-
-1. Login como Admin
-2. En la NavBar superior:
-   - Haz clic en el logo eMeet
-   - Haz clic en "Inicio"
-   - Haz clic en "Panel Admin"
-
-**Resultados esperados:**
-- ✅ Logo redirige a `/admin`
-- ✅ "Inicio" redirige a `/chat`
-- ✅ "Panel Admin" redirige a `/admin`
-
-**En móvil:**
-- ✅ Menú hamburguesa aparece
-- ✅ Opciones visibles al abrirlo
-- ✅ Se cierra al seleccionar opción
-
----
-
-### 7️⃣ Test: Logout
-
-**Paso a paso:**
-
-1. Login como cualquier rol
-2. En NavBar, haz clic en el botón de logout (rojo, esquina superior derecha)
-
-**Resultados esperados:**
-- ✅ Usuario se desconecta
-- ✅ Se redirige a `/auth`
-- ✅ AuthContext se limpia
-- ✅ localStorage se borra
-
----
-
-### 8️⃣ Test: Protección de Rutas
-
-**Paso a paso:**
-
-1. Login como Usuario Regular
-2. Intenta acceder a `/admin` directamente en la URL
-3. Intenta acceder a `/locatario` directamente
-
-**Resultados esperados:**
-- ✅ Redirige a `/chat` (página permitida)
-- ✅ No puedes ver contenido protegido
-
----
-
-### 9️⃣ Test: Validaciones de Formulario
-
-**Paso a paso (Login):**
-
-1. Abre `/auth`
-2. Intenta enviar sin llenar campos
-3. Intenta con email inválido (sin @)
-4. Intenta con contraseña muy corta
-
-**Resultados esperados:**
-- ✅ Validación en el lado del cliente
-- ✅ Mensajes de error claros
-
-**Paso a paso (Registro Locatario):**
-
-1. Selecciona "Soy Locatario"
-2. Deja campo "Nombre del negocio" vacío
-3. Intenta crear cuenta
-
-**Resultados esperados:**
-- ✅ Error: "Debes ingresar el nombre del negocio"
-- ✅ No se crea la cuenta
-
----
-
-### 🔟 Test: Crear Evento (Locatario)
-
-**Paso a paso:**
-
-1. Login como Locatario
-2. Haz clic en botón **"Crear Evento"** (naranja, arriba a la derecha)
-3. Llena el modal:
-   - Nombre: `Happy Hour Viernes`
-   - Descripción: `Descuentos especiales todo el día`
-   - Fecha/hora: mañana a las 18:00
-   - Precio: `0`
-4. Haz clic en **"Crear Evento"**
-
-**Resultados esperados:**
-- ✅ Modal aparece
-- ✅ Al crear, muestra "Evento creado exitosamente!"
-- ✅ Modal se cierra
-
----
-
-## 📊 Checklist de Testing Completo
-
-- [ ] Login funciona para los 3 roles
-- [ ] Registro funciona para usuario y locatario
-- [ ] NavBar se muestra correctamente en cada rol
-- [ ] Protección de rutas funciona
-- [ ] Logout funciona
-- [ ] Validaciones de formulario funcionan
-- [ ] Diseño es responsive (móvil y desktop)
-- [ ] Colores respetan paleta eMeet
-- [ ] Sin errores en consola de navegador
-- [ ] localStorage guarda/recupera datos
-
----
-
-## 🐛 Troubleshooting
-
-### "No se redirige después de login"
-```
-Solución: Verifica que useRouter funcione
-- Abre DevTools (F12)
-- Tab Console
-- Busca errores
-```
-
-### "NavBar no aparece"
-```
-Solución: Verifica AppProviders.tsx
-- Confirma que NavBar esté importado
-- Verifica que no haya errores de importación
-```
-
-### "Formulario valida incorrectamente"
-```
-Solución: Abre DevTools
-- Consola → busca errores
-- Network → verifica que no haya requests fallidas
-```
-
-### "Datos no persisten después de F5"
-```
-Solución: localStorage podría estar deshabilitado
-- Abre DevTools
-- Application → Local Storage
-- Verifica que 'authUser' esté guardado
-```
-
----
-
-## 📸 Screenshots Esperados
-
-### ✅ Login Page
-```
-┌─────────────────────────────┐
-│  🎉 eMeet                   │
-│  Descubre eventos...        │
-│                             │
-│  [Inicia Sesión][Registr]   │
-│  ┌─────────────────────────┐│
-│  │ [👤 Usuario][🏪 Admin] ││
-│  │ [Admin]    [Locatario] ││
-│  │                         ││
-│  │ Email: user@emeet.com  ││
-│  │ Pwd: •••••••••         ││
-│  │ [👁 mostrar]           ││
-│  │ [Inicia Sesión]        ││
-│  └─────────────────────────┘│
-└─────────────────────────────┘
-```
-
-### ✅ NavBar Logged In
-```
-┌─────────────────────────────────────────┐
-│ eMeet  [Inicio][Panel Admin] [Usuario]  │
-│                            [Salir 🔑]   │
-└─────────────────────────────────────────┘
-```
-
----
-
-## 🎓 Conclusión
-
-Si todos los tests pasan ✅, el sistema de autenticación está funcionando correctamente y listo para producción.
-
-¿Necesitas ayuda? Abre DevTools (F12) y revisa la consola para errores.
-
-**¡Happy testing!** 🚀

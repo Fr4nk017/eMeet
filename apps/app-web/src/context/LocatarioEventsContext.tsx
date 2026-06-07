@@ -1,0 +1,400 @@
+'use client'
+
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
+import type { Event, EventCategory } from '../types'
+import { getSupabaseBrowserClient, hasSupabaseEnv } from '../lib/supabase'
+import { resolveServiceUrl } from '../lib/serviceUrl'
+
+export interface CreateLocatarioEventInput {
+  title: string
+  description: string
+  category: EventCategory
+  date: string
+  address: string
+  price: number | null
+  imageUrl?: string
+  videoUrl?: string
+  audioUrl?: string
+  organizerName: string
+  organizerAvatar: string
+  lat?: number
+  lng?: number
+}
+
+interface LocatarioEventsContextValue {
+  locatarioEvents: Event[]
+  publicLocatarioEvents: Event[]
+  isLoading: boolean
+  createLocatarioEvent: (input: CreateLocatarioEventInput) => Promise<Event>
+  removeLocatarioEvent: (eventId: string) => Promise<void>
+  updateLocatarioEvent: (eventId: string, input: Partial<CreateLocatarioEventInput>) => Promise<void>
+}
+
+const LocatarioEventsContext = createContext<LocatarioEventsContextValue | undefined>(undefined)
+
+const STORAGE_KEY = 'emeet-locatario-events'
+const FALLBACK_EVENT_IMAGE = 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=1200&q=80'
+const EVENTS_URL = resolveServiceUrl(process.env.NEXT_PUBLIC_EVENTS_URL, 'EVENTS_URL')
+
+// ── localStorage helpers (modo local sin Supabase) ───────────────────────────
+
+function loadEventsFromStorage(): Event[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as Event[]
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function saveEventsToStorage(events: Event[]) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(events))
+}
+
+// ── Mapper: fila de Supabase → Event ────────────────────────────────────────
+
+type LocatarioEventRow = {
+  id: string
+  title: string
+  description: string
+  category: string
+  event_date: string
+  address: string
+  price: number | null
+  image_url: string | null
+  video_url: string | null
+  audio_url: string | null
+  organizer_name: string
+  organizer_avatar: string | null
+  lat: number | null
+  lng: number | null
+}
+
+function dbRowToEvent(row: LocatarioEventRow): Event {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    category: row.category as EventCategory,
+    source: 'locatario',
+    date: row.event_date,
+    location: row.organizer_name,
+    address: row.address,
+    distance: 0,
+    lat: row.lat ?? undefined,
+    lng: row.lng ?? undefined,
+    price: row.price,
+    imageUrl: row.image_url || FALLBACK_EVENT_IMAGE,
+    videoUrl: row.video_url || null,
+    audioUrl: row.audio_url || null,
+    websiteUrl: null,
+    organizerName: row.organizer_name,
+    organizerAvatar: row.organizer_avatar || 'https://i.pravatar.cc/150?img=32',
+    attendees: 0,
+    capacity: null,
+    tags: ['locatario', row.category as EventCategory],
+    isLiked: false,
+    isSaved: false,
+    rating: undefined,
+    isOpen: null,
+  }
+}
+
+// ── Fetch helper ─────────────────────────────────────────────────────────────
+
+async function apiFetch<T>(baseUrl: string, path: string, init?: RequestInit): Promise<T> {
+  const endpoint = `${baseUrl}${path}`
+  const headers = new Headers({ 'Content-Type': 'application/json', ...(init?.headers ?? {}) })
+
+  if (hasSupabaseEnv) {
+    const { data } = await getSupabaseBrowserClient().auth.getSession()
+    const accessToken = data.session?.access_token
+    if (accessToken) {
+      headers.set('Authorization', `Bearer ${accessToken}`)
+    }
+  }
+
+  const res = await fetch(endpoint, {
+    credentials: 'include',
+    ...init,
+    headers,
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null
+    throw new Error(body?.error ?? 'Error al comunicarse con el servidor.')
+  }
+  if (res.status === 204) return undefined as T
+  return res.json() as Promise<T>
+}
+
+// ── Provider ─────────────────────────────────────────────────────────────────
+
+export function LocatarioEventsProvider({ children }: { children: ReactNode }) {
+  const [locatarioEvents, setLocatarioEvents] = useState<Event[]>([])
+  const [publicLocatarioEvents, setPublicLocatarioEvents] = useState<Event[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+
+    ;(async () => {
+      try {
+        if (EVENTS_URL) {
+          // Usa el endpoint público de la API (service role, bypass RLS — más fiable)
+          const rows = await apiFetch<LocatarioEventRow[]>(EVENTS_URL, '/events/public')
+          if (mounted && Array.isArray(rows)) {
+            setPublicLocatarioEvents(rows.map(dbRowToEvent))
+          }
+          return
+        }
+
+        // Fallback: query anon directo a Supabase (requiere política RLS lectura pública)
+        if (!hasSupabaseEnv) return
+        const { data } = await getSupabaseBrowserClient()
+          .from('locatario_events')
+          .select('*')
+          .gte('event_date', new Date().toISOString())
+          .order('event_date', { ascending: true })
+        if (mounted && data) {
+          setPublicLocatarioEvents((data as unknown as LocatarioEventRow[]).map(dbRowToEvent))
+        }
+      } catch {
+        // Fallo silencioso — el feed sigue funcionando sin eventos de locatarios
+      }
+    })()
+
+    return () => { mounted = false }
+  }, [])
+
+  // Carga inicial
+  useEffect(() => {
+    if (!hasSupabaseEnv) {
+      setLocatarioEvents(loadEventsFromStorage())
+      return
+    }
+
+    let mounted = true
+    setIsLoading(true)
+
+    ;(async () => {
+      const { data } = await getSupabaseBrowserClient().auth.getSession()
+
+      // Evita request 401 en frío cuando aún no hay sesión.
+      if (!data.session) {
+        if (!mounted) return
+        setLocatarioEvents(loadEventsFromStorage())
+        return
+      }
+
+      try {
+        const { data: rows, error } = await getSupabaseBrowserClient()
+          .from('locatario_events')
+          .select('*')
+          .eq('creator_id', data.session.user.id)
+          .gte('event_date', new Date().toISOString())
+          .order('event_date', { ascending: true })
+        if (!mounted) return
+        if (error || !rows) {
+          setLocatarioEvents(loadEventsFromStorage())
+        } else {
+          setLocatarioEvents((rows as unknown as LocatarioEventRow[]).map(dbRowToEvent))
+        }
+      } finally {
+        if (mounted) setIsLoading(false)
+      }
+    })().catch(() => {
+      if (!mounted) return
+      setLocatarioEvents(loadEventsFromStorage())
+      setIsLoading(false)
+    })
+
+    return () => { mounted = false }
+  }, [])
+
+  const createLocatarioEvent = useCallback(async (input: CreateLocatarioEventInput): Promise<Event> => {
+    if (!hasSupabaseEnv) {
+      const newEvent: Event = {
+        id: `loc-event-${Date.now()}`,
+        title: input.title.trim(),
+        description: input.description.trim(),
+        category: input.category,
+        source: 'locatario',
+        date: new Date(input.date).toISOString(),
+        location: input.organizerName,
+        address: input.address.trim(),
+        distance: 0,
+        lat: input.lat,
+        lng: input.lng,
+        price: input.price,
+        imageUrl: input.imageUrl?.trim() || FALLBACK_EVENT_IMAGE,
+        videoUrl: input.videoUrl?.trim() || null,
+        audioUrl: input.audioUrl?.trim() || null,
+        websiteUrl: null,
+        organizerName: input.organizerName,
+        organizerAvatar: input.organizerAvatar,
+        attendees: 0,
+        capacity: null,
+        tags: ['locatario', input.category],
+        isLiked: false,
+        isSaved: false,
+        rating: undefined,
+        isOpen: null,
+      }
+      setLocatarioEvents((prev) => {
+        const next = [newEvent, ...prev]
+        saveEventsToStorage(next)
+        return next
+      })
+      setPublicLocatarioEvents((prev) => [newEvent, ...prev])
+      return newEvent
+    }
+
+    if (!EVENTS_URL) {
+      throw new Error('NEXT_PUBLIC_EVENTS_URL no está configurado. Agrega la variable en Vercel → app-web → Settings → Environment Variables.')
+    }
+
+    const { data: sessionData } = await getSupabaseBrowserClient().auth.getSession()
+    if (!sessionData.session) {
+      throw new Error('Debes iniciar sesión para crear eventos de locatario.')
+    }
+
+    const row = await apiFetch<LocatarioEventRow>(EVENTS_URL, '/events/locatario', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: input.title,
+        description: input.description,
+        category: input.category,
+        event_date: input.date,
+        address: input.address,
+        price: input.price,
+        image_url: input.imageUrl || null,
+        video_url: input.videoUrl || null,
+        audio_url: input.audioUrl || null,
+        organizer_name: input.organizerName,
+        organizer_avatar: input.organizerAvatar,
+        lat: input.lat ?? null,
+        lng: input.lng ?? null,
+      }),
+    })
+
+    const newEvent = dbRowToEvent(row)
+    setLocatarioEvents((prev) => [newEvent, ...prev])
+    setPublicLocatarioEvents((prev) => [newEvent, ...prev])
+    return newEvent
+  }, [])
+
+  const updateLocatarioEvent = useCallback(async (eventId: string, input: Partial<CreateLocatarioEventInput>): Promise<void> => {
+    if (!hasSupabaseEnv) {
+      setLocatarioEvents((prev) => {
+        const next = prev.map((e) => {
+          if (e.id !== eventId) return e
+          return {
+            ...e,
+            title: input.title?.trim() ?? e.title,
+            description: input.description?.trim() ?? e.description,
+            category: input.category ?? e.category,
+            date: input.date ? new Date(input.date).toISOString() : e.date,
+            address: input.address?.trim() ?? e.address,
+            price: input.price !== undefined ? input.price : e.price,
+            imageUrl: input.imageUrl?.trim() || e.imageUrl,
+            videoUrl: input.videoUrl?.trim() || e.videoUrl,
+            audioUrl: input.audioUrl?.trim() || e.audioUrl,
+            lat: input.lat ?? e.lat,
+            lng: input.lng ?? e.lng,
+          }
+        })
+        saveEventsToStorage(next)
+        return next
+      })
+      return
+    }
+
+    const { data: sessionData } = await getSupabaseBrowserClient().auth.getSession()
+    if (!sessionData.session) throw new Error('Debes iniciar sesión para editar eventos.')
+
+    // Snapshot before optimistic update so we can revert on failure
+    let snapshot: Event[] = []
+    setLocatarioEvents((prev) => {
+      snapshot = prev
+      return prev.map((e) => {
+        if (e.id !== eventId) return e
+        return {
+          ...e,
+          title: input.title?.trim() ?? e.title,
+          description: input.description?.trim() ?? e.description,
+          category: input.category ?? e.category,
+          date: input.date ? new Date(input.date).toISOString() : e.date,
+          address: input.address?.trim() ?? e.address,
+          price: input.price !== undefined ? input.price : e.price,
+          imageUrl: input.imageUrl?.trim() || e.imageUrl,
+          videoUrl: input.videoUrl?.trim() || e.videoUrl,
+          audioUrl: input.audioUrl?.trim() || e.audioUrl,
+          lat: input.lat ?? e.lat,
+          lng: input.lng ?? e.lng,
+        }
+      })
+    })
+
+    try {
+      await apiFetch<void>(EVENTS_URL, `/events/locatario/${eventId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          title: input.title,
+          description: input.description,
+          category: input.category,
+          event_date: input.date,
+          address: input.address,
+          price: input.price,
+          image_url: input.imageUrl || null,
+          video_url: input.videoUrl || null,
+          audio_url: input.audioUrl || null,
+          organizer_name: input.organizerName,
+          organizer_avatar: input.organizerAvatar,
+          lat: input.lat ?? null,
+          lng: input.lng ?? null,
+        }),
+      })
+    } catch (err) {
+      setLocatarioEvents(snapshot)
+      throw err
+    }
+  }, [])
+
+  const removeLocatarioEvent = useCallback(async (eventId: string): Promise<void> => {
+    // Optimistic update
+    setLocatarioEvents((prev) => {
+      const next = prev.filter((e) => e.id !== eventId)
+      if (!hasSupabaseEnv) saveEventsToStorage(next)
+      return next
+    })
+
+    if (!hasSupabaseEnv) return
+
+    const { data: sessionData } = await getSupabaseBrowserClient().auth.getSession()
+    if (!sessionData.session) {
+      throw new Error('Debes iniciar sesión para eliminar eventos de locatario.')
+    }
+
+    await apiFetch<void>(EVENTS_URL, `/events/locatario/${eventId}`, { method: 'DELETE' })
+  }, [])
+
+  const value = useMemo(
+    () => ({ locatarioEvents, publicLocatarioEvents, isLoading, createLocatarioEvent, removeLocatarioEvent, updateLocatarioEvent }),
+    [locatarioEvents, publicLocatarioEvents, isLoading, createLocatarioEvent, removeLocatarioEvent, updateLocatarioEvent],
+  )
+
+  return <LocatarioEventsContext.Provider value={value}>{children}</LocatarioEventsContext.Provider>
+}
+
+export function useLocatarioEvents() {
+  const context = useContext(LocatarioEventsContext)
+  if (!context) {
+    throw new Error('useLocatarioEvents debe usarse dentro de LocatarioEventsProvider')
+  }
+  return context
+}
