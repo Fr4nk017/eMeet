@@ -43,6 +43,24 @@ function resetDb() {
 
 resetDb()
 
+// ── Error injection ──────────────────────────────────────────────────────────
+// Permite que tests individuales simulen errores de BD sin refactorizar el mock.
+
+interface ErrorInject {
+  table: string
+  op: 'upsert' | 'insert' | 'delete' | 'select'
+  error: any
+  maxFires?: number  // cuántas veces inyectar el error (default: infinito)
+}
+
+let _injectError: ErrorInject | null = null
+let _fireCount = 0
+
+function setError(e: ErrorInject | null) {
+  _injectError = e
+  _fireCount   = 0
+}
+
 // ── Query builder ─────────────────────────────────────────────────────────────
 
 function tableData(table: string): any[] | null {
@@ -82,6 +100,20 @@ function buildQuery(table: string) {
     },
     then: (resolve: any) => {
       const ref = tableData(table) ?? []
+      const currentOp: ErrorInject['op'] = deleteMode ? 'delete'
+        : upsertPayload ? 'upsert'
+        : insertPayload ? 'insert'
+        : 'select'
+
+      if (
+        _injectError &&
+        _injectError.table === table &&
+        _injectError.op   === currentOp &&
+        _fireCount < (_injectError.maxFires ?? Infinity)
+      ) {
+        _fireCount++
+        return resolve({ data: null, error: _injectError.error })
+      }
 
       if (deleteMode) {
         const toDelete = ref.filter(r => filters.every(f => f(r)))
@@ -147,7 +179,10 @@ jest.mock('@emeet/redis', () => ({
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
-beforeEach(() => resetDb())
+beforeEach(() => {
+  resetDb()
+  setError(null)
+})
 
 // ── POST /events/save ─────────────────────────────────────────────────────────
 
@@ -175,6 +210,33 @@ describe('POST /events/save', () => {
     expect(res.status).toBe(201)
     expect(res.body.ok).toBe(true)
   })
+
+  it('devuelve 500 si ensureProfile falla', async () => {
+    setError({ table: 'profiles', op: 'upsert', error: { message: 'FK violation', code: '23503' } })
+    const res = await request(app)
+      .post('/events/save')
+      .set('Authorization', `Bearer ${AUTH_TOKEN}`)
+      .send({ eventId: 'x', eventTitle: 'Test' })
+    expect(res.status).toBe(500)
+  })
+
+  it('devuelve 500 si writeUserEvent falla', async () => {
+    setError({ table: 'user_events', op: 'delete', error: { message: 'Permission denied' } })
+    const res = await request(app)
+      .post('/events/save')
+      .set('Authorization', `Bearer ${AUTH_TOKEN}`)
+      .send({ eventId: 'x', eventTitle: 'Test' })
+    expect(res.status).toBe(500)
+  })
+
+  it('reintenta con UUID estable si el insert falla con error 22P02', async () => {
+    setError({ table: 'user_events', op: 'insert', error: { code: '22P02', message: 'invalid uuid' }, maxFires: 1 })
+    const res = await request(app)
+      .post('/events/save')
+      .set('Authorization', `Bearer ${AUTH_TOKEN}`)
+      .send({ eventId: 'non-uuid-string-id', eventTitle: 'Test fallback' })
+    expect(res.status).toBe(201)
+  })
 })
 
 // ── GET /events/saved ─────────────────────────────────────────────────────────
@@ -194,6 +256,14 @@ describe('GET /events/saved', () => {
     const saved = res.body.find((e: any) => e.event_id === 'existing-saved-event')
     expect(saved).toBeDefined()
   })
+
+  it('devuelve 500 si falla la consulta a la BD', async () => {
+    setError({ table: 'user_events', op: 'select', error: { message: 'Connection error' } })
+    const res = await request(app)
+      .get('/events/saved')
+      .set('Authorization', `Bearer ${AUTH_TOKEN}`)
+    expect(res.status).toBe(500)
+  })
 })
 
 // ── DELETE /events/save/:id ───────────────────────────────────────────────────
@@ -209,6 +279,14 @@ describe('DELETE /events/save/:id', () => {
       .delete('/events/save/existing-saved-event')
       .set('Authorization', `Bearer ${AUTH_TOKEN}`)
     expect(res.status).toBe(204)
+  })
+
+  it('devuelve 500 si hay error de base de datos', async () => {
+    setError({ table: 'user_events', op: 'delete', error: { message: 'DB error' } })
+    const res = await request(app)
+      .delete('/events/save/existing-saved-event')
+      .set('Authorization', `Bearer ${AUTH_TOKEN}`)
+    expect(res.status).toBe(500)
   })
 })
 
@@ -245,6 +323,53 @@ describe('POST /events/like', () => {
     expect(res.status).toBe(201)
     expect(res.body.ok).toBe(true)
   })
+
+  it('devuelve 500 si ensureProfile falla', async () => {
+    setError({ table: 'profiles', op: 'upsert', error: { message: 'DB error', code: '23503' } })
+    const res = await request(app)
+      .post('/events/like')
+      .set('Authorization', `Bearer ${AUTH_TOKEN}`)
+      .send({ eventId: 'x', eventTitle: 'Test' })
+    expect(res.status).toBe(500)
+  })
+
+  it('devuelve 500 si writeUserEvent falla', async () => {
+    setError({ table: 'user_events', op: 'delete', error: { message: 'Permission denied' } })
+    const res = await request(app)
+      .post('/events/like')
+      .set('Authorization', `Bearer ${AUTH_TOKEN}`)
+      .send({ eventId: 'x', eventTitle: 'Test' })
+    expect(res.status).toBe(500)
+  })
+
+  it('registra like aunque falle el upsert del chat room', async () => {
+    setError({ table: 'chat_rooms', op: 'upsert', error: { message: 'Chat DB error' } })
+    const res = await request(app)
+      .post('/events/like')
+      .set('Authorization', `Bearer ${AUTH_TOKEN}`)
+      .send({ eventId: 'x', eventTitle: 'Test' })
+    expect(res.status).toBe(201)
+    expect(res.body.chatLinked).toBe(false)
+  })
+
+  it('registra like aunque falle el upsert de room_members', async () => {
+    setError({ table: 'room_members', op: 'upsert', error: { message: 'Room member error' } })
+    const res = await request(app)
+      .post('/events/like')
+      .set('Authorization', `Bearer ${AUTH_TOKEN}`)
+      .send({ eventId: 'x', eventTitle: 'Test' })
+    expect(res.status).toBe(201)
+    expect(res.body.chatLinked).toBe(false)
+  })
+
+  it('usa payload legacy si el primer upsert de perfil falla con código 42703', async () => {
+    setError({ table: 'profiles', op: 'upsert', error: { code: '42703', message: 'column not found' }, maxFires: 1 })
+    const res = await request(app)
+      .post('/events/like')
+      .set('Authorization', `Bearer ${AUTH_TOKEN}`)
+      .send({ eventId: 'x', eventTitle: 'Test' })
+    expect(res.status).toBe(201)
+  })
 })
 
 // ── GET /events/liked ─────────────────────────────────────────────────────────
@@ -263,5 +388,86 @@ describe('GET /events/liked', () => {
     expect(Array.isArray(res.body)).toBe(true)
     const liked = res.body.find((e: any) => e.event_id === 'existing-liked-event')
     expect(liked).toBeDefined()
+  })
+
+  it('devuelve 500 si falla la consulta a la BD', async () => {
+    setError({ table: 'user_events', op: 'select', error: { message: 'Connection error' } })
+    const res = await request(app)
+      .get('/events/liked')
+      .set('Authorization', `Bearer ${AUTH_TOKEN}`)
+    expect(res.status).toBe(500)
+  })
+})
+
+// ── DELETE /events/like/:id ───────────────────────────────────────────────────
+
+describe('DELETE /events/like/:id', () => {
+  it('rechaza sin token', async () => {
+    const res = await request(app).delete('/events/like/existing-liked-event')
+    expect(res.status).toBe(401)
+  })
+
+  it('elimina el like correctamente', async () => {
+    const res = await request(app)
+      .delete('/events/like/existing-liked-event')
+      .set('Authorization', `Bearer ${AUTH_TOKEN}`)
+    expect(res.status).toBe(204)
+  })
+
+  it('devuelve 500 si hay error de base de datos', async () => {
+    setError({ table: 'user_events', op: 'delete', error: { message: 'DB error' } })
+    const res = await request(app)
+      .delete('/events/like/existing-liked-event')
+      .set('Authorization', `Bearer ${AUTH_TOKEN}`)
+    expect(res.status).toBe(500)
+  })
+
+  it('reintenta con UUID estable si el primer delete falla con error 22P02', async () => {
+    setError({ table: 'user_events', op: 'delete', error: { code: '22P02', message: 'invalid input syntax for uuid' }, maxFires: 1 })
+    const res = await request(app)
+      .delete('/events/like/non-uuid-event-id')
+      .set('Authorization', `Bearer ${AUTH_TOKEN}`)
+    expect(res.status).toBe(204)
+  })
+})
+
+// ── POST /events/recommendations ─────────────────────────────────────────────
+
+describe('POST /events/recommendations', () => {
+  it('rechaza sin token', async () => {
+    const res = await request(app)
+      .post('/events/recommendations')
+      .send({ availableEvents: [] })
+    expect(res.status).toBe(401)
+  })
+
+  it('rechaza si availableEvents no es un array', async () => {
+    const res = await request(app)
+      .post('/events/recommendations')
+      .set('Authorization', `Bearer ${AUTH_TOKEN}`)
+      .send({ availableEvents: 'not-an-array' })
+    expect(res.status).toBe(400)
+  })
+
+  it('rechaza si no se envía availableEvents', async () => {
+    const res = await request(app)
+      .post('/events/recommendations')
+      .set('Authorization', `Bearer ${AUTH_TOKEN}`)
+      .send({})
+    expect(res.status).toBe(400)
+  })
+
+  it('devuelve recomendaciones basadas en eventos disponibles', async () => {
+    const availableEvents = [
+      { id: 'ev-1', type: 'musica',  lat: -33.4, lng: -70.6, distance: 100 },
+      { id: 'ev-2', type: 'cultura', lat: -33.5, lng: -70.7, distance: 200 },
+    ]
+    const res = await request(app)
+      .post('/events/recommendations')
+      .set('Authorization', `Bearer ${AUTH_TOKEN}`)
+      .send({ availableEvents, limit: 2 })
+    expect(res.status).toBe(200)
+    expect(Array.isArray(res.body.recommendations)).toBe(true)
+    expect(typeof res.body.count).toBe('number')
   })
 })

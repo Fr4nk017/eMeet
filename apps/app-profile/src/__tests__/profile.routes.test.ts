@@ -73,7 +73,17 @@ function buildQuery(table: string) {
   return query
 }
 
-const mockUserClient = { from: (table: string) => buildQuery(table) }
+const mockStorageUpload   = jest.fn().mockResolvedValue({ error: null })
+const mockStoragePublicUrl = jest.fn().mockReturnValue({ data: { publicUrl: 'https://storage.mock/avatar.jpg' } })
+
+const mockStorage = {
+  from: () => ({
+    upload: mockStorageUpload,
+    getPublicUrl: mockStoragePublicUrl,
+  }),
+}
+
+const mockUserClient = { from: (table: string) => buildQuery(table), storage: mockStorage }
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -160,6 +170,47 @@ describe('PATCH /profile', () => {
     expect(res.status).toBe(200)
     expect(res.body.name).toBe('Nuevo nombre')
     expect(res.body.location).toBe('Valparaíso')
+  })
+})
+
+// ── POST /profile/avatar ──────────────────────────────────────────────────────
+
+describe('POST /profile/avatar', () => {
+  beforeEach(() => {
+    mockStorageUpload.mockResolvedValue({ error: null })
+    mockStoragePublicUrl.mockReturnValue({ data: { publicUrl: 'https://storage.mock/avatar.jpg' } })
+  })
+
+  it('rechaza sin token', async () => {
+    const res = await request(app).post('/profile/avatar').send({ fileBase64: 'abc' })
+    expect(res.status).toBe(401)
+  })
+
+  it('rechaza si no se envía fileBase64', async () => {
+    const res = await request(app)
+      .post('/profile/avatar')
+      .set('Authorization', `Bearer ${AUTH_TOKEN}`)
+      .send({})
+    expect(res.status).toBe(400)
+  })
+
+  it('sube avatar y devuelve URL pública', async () => {
+    const base64 = Buffer.from('fake-image-data').toString('base64')
+    const res = await request(app)
+      .post('/profile/avatar')
+      .set('Authorization', `Bearer ${AUTH_TOKEN}`)
+      .send({ fileBase64: base64, contentType: 'image/jpeg' })
+    expect(res.status).toBe(200)
+    expect(res.body.avatarUrl).toContain('storage.mock')
+  })
+
+  it('sube avatar PNG', async () => {
+    const base64 = Buffer.from('fake-png').toString('base64')
+    const res = await request(app)
+      .post('/profile/avatar')
+      .set('Authorization', `Bearer ${AUTH_TOKEN}`)
+      .send({ fileBase64: base64, contentType: 'image/png' })
+    expect(res.status).toBe(200)
   })
 })
 
