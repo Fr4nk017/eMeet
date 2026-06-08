@@ -1,0 +1,105 @@
+REPOSITORIOS GITHUB — PROYECTO eMeet
+=====================================
+
+REPOSITORIO PRINCIPAL (Monorepo)
+---------------------------------
+URL:         https://github.com/Fr4nk017/eMeet
+Descripción: Monorepo principal que contiene todos los componentes del proyecto
+             eMeet. Incluye el frontend (app-web), los 7 microservicios backend,
+             documentación, y guías de testing.
+Rama main:   https://github.com/Fr4nk017/eMeet/tree/main
+Estructura:
+  apps/app-web/      → Frontend Next.js 14
+  apps/app-auth/     → Microservicio de autenticación
+  apps/app-profile/  → Microservicio de perfiles
+  apps/app-events/   → Microservicio de eventos
+  apps/app-saved/    → Microservicio de guardados/likes
+  apps/app-chat/     → Microservicio de chat grupal
+  apps/app-places/   → Microservicio proxy de Google Places
+  apps/app-admin/    → Microservicio de administración
+  docs/              → Documentación del entregable
+
+
+COMPONENTE FRONTEND
+-------------------
+URL:         https://github.com/Fr4nk017/eMeet/tree/main/apps/app-web
+Descripción: Aplicación web Next.js 14 con App Router. Incluye mapa interactivo,
+             sistema de eventos, chat en tiempo real, panel de locatario y panel
+             de administración. Desplegada en Vercel.
+URL Producción: https://e-meet-app-web.vercel.app
+README:      https://github.com/Fr4nk017/eMeet/blob/main/apps/app-web/README.md
+
+
+MICROSERVICIOS BACKEND
+-----------------------
+
+1. app-auth (Autenticación)
+   URL:     https://github.com/Fr4nk017/eMeet/tree/main/apps/app-auth
+   Puerto:  3001 | Ruta: /auth/*
+   Desc:    Login, registro, OAuth Google, gestión de sesiones JWT
+   API Doc: https://e-meet-app-auth.vercel.app/docs
+   README:  https://github.com/Fr4nk017/eMeet/blob/main/apps/app-auth/README.md
+
+2. app-profile (Perfiles)
+   URL:     https://github.com/Fr4nk017/eMeet/tree/main/apps/app-profile
+   Puerto:  3002 | Ruta: /profile/*
+   Desc:    Gestión de perfil de usuario: bio, avatar, intereses, estadísticas
+   API Doc: https://e-meet-app-profile.vercel.app/docs
+   README:  https://github.com/Fr4nk017/eMeet/blob/main/apps/app-profile/README.md
+
+3. app-events (Eventos)
+   URL:     https://github.com/Fr4nk017/eMeet/tree/main/apps/app-events
+   Puerto:  3003 | Ruta: /events/*
+   Desc:    CRUD de eventos para locatarios. Upload multimedia a Supabase Storage.
+            Eventos públicos para mapa. Cron job de limpieza.
+   API Doc: https://e-meet-app-events.vercel.app/docs
+   README:  https://github.com/Fr4nk017/eMeet/blob/main/apps/app-events/README.md
+
+4. app-saved (Guardados y Likes)
+   URL:     https://github.com/Fr4nk017/eMeet/tree/main/apps/app-saved
+   Puerto:  3004 | Ruta: /events/like|save|liked|saved
+   Desc:    Registro de likes y guardados. Vincula automáticamente al chat grupal
+            del evento al dar like. Genera recomendaciones personalizadas.
+   API Doc: https://e-meet-app-saved.vercel.app/docs
+   README:  https://github.com/Fr4nk017/eMeet/blob/main/apps/app-saved/README.md
+
+5. app-chat (Chat Grupal)
+   URL:     https://github.com/Fr4nk017/eMeet/tree/main/apps/app-chat
+   Puerto:  3005 | Ruta: /chat/*
+   Desc:    Salas de chat por evento (una sala por evento). Mensajes, miembros,
+            conteo de no leídos, expiración automática de salas.
+   API Doc: https://e-meet-app-chat.vercel.app/docs
+   README:  https://github.com/Fr4nk017/eMeet/blob/main/apps/app-chat/README.md
+
+6. app-places (Búsqueda de Lugares)
+   URL:     https://github.com/Fr4nk017/eMeet/tree/main/apps/app-places
+   Puerto:  3006 | Ruta: /places/*
+   Desc:    Proxy server-side hacia Google Places API. Búsqueda de lugares
+            cercanos, detalles de lugar, proxy de imágenes.
+   API Doc: https://e-meet-app-places.vercel.app/docs
+   README:  https://github.com/Fr4nk017/eMeet/blob/main/apps/app-places/README.md
+
+7. app-admin (Administración)
+   URL:     https://github.com/Fr4nk017/eMeet/tree/main/apps/app-admin
+   Puerto:  3007 | Ruta: /admin/*
+   Desc:    Panel de administración. Gestión de usuarios (baneo, roles),
+            gestión de eventos, estadísticas globales del sistema.
+   API Doc: https://e-meet-app-admin.vercel.app/docs
+   README:  https://github.com/Fr4nk017/eMeet/blob/main/apps/app-admin/README.md
+
+
+DOCUMENTACIÓN SWAGGER (API REST)
+----------------------------------
+Todos los microservicios exponen documentación Swagger en /docs:
+  Auth:    https://e-meet-app-auth.vercel.app/docs
+  Profile: https://e-meet-app-profile.vercel.app/docs
+  Events:  https://e-meet-app-events.vercel.app/docs
+  Saved:   https://e-meet-app-saved.vercel.app/docs
+  Chat:    https://e-meet-app-chat.vercel.app/docs
+  Places:  https://e-meet-app-places.vercel.app/docs
+  Admin:   https://e-meet-app-admin.vercel.app/docs
+
+
+GUÍA DE TESTING
+----------------
+Ver: https://github.com/Fr4nk017/eMeet/blob/main/TESTING.md
