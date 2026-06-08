@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { getSupabaseBrowserClient, hasSupabaseEnv } from '../lib/supabase'
@@ -21,8 +20,6 @@ const INPUT_CLASS =
   'w-full rounded-xl border border-white/10 bg-[hsl(222,30%,13%)] py-3 pl-10 pr-4 text-sm text-white placeholder-slate-600 outline-none transition-colors hover:border-white/20 focus:border-[hsl(262,80%,60%)] focus:ring-1 focus:ring-[hsl(262,80%,60%)]/30'
 
 export default function LoginForm() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
   const { login } = useAuth()
 
   const [view, setView] = useState<'login' | 'forgot' | 'forgot-sent'>('login')
@@ -38,10 +35,7 @@ export default function LoginForm() {
     setError('')
     setIsLoading(true)
     try {
-      const role = await login(email, password)
-      const next = searchParams.get('next')
-      if (next && next.startsWith('/')) { router.push(next); return }
-      router.push(role === 'locatario' ? '/locatario' : role === 'admin' ? '/admin' : '/')
+      await login(email, password)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido al iniciar sesión')
     } finally {

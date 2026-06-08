@@ -7,6 +7,9 @@ dist/
 dist-ssr/
 out/
 
+# Jest coverage reports (auto-generated)
+coverage/
+
 # Environment variables — never commit
 .env
 .env.*
