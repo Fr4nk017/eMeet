@@ -2,7 +2,6 @@ import cors from 'cors'
 import express from 'express'
 import helmet from 'helmet'
 import morgan from 'morgan'
-import swaggerUi from 'swagger-ui-express'
 import { env } from './config/env.js'
 import profileRouter from './routes/profile.routes.js'
 import { swaggerSpec } from './swagger.js'
@@ -39,10 +38,31 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'emeet-app-profile', timestamp: new Date().toISOString() })
 })
 
-app.use('/docs', ((_req: express.Request, res: express.Response, next: express.NextFunction) => {
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'")
-  next()
-}) as express.RequestHandler, swaggerUi.serve, swaggerUi.setup(swaggerSpec))
+app.get('/docs', (_req, res) => {
+  res.setHeader('Content-Type', 'text/html')
+  res.send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>eMeet Profile API</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    window.onload = () => SwaggerUIBundle({
+      spec: ${JSON.stringify(swaggerSpec)},
+      dom_id: '#swagger-ui',
+      presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+      layout: 'BaseLayout',
+      deepLinking: true
+    })
+  </script>
+</body>
+</html>`)
+})
 
 app.use('/profile', profileRouter)
 
