@@ -116,7 +116,7 @@ function OnboardingModal({ onDismiss }: { onDismiss: () => void }) {
         className="mx-4 w-full max-w-[320px] rounded-3xl border border-white/15 bg-card p-6 shadow-2xl"
       >
         <div className="mb-4 text-center text-4xl">👋</div>
-        <h2 className="mb-1 text-center text-xl font-bold text-white">Bienvenido a eMeet</h2>
+        <h2 className="mb-1 text-center text-xl font-bold text-white">Bienvenido a XzonaParty</h2>
         <p className="mb-5 text-center text-sm text-muted">Descubre eventos y lugares cerca tuyo.</p>
 
         <div className="mb-6 space-y-2.5">

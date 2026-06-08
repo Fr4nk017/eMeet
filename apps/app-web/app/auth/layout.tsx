@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 
 export const metadata: Metadata = {
   title: 'Iniciar sesión',
-  description: 'Inicia sesión o crea tu cuenta en eMeet para descubrir eventos y lugares cerca tuyo.',
+  description: 'Inicia sesión o crea tu cuenta en XzonaParty para descubrir eventos y lugares cerca tuyo.',
 }
 
 export default function AuthLayout({ children }: { children: ReactNode }) {

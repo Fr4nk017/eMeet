@@ -164,7 +164,7 @@ export default function LocatarioPage() {
               <span className="text-base">🎉</span>
             </div>
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-[hsl(262,80%,65%)]">eMeet</p>
+              <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#b44ef8', textShadow: '0 0 8px #b44ef8' }}>XzonaParty</p>
               <p className="text-sm font-semibold leading-tight text-white">{displayName}</p>
             </div>
           </div>

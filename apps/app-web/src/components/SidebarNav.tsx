@@ -52,13 +52,13 @@ export default function SidebarNav() {
       bg-[linear-gradient(180deg,_#160D30_0%,_#0A0518_100%)]
       lg:flex">
 
-      {/* Logo metálico */}
+      {/* Logo neon */}
       <Link href="/" className="mb-8 inline-flex items-center gap-1 px-2">
-        <span className="text-2xl font-extrabold tracking-tight">
-          <span className="text-white">e</span>
-          <span className="bg-gradient-to-r from-primary-light via-white to-primary-light bg-clip-text text-transparent">
-            Meet
-          </span>
+        <span
+          className="text-xl font-extrabold tracking-widest text-white"
+          style={{ textShadow: '0 0 12px #b44ef8, 0 0 28px #7c2de8' }}
+        >
+          XzonaParty
         </span>
       </Link>
 

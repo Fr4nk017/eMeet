@@ -49,12 +49,11 @@ export default function Layout({
               px-4 py-3 backdrop-blur-sm lg:px-5 lg:py-4">
 
               <div className="flex items-center gap-2">
-                <span className="text-2xl font-extrabold tracking-tight lg:text-[1.75rem]">
-                  <span className="text-white">e</span>
-                  {/* Logo con gradiente metálico morado-plata */}
-                  <span className="bg-gradient-to-r from-primary-light via-white to-primary-light bg-clip-text text-transparent">
-                    Meet
-                  </span>
+                <span
+                  className="text-2xl font-extrabold tracking-widest lg:text-[1.75rem]"
+                  style={{ color: '#fff', textShadow: '0 0 14px #b44ef8, 0 0 30px #7c2de8' }}
+                >
+                  XzonaParty
                 </span>
               </div>
 

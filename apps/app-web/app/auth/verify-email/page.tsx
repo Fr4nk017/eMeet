@@ -9,7 +9,7 @@ import { getSupabaseBrowserClient } from '../../../src/lib/supabase'
 const RESEND_COOLDOWN = 60
 
 const STEPS = [
-  { label: 'Abre el correo de eMeet' },
+  { label: 'Abre el correo de XzonaParty' },
   { label: 'Haz clic en «Confirmar mi cuenta»' },
   { label: 'Serás redirigido automáticamente' },
 ]
@@ -71,7 +71,7 @@ export default function VerifyEmailPage() {
           transition={{ delay: 0.05 }}
           className="mb-6 flex items-center justify-center gap-2"
         >
-          <span className="text-xl font-bold tracking-tight text-white">eMeet</span>
+          <span className="text-xl font-bold tracking-tight text-white" style={{ textShadow: '0 0 12px #b44ef8' }}>XzonaParty</span>
         </motion.div>
 
         <div className="rounded-[2rem] border border-white/10 bg-[rgba(13,20,38,0.94)] p-8 shadow-2xl backdrop-blur-xl">

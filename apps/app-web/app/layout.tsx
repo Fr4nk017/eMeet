@@ -18,8 +18,8 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default: 'eMeet',
-    template: '%s — eMeet',
+    default: 'XzonaParty',
+    template: '%s — XzonaParty',
   },
   description: 'Descubre bares, restaurantes y eventos cercanos a ti.',
   icons: {
@@ -28,15 +28,15 @@ export const metadata: Metadata = {
     apple: '/favicon.svg',
   },
   openGraph: {
-    title: 'eMeet',
+    title: 'XzonaParty',
     description: 'Descubre bares, restaurantes y eventos cercanos a ti.',
     type: 'website',
     locale: 'es_CL',
-    siteName: 'eMeet',
+    siteName: 'XzonaParty',
   },
   twitter: {
     card: 'summary',
-    title: 'eMeet',
+    title: 'XzonaParty',
     description: 'Descubre bares, restaurantes y eventos cercanos a ti.',
   },
 }

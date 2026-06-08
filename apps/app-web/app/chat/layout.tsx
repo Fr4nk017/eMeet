@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 
 export const metadata: Metadata = {
   title: 'Chat',
-  description: 'Chatea con la comunidad de eventos en eMeet.',
+  description: 'Chatea con la comunidad de eventos en XzonaParty.',
 }
 
 export default function ChatLayout({ children }: { children: ReactNode }) {

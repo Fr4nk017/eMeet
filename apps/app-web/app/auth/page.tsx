@@ -8,6 +8,8 @@ import LoginForm from '@/src/components/LoginForm'
 import SignUpForm from '@/src/components/SignUpForm'
 import { useAuth } from '@/src/context/AuthContext'
 
+const EQUALIZER_HEIGHTS = [3, 6, 4, 8, 5, 9, 3, 7, 6, 4, 8, 5, 7, 3, 6, 4, 9, 5, 8, 3]
+
 function SplashScreen({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     const t = setTimeout(onDone, 5000)
@@ -20,60 +22,85 @@ function SplashScreen({ onDone }: { onDone: () => void }) {
       exit={{ opacity: 0, scale: 1.04 }}
       transition={{ duration: 0.7, ease: 'easeInOut' }}
       className="fixed inset-0 z-[200] flex flex-col items-center justify-center overflow-hidden"
-      style={{ background: 'radial-gradient(circle at 50% 40%, rgba(124,58,237,0.22), transparent 60%), hsl(222,47%,6%)' }}
+      style={{ background: '#07070d' }}
     >
-      {/* Halo de fondo pulsante */}
-      <motion.div
-        animate={{ scale: [1, 1.18, 1], opacity: [0.18, 0.32, 0.18] }}
-        transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
-        className="absolute h-[340px] w-[340px] rounded-full bg-[hsl(262,80%,55%)] blur-[90px]"
-      />
-
-      <div className="relative flex flex-col items-center gap-7">
-        {/* Ícono */}
-        <motion.div
-          initial={{ scale: 0.4, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: 'spring', stiffness: 220, damping: 18, delay: 0.1 }}
-          className="relative flex h-28 w-28 items-center justify-center rounded-[2rem] bg-gradient-to-br from-[hsl(262,80%,62%)] to-[hsl(262,80%,40%)] shadow-2xl shadow-purple-900/70"
-        >
-          <span className="text-6xl select-none">🎉</span>
-          {/* Brillo superior */}
-          <span className="pointer-events-none absolute inset-x-3 top-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent rounded-t-[2rem]" />
-        </motion.div>
-
-        {/* Texto del logo */}
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.45, duration: 0.55, ease: 'easeOut' }}
-          className="flex flex-col items-center gap-2"
-        >
-          <span className="text-6xl font-extrabold tracking-tight">
-            <span className="text-white">e</span>
-            <span className="bg-gradient-to-r from-[hsl(262,80%,78%)] via-white to-[hsl(262,80%,78%)] bg-clip-text text-transparent">
-              Meet
-            </span>
-          </span>
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.85, duration: 0.5 }}
-            className="text-sm tracking-widest text-slate-400 uppercase"
-          >
-            Descubre eventos cerca tuyo
-          </motion.p>
-        </motion.div>
+      {/* Barras ecualizador — abajo */}
+      <div className="absolute bottom-0 left-0 right-0 flex items-end justify-center gap-[3px] px-4 opacity-80">
+        {EQUALIZER_HEIGHTS.map((h, i) => (
+          <motion.div
+            key={i}
+            animate={{ scaleY: [0.3, 1, 0.5, 0.9, 0.3] }}
+            transition={{ duration: 1.1 + i * 0.07, repeat: Infinity, ease: 'easeInOut', delay: i * 0.06 }}
+            style={{
+              height: `${h * 22}px`,
+              transformOrigin: 'bottom',
+              background: i % 3 === 0 ? '#00e5ff' : i % 3 === 1 ? '#b44ef8' : '#00b4d8',
+              boxShadow: i % 3 === 0 ? '0 0 8px #00e5ff' : '0 0 8px #b44ef8',
+            }}
+            className="w-3 rounded-t-sm"
+          />
+        ))}
       </div>
 
-      {/* Barra de progreso de 5 s */}
+      {/* Barras ecualizador — arriba (espejo) */}
+      <div className="absolute top-0 left-0 right-0 flex items-start justify-center gap-[3px] px-4 opacity-40">
+        {EQUALIZER_HEIGHTS.map((h, i) => (
+          <motion.div
+            key={i}
+            animate={{ scaleY: [0.2, 0.8, 0.4, 0.7, 0.2] }}
+            transition={{ duration: 1.4 + i * 0.07, repeat: Infinity, ease: 'easeInOut', delay: i * 0.05 }}
+            style={{
+              height: `${h * 14}px`,
+              transformOrigin: 'top',
+              background: i % 3 === 0 ? '#00e5ff' : i % 3 === 1 ? '#b44ef8' : '#00b4d8',
+            }}
+            className="w-3 rounded-b-sm"
+          />
+        ))}
+      </div>
+
+      {/* Halos de glow */}
+      <div className="absolute h-[200px] w-[500px] rounded-full bg-[#b44ef8]/15 blur-[100px]" />
+      <div className="absolute h-[150px] w-[350px] rounded-full bg-[#00e5ff]/10 blur-[80px]" />
+
+      <div className="relative flex flex-col items-center gap-5">
+        {/* Nombre neon */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.3, duration: 0.6, type: 'spring', stiffness: 180, damping: 16 }}
+        >
+          <span
+            className="text-7xl font-black uppercase tracking-widest text-white"
+            style={{
+              textShadow: '0 0 18px #b44ef8, 0 0 40px #b44ef8, 0 0 80px #7c2de8, 0 0 1px rgba(255,255,255,0.95)',
+              letterSpacing: '0.15em',
+            }}
+          >
+            XzonaParty
+          </span>
+        </motion.div>
+
+        {/* Tagline chilena */}
+        <motion.p
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.9, duration: 0.5 }}
+          className="text-sm font-semibold uppercase tracking-[0.3em]"
+          style={{ color: '#00e5ff', textShadow: '0 0 14px #00e5ff, 0 0 30px #00b4d8' }}
+        >
+          Hoy te lanzai
+        </motion.p>
+      </div>
+
+      {/* Barra de progreso */}
       <div className="absolute bottom-14 h-[2px] w-52 overflow-hidden rounded-full bg-white/10">
         <motion.div
           initial={{ scaleX: 0 }}
           animate={{ scaleX: 1 }}
           transition={{ duration: 5, ease: 'linear' }}
-          style={{ transformOrigin: 'left' }}
-          className="h-full w-full rounded-full bg-gradient-to-r from-[hsl(262,80%,60%)] to-[hsl(262,80%,78%)]"
+          style={{ transformOrigin: 'left', background: 'linear-gradient(to right, #b44ef8, #00e5ff)' }}
+          className="h-full w-full rounded-full"
         />
       </div>
     </motion.div>
@@ -180,7 +207,7 @@ export default function AuthPage() {
                 <span className="text-2xl">🎉</span>
               </div>
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.35em] text-[hsl(262,80%,65%)]">eMeet</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.35em]" style={{ color: '#b44ef8', textShadow: '0 0 10px #b44ef8' }}>XzonaParty</p>
                 <h1 className="text-4xl font-semibold leading-tight tracking-tight">
                   Tu acceso a eventos, bares y experiencias únicas.
                 </h1>
@@ -224,7 +251,7 @@ export default function AuthPage() {
           <div className="rounded-[2rem] border border-white/10 bg-[rgba(15,23,42,0.92)] p-6 shadow-2xl backdrop-blur-xl">
             <div className="flex flex-col gap-5">
               <div className="text-center lg:text-left">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.35em] text-[hsl(262,80%,65%)]">eMeet</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.35em]" style={{ color: '#b44ef8', textShadow: '0 0 10px #b44ef8' }}>XzonaParty</p>
                 <h2 className="text-2xl font-semibold text-white">Accede a tu cuenta</h2>
                 <p className="mt-1.5 text-sm text-slate-400">Usa tu cuenta de Google o email y contraseña.</p>
               </div>
@@ -321,7 +348,7 @@ export default function AuthPage() {
         </div>
 
         <div className="mt-8 text-center text-xs text-slate-600">
-          <p>Santiago, Chile &nbsp;·&nbsp; eMeet © 2025</p>
+          <p>Santiago, Chile &nbsp;·&nbsp; XzonaParty © 2025</p>
         </div>
       </div>
     </div>
