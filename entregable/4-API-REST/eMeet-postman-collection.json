@@ -1,0 +1,491 @@
+{
+  "info": {
+    "name": "eMeet API — Colección Completa",
+    "description": "Colección Postman con todos los endpoints de los microservicios eMeet.\n\nVariables de entorno requeridas:\n- BASE_AUTH: http://localhost:3001\n- BASE_PROFILE: http://localhost:3002\n- BASE_EVENTS: http://localhost:3003\n- BASE_SAVED: http://localhost:3004\n- BASE_CHAT: http://localhost:3005\n- BASE_PLACES: http://localhost:3006\n- BASE_ADMIN: http://localhost:3007\n- TOKEN: (JWT obtenido al hacer login)\n- CRON_SECRET: (secreto para cleanup)\n- PLACE_ID: (ID de Google Place para pruebas)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "BASE_AUTH",    "value": "http://localhost:3001" },
+    { "key": "BASE_PROFILE", "value": "http://localhost:3002" },
+    { "key": "BASE_EVENTS",  "value": "http://localhost:3003" },
+    { "key": "BASE_SAVED",   "value": "http://localhost:3004" },
+    { "key": "BASE_CHAT",    "value": "http://localhost:3005" },
+    { "key": "BASE_PLACES",  "value": "http://localhost:3006" },
+    { "key": "BASE_ADMIN",   "value": "http://localhost:3007" },
+    { "key": "TOKEN",        "value": "" },
+    { "key": "CRON_SECRET",  "value": "mi-cron-secret" },
+    { "key": "PLACE_ID",     "value": "ChIJ1QBJAdjHYpYR4MsOZpZv6tA" }
+  ],
+  "item": [
+    {
+      "name": "🔐 Auth Service (:3001)",
+      "item": [
+        {
+          "name": "POST /auth/login",
+          "request": {
+            "method": "POST",
+            "url": "{{BASE_AUTH}}/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"usuario@ejemplo.com\",\n  \"password\": \"contraseña123\"\n}"
+            },
+            "description": "Inicia sesión con email y contraseña. Retorna JWT session token y datos del usuario."
+          },
+          "response": [
+            {
+              "name": "200 OK — Login exitoso",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"session\": {\n    \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR...\",\n    \"token_type\": \"bearer\",\n    \"expires_in\": 3600\n  },\n  \"user\": {\n    \"id\": \"uuid-del-usuario\",\n    \"email\": \"usuario@ejemplo.com\"\n  }\n}"
+            },
+            {
+              "name": "400 Bad Request — Credenciales inválidas",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{ \"error\": \"Invalid login credentials\" }"
+            }
+          ]
+        },
+        {
+          "name": "POST /auth/register",
+          "request": {
+            "method": "POST",
+            "url": "{{BASE_AUTH}}/auth/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Francisco\",\n  \"email\": \"nuevo@ejemplo.com\",\n  \"password\": \"contraseña123\",\n  \"role\": \"user\"\n}"
+            },
+            "description": "Registra un nuevo usuario. Roles disponibles: user, locatario, admin."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "body": "{ \"message\": \"Usuario registrado. Verifica tu email.\", \"user\": { \"id\": \"...\", \"email\": \"...\" } }"
+            },
+            {
+              "name": "400 Bad Request — Faltan campos",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{ \"error\": \"name, email y password son requeridos\" }"
+            }
+          ]
+        },
+        {
+          "name": "GET /auth/session",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_AUTH}}/auth/session",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }],
+            "description": "Verifica y refresca la sesión actual."
+          },
+          "response": [
+            {
+              "name": "200 OK — Sesión válida",
+              "status": "OK",
+              "code": 200,
+              "body": "{ \"session\": { \"access_token\": \"eyJ...\", \"expires_in\": 3600 }, \"user\": { \"id\": \"...\" } }"
+            },
+            {
+              "name": "200 OK — Sin sesión",
+              "status": "OK",
+              "code": 200,
+              "body": "{ \"session\": null, \"user\": null }"
+            }
+          ]
+        },
+        {
+          "name": "POST /auth/logout",
+          "request": {
+            "method": "POST",
+            "url": "{{BASE_AUTH}}/auth/logout",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }],
+            "description": "Cierra la sesión del usuario."
+          },
+          "response": [
+            { "name": "204 No Content — Logout exitoso", "status": "No Content", "code": 204, "body": "" }
+          ]
+        },
+        {
+          "name": "GET /health",
+          "request": { "method": "GET", "url": "{{BASE_AUTH}}/health", "description": "Health check del servicio." },
+          "response": [{ "name": "200 OK", "status": "OK", "code": 200, "body": "{ \"status\": \"ok\" }" }]
+        }
+      ]
+    },
+    {
+      "name": "👤 Profile Service (:3002)",
+      "item": [
+        {
+          "name": "GET /profile",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_PROFILE}}/profile",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }],
+            "description": "Obtiene el perfil del usuario autenticado."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"id\": \"uuid\",\n  \"name\": \"Francisco\",\n  \"bio\": \"Amante de la gastronomía\",\n  \"avatarUrl\": \"https://...\",\n  \"location\": \"Santiago, Chile\",\n  \"interests\": [\"gastronomia\", \"musica\"]\n}"
+            }
+          ]
+        },
+        {
+          "name": "PATCH /profile",
+          "request": {
+            "method": "PATCH",
+            "url": "{{BASE_PROFILE}}/profile",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bio\": \"Nueva descripción\",\n  \"location\": \"Valparaíso\",\n  \"interests\": [\"arte\", \"teatro\"]\n}"
+            },
+            "description": "Actualiza bio, location e interests del perfil."
+          }
+        },
+        {
+          "name": "POST /profile/avatar",
+          "request": {
+            "method": "POST",
+            "url": "{{BASE_PROFILE}}/profile/avatar",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"imageBase64\": \"data:image/jpeg;base64,/9j/4AAQ...\" }"
+            },
+            "description": "Sube avatar en base64 a Supabase Storage."
+          }
+        }
+      ]
+    },
+    {
+      "name": "📅 Events Service (:3003)",
+      "item": [
+        {
+          "name": "GET /events/public",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_EVENTS}}/events/public",
+            "description": "Lista todos los eventos futuros públicos, ordenados por fecha."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "[\n  {\n    \"id\": \"uuid\",\n    \"title\": \"Feria Gastronómica\",\n    \"description\": \"...\",\n    \"category\": \"gastronomia\",\n    \"eventDate\": \"2026-07-15T20:00:00Z\",\n    \"address\": \"Parque Bustamante, Santiago\",\n    \"price\": 5000,\n    \"imageUrl\": \"https://...\",\n    \"lat\": -33.4364,\n    \"lng\": -70.6358\n  }\n]"
+            }
+          ]
+        },
+        {
+          "name": "POST /events/locatario",
+          "request": {
+            "method": "POST",
+            "url": "{{BASE_EVENTS}}/events/locatario",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Noche de Jazz\",\n  \"description\": \"Velada musical con los mejores artistas\",\n  \"category\": \"musica\",\n  \"eventDate\": \"2026-08-20T21:00:00Z\",\n  \"address\": \"Bar El Observatorio, Santiago\",\n  \"price\": 8000,\n  \"lat\": -33.4400,\n  \"lng\": -70.6500\n}"
+            },
+            "description": "Crea un nuevo evento (requiere rol locatario)."
+          }
+        },
+        {
+          "name": "GET /events/locatario",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_EVENTS}}/events/locatario",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }],
+            "description": "Lista los eventos creados por el locatario autenticado."
+          }
+        },
+        {
+          "name": "PATCH /events/locatario/:id",
+          "request": {
+            "method": "PATCH",
+            "url": "{{BASE_EVENTS}}/events/locatario/:id",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{ \"price\": 10000, \"description\": \"Descripción actualizada\" }" }
+          }
+        },
+        {
+          "name": "DELETE /events/locatario/:id",
+          "request": {
+            "method": "DELETE",
+            "url": "{{BASE_EVENTS}}/events/locatario/:id",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }]
+          }
+        },
+        {
+          "name": "GET /events/cleanup (cron)",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_EVENTS}}/events/cleanup",
+            "header": [{ "key": "Authorization", "value": "Bearer {{CRON_SECRET}}" }],
+            "description": "Limpia eventos expirados. Solo ejecutar con el CRON_SECRET correcto."
+          }
+        }
+      ]
+    },
+    {
+      "name": "❤️ Saved Service (:3004)",
+      "item": [
+        {
+          "name": "POST /saved/like",
+          "request": {
+            "method": "POST",
+            "url": "{{BASE_SAVED}}/saved/like",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"uuid-del-evento\",\n  \"eventTitle\": \"Feria Gastronómica\",\n  \"eventImageUrl\": \"https://...\",\n  \"eventAddress\": \"Parque Bustamante\"\n}"
+            },
+            "description": "Da like a un evento. Crea automáticamente una sala de chat para el evento."
+          }
+        },
+        {
+          "name": "POST /saved/save",
+          "request": {
+            "method": "POST",
+            "url": "{{BASE_SAVED}}/saved/save",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"eventId\": \"uuid-del-evento\", \"eventTitle\": \"Feria Gastronómica\" }"
+            }
+          }
+        },
+        {
+          "name": "GET /saved/liked",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_SAVED}}/saved/liked",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }]
+          }
+        },
+        {
+          "name": "GET /saved/saved",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_SAVED}}/saved/saved",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }]
+          }
+        },
+        {
+          "name": "DELETE /saved/like/:id",
+          "request": {
+            "method": "DELETE",
+            "url": "{{BASE_SAVED}}/saved/like/:id",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }]
+          }
+        },
+        {
+          "name": "POST /saved/recommendations",
+          "request": {
+            "method": "POST",
+            "url": "{{BASE_SAVED}}/saved/recommendations",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{ \"limit\": 10 }" },
+            "description": "Retorna eventos recomendados basados en similitud de intereses (Redis)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "💬 Chat Service (:3005)",
+      "item": [
+        {
+          "name": "GET /chat/rooms",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_CHAT}}/chat/rooms",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }],
+            "description": "Lista todas las salas de chat del usuario."
+          }
+        },
+        {
+          "name": "POST /chat/rooms/:id/join",
+          "request": {
+            "method": "POST",
+            "url": "{{BASE_CHAT}}/chat/rooms/:id/join",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }],
+            "description": "Une al usuario a la sala de chat de un evento."
+          }
+        },
+        {
+          "name": "GET /chat/rooms/:id/messages",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_CHAT}}/chat/rooms/:id/messages",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }]
+          }
+        },
+        {
+          "name": "POST /chat/rooms/:id/messages",
+          "request": {
+            "method": "POST",
+            "url": "{{BASE_CHAT}}/chat/rooms/:id/messages",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{ \"text\": \"¡Hola a todos! ¿Alguien va al evento?\" }" }
+          }
+        },
+        {
+          "name": "GET /chat/unread",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_CHAT}}/chat/unread",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }],
+            "description": "Cuenta total de mensajes no leídos en todas las salas."
+          }
+        }
+      ]
+    },
+    {
+      "name": "📍 Places Service (:3006)",
+      "item": [
+        {
+          "name": "POST /places/search-nearby",
+          "request": {
+            "method": "POST",
+            "url": "{{BASE_PLACES}}/places/search-nearby",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"location\": { \"lat\": -33.4364, \"lng\": -70.6358 },\n  \"radius\": 1000,\n  \"type\": \"restaurant\"\n}"
+            },
+            "description": "Busca restaurantes y locales cercanos usando Google Places API."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"places\": [\n    {\n      \"placeId\": \"ChIJ...\",\n      \"name\": \"Restaurante El Huerto\",\n      \"address\": \"Orrego Luco 054, Providencia\",\n      \"rating\": 4.5,\n      \"lat\": -33.432,\n      \"lng\": -70.624,\n      \"photoReference\": \"AUjq9...\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /places/:placeId/details",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_PLACES}}/places/{{PLACE_ID}}/details",
+            "description": "Obtiene detalles completos de un lugar: horarios, fotos, reseñas."
+          }
+        },
+        {
+          "name": "GET /places/photo",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{BASE_PLACES}}/places/photo?photoReference=AUjq9...&maxwidth=400",
+              "query": [
+                { "key": "photoReference", "value": "AUjq9..." },
+                { "key": "maxwidth", "value": "400" }
+              ]
+            },
+            "description": "Proxy de fotos de Google Places."
+          }
+        }
+      ]
+    },
+    {
+      "name": "🛡️ Admin Service (:3007)",
+      "item": [
+        {
+          "name": "GET /admin/users",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_ADMIN}}/admin/users",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }],
+            "description": "Lista todos los usuarios (solo admin)."
+          }
+        },
+        {
+          "name": "PUT /admin/users/:id",
+          "request": {
+            "method": "PUT",
+            "url": "{{BASE_ADMIN}}/admin/users/:id",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{ \"role\": \"locatario\" }" },
+            "description": "Actualiza rol de usuario (solo admin)."
+          }
+        },
+        {
+          "name": "DELETE /admin/users/:id",
+          "request": {
+            "method": "DELETE",
+            "url": "{{BASE_ADMIN}}/admin/users/:id",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }]
+          }
+        },
+        {
+          "name": "GET /admin/statistics",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_ADMIN}}/admin/statistics",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }],
+            "description": "Dashboard: total usuarios, eventos, likes, usuarios baneados."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"totalUsers\": 142,\n  \"totalEvents\": 38,\n  \"totalLikes\": 521,\n  \"bannedUsers\": 3\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /admin/events",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_ADMIN}}/admin/events",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }]
+          }
+        },
+        {
+          "name": "DELETE /admin/events/:id",
+          "request": {
+            "method": "DELETE",
+            "url": "{{BASE_ADMIN}}/admin/events/:id",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }],
+            "description": "Elimina evento inapropiado (moderación)."
+          }
+        }
+      ]
+    }
+  ]
+}

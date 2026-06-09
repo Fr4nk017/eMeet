@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<title>eMeet — Descripción de la Persistencia de Datos</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f8f9fa; color: #1a1a2e; line-height: 1.7; }
+  .page { max-width: 900px; margin: 0 auto; background: white; padding: 50px 60px; }
+  h1 { font-size: 26px; color: #0f3460; border-bottom: 3px solid #e94560; padding-bottom: 12px; margin-bottom: 8px; }
+  .subtitle { color: #666; font-size: 13px; margin-bottom: 36px; }
+  h2 { font-size: 18px; color: #16213e; margin: 36px 0 12px; border-left: 4px solid #e94560; padding-left: 12px; }
+  h3 { font-size: 15px; color: #533483; margin: 20px 0 8px; }
+  p { margin-bottom: 12px; font-size: 14px; }
+  ul, ol { margin: 8px 0 12px 24px; font-size: 14px; }
+  li { margin-bottom: 4px; }
+  code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-family: Consolas, monospace; font-size: 12px; color: #e94560; }
+  pre { background: #1a1a2e; color: #e0e0e0; padding: 18px 22px; border-radius: 8px; overflow-x: auto; font-size: 12px; margin: 12px 0 18px; line-height: 1.6; }
+  pre .kw  { color: #7ec8e3; }
+  pre .str { color: #a8e6cf; }
+  pre .cm  { color: #888; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; font-size: 13px; }
+  th { background: #16213e; color: white; padding: 10px 14px; text-align: left; }
+  td { padding: 9px 14px; border-bottom: 1px solid #e5e7eb; }
+  tr:nth-child(even) td { background: #f8f9fa; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+  .badge-green { background: #d1fae5; color: #065f46; }
+  .badge-blue  { background: #dbeafe; color: #1e40af; }
+  .badge-purple{ background: #ede9fe; color: #5b21b6; }
+  .badge-red   { background: #fee2e2; color: #991b1b; }
+  .callout { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 13px; }
+  @media print { body { background: white; } .page { padding: 30px 40px; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>Descripción de la Persistencia de Datos</h1>
+<p class="subtitle">Proyecto eMeet · Arquitectura de Microservicios · Junio 2026</p>
+
+<h2>1. Visión General</h2>
+<p>eMeet implementa persistencia mediante dos tecnologías complementarias: <strong>PostgreSQL gestionado por Supabase</strong> como base de datos relacional principal, y <strong>Redis</strong> como almacenamiento en memoria para caché y motor de recomendaciones. El acceso a PostgreSQL se realiza exclusivamente a través del ORM <strong>Prisma</strong>, garantizando tipado estático, migraciones versionadas y operaciones seguras.</p>
+
+<div class="callout">
+  <strong>Stack de persistencia:</strong> Prisma 5 (ORM) → Supabase PostgreSQL (datos relacionales) + Supabase Storage (archivos binarios) + Redis (caché y recomendaciones)
+</div>
+
+<h2>2. ORM: Prisma</h2>
+<p>Prisma actúa como capa de abstracción entre los microservicios y la base de datos. El esquema centralizado se encuentra en el paquete compartido <code>@emeet/db</code>, lo que garantiza consistencia en todos los servicios.</p>
+
+<h3>2.1 Configuración del datasource</h3>
+<pre><span class="cm">// packages/db/prisma/schema.prisma</span>
+<span class="kw">datasource</span> db {
+  provider  = <span class="str">"postgresql"</span>
+  <span class="cm">// Runtime: pooler Supabase (puerto 6543, alta concurrencia)</span>
+  url       = env(<span class="str">"DATABASE_URL"</span>)
+  <span class="cm">// Migraciones: conexión directa (puerto 5432)</span>
+  directUrl = env(<span class="str">"DIRECT_URL"</span>)
+  schemas   = [<span class="str">"public"</span>, <span class="str">"auth"</span>]
+}</pre>
+
+<p>Se usan dos conexiones distintas para optimizar:</p>
+<ul>
+  <li><strong>DATABASE_URL</strong> (puerto 6543): conexión vía PgBouncer (pooler) para las peticiones de producción. Soporta alta concurrencia con menor consumo de conexiones.</li>
+  <li><strong>DIRECT_URL</strong> (puerto 5432): conexión directa usada por Prisma Migrate para aplicar migraciones sin overhead del pooler.</li>
+</ul>
+
+<h3>2.2 Multi-schema</h3>
+<p>El esquema de Prisma utiliza la feature <code>multiSchema</code> para acceder tanto al esquema <code>public</code> (datos de la aplicación) como al esquema <code>auth</code> (gestionado por Supabase Auth). Esto permite relaciones entre tablas de ambos esquemas.</p>
+
+<h2>3. Modelo de Datos</h2>
+
+<table>
+  <tr><th>Tabla</th><th>Schema</th><th>Descripción</th><th>Relaciones clave</th></tr>
+  <tr><td><code>auth.users</code></td><td>auth</td><td>Usuarios de Supabase Auth (solo lectura)</td><td>→ profiles (1:1)</td></tr>
+  <tr><td><code>public.profiles</code></td><td>public</td><td>Perfil extendido del usuario</td><td>← auth.users; → user_events, locatario_events, room_members, chat_messages</td></tr>
+  <tr><td><code>public.locatario_events</code></td><td>public</td><td>Eventos creados por locatarios</td><td>← profiles (creator)</td></tr>
+  <tr><td><code>public.user_events</code></td><td>public</td><td>Likes y guardados de usuarios</td><td>← profiles (user)</td></tr>
+  <tr><td><code>public.chat_rooms</code></td><td>public</td><td>Salas de chat por evento</td><td>→ room_members, chat_messages</td></tr>
+  <tr><td><code>public.room_members</code></td><td>public</td><td>Membresía a salas de chat</td><td>← profiles, chat_rooms</td></tr>
+  <tr><td><code>public.chat_messages</code></td><td>public</td><td>Mensajes en salas de chat</td><td>← profiles, chat_rooms</td></tr>
+</table>
+
+<h3>3.1 Entidades principales</h3>
+<pre><span class="kw">model</span> Profile {
+  id        String          <span class="kw">@id</span> <span class="kw">@db.Uuid</span>
+  name      String          <span class="kw">@default</span>(<span class="str">""</span>)
+  bio       String          <span class="kw">@default</span>(<span class="str">""</span>)
+  avatarUrl String?         <span class="kw">@map</span>(<span class="str">"avatar_url"</span>)
+  location  String          <span class="kw">@default</span>(<span class="str">""</span>)
+  interests EventCategory[]          <span class="cm">// Array de enums</span>
+  createdAt DateTime        <span class="kw">@default</span>(now()) <span class="kw">@map</span>(<span class="str">"created_at"</span>)
+
+  authUser        AuthUser         <span class="kw">@relation</span>(fields: [id], references: [id], onDelete: Cascade)
+  userEvents      UserEvent[]
+  locatarioEvents LocatarioEvent[]
+  <span class="kw">@@schema</span>(<span class="str">"public"</span>)
+}
+
+<span class="kw">model</span> LocatarioEvent {
+  id              String        <span class="kw">@id</span> <span class="kw">@default</span>(uuid()) <span class="kw">@db.Uuid</span>
+  title           String
+  category        EventCategory
+  eventDate       DateTime      <span class="kw">@map</span>(<span class="str">"event_date"</span>)
+  lat             Float?
+  lng             Float?
+  imageUrl        String?       <span class="kw">@map</span>(<span class="str">"image_url"</span>)
+  videoUrl        String?       <span class="kw">@map</span>(<span class="str">"video_url"</span>)
+  creator         Profile       <span class="kw">@relation</span>(fields: [creatorId], references: [id], onDelete: Cascade)
+  <span class="kw">@@schema</span>(<span class="str">"public"</span>)
+}
+
+<span class="kw">model</span> UserEvent {
+  <span class="cm">// Constraint de unicidad: un usuario no puede dar like/save dos veces al mismo evento</span>
+  <span class="kw">@@unique</span>([userId, eventId, action], name: <span class="str">"user_events_user_event_action_key"</span>)
+  <span class="kw">@@schema</span>(<span class="str">"public"</span>)
+}</pre>
+
+<h3>3.2 Enumeraciones</h3>
+<pre><span class="kw">enum</span> EventCategory {
+  gastronomia | musica | cultura | networking
+  deporte | fiesta | teatro | arte
+}
+
+<span class="kw">enum</span> UserEventAction {
+  like | save    <span class="cm">// Un mismo evento puede tener ambas acciones del mismo usuario</span>
+}</pre>
+
+<h2>4. Comandos de Migración</h2>
+<pre><span class="cm"># Generar cliente Prisma</span>
+npx prisma generate
+
+<span class="cm"># Aplicar cambios al schema sin migración (desarrollo)</span>
+npx prisma db push
+
+<span class="cm"># Crear y aplicar migración versionada (producción)</span>
+npx prisma migrate deploy</pre>
+
+<p>Estos comandos se integran en el pipeline de Turborepo bajo las tareas <code>db:generate</code>, <code>db:push</code> y <code>db:migrate:deploy</code>.</p>
+
+<h2>5. Supabase como Proveedor</h2>
+<p>Supabase provee tres servicios de persistencia utilizados por eMeet:</p>
+
+<table>
+  <tr><th>Servicio</th><th>Uso en eMeet</th><th>Acceso</th></tr>
+  <tr><td><span class="badge badge-green">Auth</span></td><td>Login, registro, OAuth, verificación JWT</td><td>@supabase/supabase-js SDK</td></tr>
+  <tr><td><span class="badge badge-blue">PostgreSQL</span></td><td>Todos los datos relacionales de la app</td><td>Prisma ORM (pool + direct)</td></tr>
+  <tr><td><span class="badge badge-purple">Storage</span></td><td>Avatares, imágenes y videos de eventos</td><td>Signed URLs via SDK</td></tr>
+</table>
+
+<h3>5.1 Cliente Supabase compartido</h3>
+<p>El paquete <code>@emeet/shared</code> expone una factory para crear clientes Supabase, evitando duplicación y garantizando configuración uniforme en todos los microservicios:</p>
+<pre><span class="cm">// packages/shared/src/supabase.ts</span>
+<span class="kw">import</span> { createClient } from <span class="str">'@supabase/supabase-js'</span>
+
+<span class="kw">export function</span> createSupabaseClient() {
+  <span class="kw">return</span> createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_ANON_KEY!
+  )
+}
+
+<span class="kw">export function</span> createSupabaseAdmin() {
+  <span class="kw">return</span> createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!  <span class="cm">// Bypasa RLS</span>
+  )
+}</pre>
+
+<h3>5.2 Middleware de autenticación</h3>
+<p>Cada microservicio protege sus rutas mediante un middleware que verifica el JWT emitido por Supabase:</p>
+<pre><span class="kw">export async function</span> requireAuth(req, res, next) {
+  <span class="kw">const</span> token = req.headers.authorization?.replace(<span class="str">'Bearer '</span>, <span class="str">''</span>)
+  <span class="kw">if</span> (!token) <span class="kw">return</span> res.status(401).json({ error: <span class="str">'Sin token'</span> })
+
+  <span class="kw">const</span> { data: { user }, error } = <span class="kw">await</span> supabase.auth.getUser(token)
+  <span class="kw">if</span> (error || !user) <span class="kw">return</span> res.status(401).json({ error: <span class="str">'Token inválido'</span> })
+
+  req.user = user
+  next()
+}</pre>
+
+<h2>6. Redis: Persistencia en Memoria</h2>
+<p>El paquete <code>@emeet/redis</code> implementa un motor de recomendaciones basado en similitud coseno. Los vectores de preferencias de cada usuario se almacenan en Redis como hashes, y el algoritmo compara los intereses del usuario con los de otros usuarios que dieron like a los mismos eventos.</p>
+
+<pre><span class="cm">// packages/redis/src/recommendations.ts (simplificado)</span>
+<span class="kw">async function</span> getRecommendations(userId: string, likedEventIds: string[]) {
+  <span class="cm">// 1. Obtener vector de categorías del usuario actual</span>
+  <span class="kw">const</span> userVector = <span class="kw">await</span> redis.hGetAll(<span class="str">`user:${userId}:interests`</span>)
+
+  <span class="cm">// 2. Buscar usuarios con intereses similares (similitud coseno)</span>
+  <span class="cm">// 3. Retornar eventos que esos usuarios han dado like y el usuario no ha visto</span>
+  <span class="kw">return</span> recommendedEvents
+}</pre>
+
+<h2>7. Supabase Storage: Archivos Binarios</h2>
+<p>Las imágenes y videos de eventos, así como los avatares de usuarios, se almacenan en Supabase Storage. El flujo utiliza <strong>Signed URLs</strong> para subidas seguras y directas desde el cliente sin pasar por el microservicio:</p>
+<ol>
+  <li>El cliente solicita una Signed URL al microservicio correspondiente.</li>
+  <li>El microservicio genera la URL usando el cliente admin de Supabase (con <code>SERVICE_ROLE_KEY</code>).</li>
+  <li>El cliente sube el archivo directamente a Supabase Storage usando la URL firmada.</li>
+  <li>El microservicio guarda la URL pública del archivo en PostgreSQL.</li>
+</ol>
+
+<h2>8. Integridad Referencial y Seguridad</h2>
+<ul>
+  <li><strong>Cascades</strong>: al eliminar un perfil, se eliminan en cascada sus eventos, likes, membresías y mensajes.</li>
+  <li><strong>Constraints de unicidad</strong>: <code>user_events</code> tiene un índice único en <code>(user_id, event_id, action)</code> para evitar duplicados.</li>
+  <li><strong>UUIDs</strong>: todas las claves primarias usan UUID v4 (<code>@db.Uuid</code>), compatible con Supabase Auth.</li>
+  <li><strong>Row-Level Security (RLS)</strong>: Supabase habilita RLS por defecto; el cliente admin (<code>SERVICE_ROLE_KEY</code>) lo bypasa para operaciones de servidor.</li>
+  <li><strong>Variables de entorno</strong>: ninguna credencial está hardcodeada; se gestionan mediante <code>.env.local</code> y <code>vercel env</code> en producción.</li>
+</ul>
+
+<h2>9. Limpieza Automática de Datos</h2>
+<p>El microservicio <code>app-events</code> expone el endpoint <code>GET /events/cleanup</code> protegido por un <code>CRON_SECRET</code>. Este endpoint es invocado diariamente por Vercel Cron Jobs y elimina todos los eventos cuya fecha (<code>event_date</code>) sea anterior a la fecha actual, manteniendo la base de datos libre de eventos expirados.</p>
+
+<pre><span class="cm">// Verificado en logs de desarrollo:</span>
+[dev-cleanup] 1 evento(s) expirado(s) eliminado(s)</pre>
+
+<div style="margin-top:40px; padding-top:16px; border-top:1px solid #e5e7eb; font-size:12px; color:#888; text-align:center;">
+  eMeet · Arquitectura de Microservicios · Documento de Persistencia de Datos · Junio 2026
+</div>
+</div>
+</body>
+</html>

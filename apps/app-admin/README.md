@@ -52,6 +52,28 @@ npm run dev    # desarrollo
 npm run build && npm start   # producción
 ```
 
+## Probar con Swagger
+
+Con el servidor corriendo (`npm run dev`), abre el browser en:
+
+```
+http://localhost:3007/docs
+```
+
+| URL | Descripción |
+|-----|-------------|
+| `http://localhost:3007/docs` | Swagger UI interactivo |
+| `http://localhost:3007/docs/spec` | Spec OpenAPI en JSON |
+
+**Todos los endpoints requieren auth de admin:** haz clic en **Authorize** e ingresa `Bearer <token>` (token de un usuario con `role: 'admin'` obtenido desde app-auth).
+
+Para verificar que el servidor responde antes de abrir el browser:
+
+```bash
+curl http://localhost:3007/health
+# → {"ok":true,"service":"emeet-app-admin",...}
+```
+
 ---
 
 ## Pruebas
