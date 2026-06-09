@@ -50,6 +50,28 @@ npm run dev    # desarrollo
 npm run build && npm start   # producción
 ```
 
+## Probar con Swagger
+
+Con el servidor corriendo (`npm run dev`), abre el browser en:
+
+```
+http://localhost:3004/docs
+```
+
+| URL | Descripción |
+|-----|-------------|
+| `http://localhost:3004/docs` | Swagger UI interactivo |
+| `http://localhost:3004/docs/spec` | Spec OpenAPI en JSON |
+
+**Endpoints con autenticación:** haz clic en **Authorize** e ingresa `Bearer <token>` (token obtenido desde `POST /auth/login` en app-auth).
+
+Para verificar que el servidor responde antes de abrir el browser:
+
+```bash
+curl http://localhost:3004/health
+# → {"ok":true,"service":"emeet-app-saved",...}
+```
+
 ---
 
 ## Pruebas

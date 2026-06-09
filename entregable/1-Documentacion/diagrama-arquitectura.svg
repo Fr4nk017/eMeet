@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="820" viewBox="0 0 1200 820" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/>
+    </marker>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="#00000022"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="820" fill="#f8f9fa"/>
+
+  <!-- Title -->
+  <text x="600" y="38" text-anchor="middle" font-size="22" font-weight="bold" fill="#1a1a2e">Arquitectura de Microservicios — eMeet</text>
+  <text x="600" y="60" text-anchor="middle" font-size="13" fill="#666">Monorepo Turborepo · Next.js 14 + Express + Supabase + Redis</text>
+
+  <!-- ═══════════════════ CLIENTE ═══════════════════ -->
+  <rect x="490" y="82" width="220" height="52" rx="10" fill="#0f3460" filter="url(#shadow)"/>
+  <text x="600" y="107" text-anchor="middle" font-size="14" font-weight="bold" fill="white">Navegador / Cliente</text>
+  <text x="600" y="124" text-anchor="middle" font-size="11" fill="#aec6f0">HTTPS · PWA</text>
+
+  <!-- Arrow client → frontend -->
+  <line x1="600" y1="134" x2="600" y2="162" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- ═══════════════════ FRONTEND ═══════════════════ -->
+  <rect x="390" y="162" width="420" height="66" rx="10" fill="#16213e" filter="url(#shadow)"/>
+  <text x="600" y="187" text-anchor="middle" font-size="14" font-weight="bold" fill="white">Frontend — app-web  :3000</text>
+  <text x="600" y="204" text-anchor="middle" font-size="11" fill="#7ec8e3">Next.js 14 · React 18 · Tailwind CSS · Framer Motion · TanStack Query</text>
+  <text x="600" y="220" text-anchor="middle" font-size="11" fill="#7ec8e3">Swipe feed · Auth · Chat · Perfil · Guardados · Mapa</text>
+
+  <!-- Arrow frontend → microservices (vertical line down) -->
+  <line x1="600" y1="228" x2="600" y2="270" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- Spread lines to 7 services -->
+  <line x1="95" y1="270" x2="1105" y2="270" stroke="#555" stroke-width="1.5"/>
+  <!-- Vertical drops -->
+  <line x1="95" y1="270" x2="95" y2="300" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="245" y1="270" x2="245" y2="300" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="415" y1="270" x2="415" y2="300" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="600" y1="270" x2="600" y2="300" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="760" y1="270" x2="760" y2="300" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="920" y1="270" x2="920" y2="300" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="1105" y1="270" x2="1105" y2="300" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- REST API label -->
+  <rect x="460" y="248" width="80" height="18" rx="4" fill="#e94560"/>
+  <text x="500" y="261" text-anchor="middle" font-size="11" fill="white" font-weight="bold">REST / JSON</text>
+
+  <!-- ═══════════════════ MICROSERVICES ROW ═══════════════════ -->
+  <!-- app-auth -->
+  <rect x="20" y="300" width="150" height="90" rx="8" fill="#533483" filter="url(#shadow)"/>
+  <text x="95" y="322" text-anchor="middle" font-size="12" font-weight="bold" fill="white">app-auth</text>
+  <text x="95" y="338" text-anchor="middle" font-size="10" fill="#ddd">:3001</text>
+  <text x="95" y="355" text-anchor="middle" font-size="10" fill="#ccc">Login / Register</text>
+  <text x="95" y="370" text-anchor="middle" font-size="10" fill="#ccc">Session / OAuth</text>
+  <text x="95" y="385" text-anchor="middle" font-size="10" fill="#ccc">Logout</text>
+
+  <!-- app-profile -->
+  <rect x="170" y="300" width="150" height="90" rx="8" fill="#0b5394" filter="url(#shadow)"/>
+  <text x="245" y="322" text-anchor="middle" font-size="12" font-weight="bold" fill="white">app-profile</text>
+  <text x="245" y="338" text-anchor="middle" font-size="10" fill="#ddd">:3002</text>
+  <text x="245" y="355" text-anchor="middle" font-size="10" fill="#ccc">Perfil de usuario</text>
+  <text x="245" y="370" text-anchor="middle" font-size="10" fill="#ccc">Bio / Intereses</text>
+  <text x="245" y="385" text-anchor="middle" font-size="10" fill="#ccc">Avatar (Storage)</text>
+
+  <!-- app-events -->
+  <rect x="333" y="300" width="165" height="90" rx="8" fill="#137333" filter="url(#shadow)"/>
+  <text x="415" y="322" text-anchor="middle" font-size="12" font-weight="bold" fill="white">app-events</text>
+  <text x="415" y="338" text-anchor="middle" font-size="10" fill="#ddd">:3003</text>
+  <text x="415" y="355" text-anchor="middle" font-size="10" fill="#ccc">Crear / editar eventos</text>
+  <text x="415" y="370" text-anchor="middle" font-size="10" fill="#ccc">Listar públicos</text>
+  <text x="415" y="385" text-anchor="middle" font-size="10" fill="#ccc">Cleanup (cron)</text>
+
+  <!-- app-saved -->
+  <rect x="510" y="300" width="180" height="90" rx="8" fill="#7b3f00" filter="url(#shadow)"/>
+  <text x="600" y="322" text-anchor="middle" font-size="12" font-weight="bold" fill="white">app-saved</text>
+  <text x="600" y="338" text-anchor="middle" font-size="10" fill="#ddd">:3004</text>
+  <text x="600" y="355" text-anchor="middle" font-size="10" fill="#ccc">Likes / Guardados</text>
+  <text x="600" y="370" text-anchor="middle" font-size="10" fill="#ccc">Recomendaciones</text>
+  <text x="600" y="385" text-anchor="middle" font-size="10" fill="#ccc">Redis similarity</text>
+
+  <!-- app-chat -->
+  <rect x="700" y="300" width="120" height="90" rx="8" fill="#880e4f" filter="url(#shadow)"/>
+  <text x="760" y="322" text-anchor="middle" font-size="12" font-weight="bold" fill="white">app-chat</text>
+  <text x="760" y="338" text-anchor="middle" font-size="10" fill="#ddd">:3005</text>
+  <text x="760" y="355" text-anchor="middle" font-size="10" fill="#ccc">Salas de chat</text>
+  <text x="760" y="370" text-anchor="middle" font-size="10" fill="#ccc">Mensajes</text>
+  <text x="760" y="385" text-anchor="middle" font-size="10" fill="#ccc">No leídos</text>
+
+  <!-- app-places -->
+  <rect x="836" y="300" width="168" height="90" rx="8" fill="#006064" filter="url(#shadow)"/>
+  <text x="920" y="322" text-anchor="middle" font-size="12" font-weight="bold" fill="white">app-places</text>
+  <text x="920" y="338" text-anchor="middle" font-size="10" fill="#ddd">:3006</text>
+  <text x="920" y="355" text-anchor="middle" font-size="10" fill="#ccc">Google Places API</text>
+  <text x="920" y="370" text-anchor="middle" font-size="10" fill="#ccc">Venues cercanos</text>
+  <text x="920" y="385" text-anchor="middle" font-size="10" fill="#ccc">Fotos / Detalles</text>
+
+  <!-- app-admin -->
+  <rect x="1018" y="300" width="174" height="90" rx="8" fill="#4a148c" filter="url(#shadow)"/>
+  <text x="1105" y="322" text-anchor="middle" font-size="12" font-weight="bold" fill="white">app-admin</text>
+  <text x="1105" y="338" text-anchor="middle" font-size="10" fill="#ddd">:3007</text>
+  <text x="1105" y="355" text-anchor="middle" font-size="10" fill="#ccc">Usuarios / Roles</text>
+  <text x="1105" y="370" text-anchor="middle" font-size="10" fill="#ccc">Estadísticas</text>
+  <text x="1105" y="385" text-anchor="middle" font-size="10" fill="#ccc">Moderación</text>
+
+  <!-- ═══════════════════ SHARED PACKAGES ═══════════════════ -->
+  <!-- Arrows down from services to shared -->
+  <line x1="600" y1="390" x2="600" y2="440" stroke="#999" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <line x1="95" y1="390" x2="95" y2="460" stroke="#999" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="95" y1="460" x2="400" y2="460" stroke="#999" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <line x1="1105" y1="390" x2="1105" y2="460" stroke="#999" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="1105" y1="460" x2="810" y2="460" stroke="#999" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+
+  <!-- Shared packages row -->
+  <rect x="100" y="440" width="300" height="60" rx="8" fill="#2d3748" filter="url(#shadow)"/>
+  <text x="250" y="462" text-anchor="middle" font-size="12" font-weight="bold" fill="white">@emeet/db</text>
+  <text x="250" y="478" text-anchor="middle" font-size="10" fill="#aaa">Prisma 5 · PostgreSQL schema</text>
+  <text x="250" y="493" text-anchor="middle" font-size="10" fill="#aaa">Migrations · Multi-schema</text>
+
+  <rect x="450" y="440" width="300" height="60" rx="8" fill="#2d3748" filter="url(#shadow)"/>
+  <text x="600" y="462" text-anchor="middle" font-size="12" font-weight="bold" fill="white">@emeet/shared</text>
+  <text x="600" y="478" text-anchor="middle" font-size="10" fill="#aaa">Auth middleware · Supabase client</text>
+  <text x="600" y="493" text-anchor="middle" font-size="10" fill="#aaa">Tipos compartidos · JWT verify</text>
+
+  <rect x="800" y="440" width="300" height="60" rx="8" fill="#2d3748" filter="url(#shadow)"/>
+  <text x="950" y="462" text-anchor="middle" font-size="12" font-weight="bold" fill="white">@emeet/redis</text>
+  <text x="950" y="478" text-anchor="middle" font-size="10" fill="#aaa">Redis client · Similarity engine</text>
+  <text x="950" y="493" text-anchor="middle" font-size="10" fill="#aaa">Vectores de intereses</text>
+
+  <!-- ═══════════════════ DATA LAYER ═══════════════════ -->
+  <!-- Arrows to data layer -->
+  <line x1="250" y1="500" x2="250" y2="560" stroke="#999" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="600" y1="500" x2="600" y2="560" stroke="#999" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="950" y1="500" x2="950" y2="560" stroke="#999" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Supabase Auth -->
+  <rect x="20" y="560" width="220" height="80" rx="8" fill="#1f6b3b" filter="url(#shadow)"/>
+  <text x="130" y="582" text-anchor="middle" font-size="12" font-weight="bold" fill="white">Supabase Auth</text>
+  <text x="130" y="598" text-anchor="middle" font-size="10" fill="#aed6b8">JWT tokens · OAuth</text>
+  <text x="130" y="614" text-anchor="middle" font-size="10" fill="#aed6b8">Email/Password</text>
+  <text x="130" y="630" text-anchor="middle" font-size="10" fill="#aed6b8">auth.users (read-only)</text>
+
+  <!-- Supabase PostgreSQL -->
+  <rect x="260" y="560" width="320" height="190" rx="8" fill="#1b4332" filter="url(#shadow)"/>
+  <text x="420" y="582" text-anchor="middle" font-size="12" font-weight="bold" fill="white">Supabase PostgreSQL</text>
+  <text x="420" y="598" text-anchor="middle" font-size="10" fill="#aed6b8">Schema: public</text>
+  <!-- Tables -->
+  <rect x="270" y="606" width="140" height="24" rx="4" fill="#27574430"/>
+  <text x="340" y="622" text-anchor="middle" font-size="10" fill="#86efac">profiles</text>
+  <rect x="420" y="606" width="150" height="24" rx="4" fill="#27574430"/>
+  <text x="495" y="622" text-anchor="middle" font-size="10" fill="#86efac">locatario_events</text>
+  <rect x="270" y="636" width="140" height="24" rx="4" fill="#27574430"/>
+  <text x="340" y="652" text-anchor="middle" font-size="10" fill="#86efac">user_events</text>
+  <rect x="420" y="636" width="150" height="24" rx="4" fill="#27574430"/>
+  <text x="495" y="652" text-anchor="middle" font-size="10" fill="#86efac">chat_rooms</text>
+  <rect x="270" y="666" width="140" height="24" rx="4" fill="#27574430"/>
+  <text x="340" y="682" text-anchor="middle" font-size="10" fill="#86efac">room_members</text>
+  <rect x="420" y="666" width="150" height="24" rx="4" fill="#27574430"/>
+  <text x="495" y="682" text-anchor="middle" font-size="10" fill="#86efac">chat_messages</text>
+  <text x="420" y="720" text-anchor="middle" font-size="10" fill="#aed6b8">Prisma ORM (pooler :6543 / direct :5432)</text>
+  <text x="420" y="738" text-anchor="middle" font-size="10" fill="#aed6b8">Row-Level Security · Enums · Cascades</text>
+
+  <!-- Supabase Storage -->
+  <rect x="20" y="656" width="220" height="90" rx="8" fill="#1f6b3b" filter="url(#shadow)"/>
+  <text x="130" y="678" text-anchor="middle" font-size="12" font-weight="bold" fill="white">Supabase Storage</text>
+  <text x="130" y="694" text-anchor="middle" font-size="10" fill="#aed6b8">Avatares de usuarios</text>
+  <text x="130" y="710" text-anchor="middle" font-size="10" fill="#aed6b8">Imágenes de eventos</text>
+  <text x="130" y="726" text-anchor="middle" font-size="10" fill="#aed6b8">Videos de eventos</text>
+  <text x="130" y="742" text-anchor="middle" font-size="10" fill="#aed6b8">Signed URLs (upload)</text>
+
+  <!-- Redis -->
+  <rect x="830" y="560" width="240" height="100" rx="8" fill="#7a1f1f" filter="url(#shadow)"/>
+  <text x="950" y="582" text-anchor="middle" font-size="12" font-weight="bold" fill="white">Redis Cache</text>
+  <text x="950" y="598" text-anchor="middle" font-size="10" fill="#fca5a5">Vectores de preferencias</text>
+  <text x="950" y="614" text-anchor="middle" font-size="10" fill="#fca5a5">Motor de similaridad coseno</text>
+  <text x="950" y="630" text-anchor="middle" font-size="10" fill="#fca5a5">Recomendaciones en tiempo real</text>
+  <text x="950" y="646" text-anchor="middle" font-size="10" fill="#fca5a5">Caché de sesiones</text>
+
+  <!-- Google Maps API -->
+  <rect x="830" y="676" width="240" height="70" rx="8" fill="#1565c0" filter="url(#shadow)"/>
+  <text x="950" y="698" text-anchor="middle" font-size="12" font-weight="bold" fill="white">Google Maps API</text>
+  <text x="950" y="714" text-anchor="middle" font-size="10" fill="#bbdefb">Places Nearby Search</text>
+  <text x="950" y="730" text-anchor="middle" font-size="10" fill="#bbdefb">Place Details · Photo proxy</text>
+
+  <!-- Arrow app-places → Google Maps (lateral) -->
+  <line x1="1004" y1="355" x2="1070" y2="355" stroke="#555" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="920" y1="390" x2="920" y2="711" stroke="#555" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+
+  <!-- Legend -->
+  <rect x="20" y="760" width="1160" height="50" rx="6" fill="#e2e8f0"/>
+  <text x="40" y="780" font-size="11" fill="#333" font-weight="bold">Leyenda:</text>
+  <rect x="120" y="768" width="14" height="14" rx="2" fill="#16213e"/>
+  <text x="140" y="780" font-size="11" fill="#333">Frontend</text>
+  <rect x="210" y="768" width="14" height="14" rx="2" fill="#533483"/>
+  <text x="230" y="780" font-size="11" fill="#333">Microservicios Express</text>
+  <rect x="380" y="768" width="14" height="14" rx="2" fill="#2d3748"/>
+  <text x="400" y="780" font-size="11" fill="#333">Paquetes compartidos</text>
+  <rect x="560" y="768" width="14" height="14" rx="2" fill="#1b4332"/>
+  <text x="580" y="780" font-size="11" fill="#333">Supabase (Auth + PostgreSQL + Storage)</text>
+  <rect x="820" y="768" width="14" height="14" rx="2" fill="#7a1f1f"/>
+  <text x="840" y="780" font-size="11" fill="#333">Redis</text>
+  <rect x="900" y="768" width="14" height="14" rx="2" fill="#1565c0"/>
+  <text x="920" y="780" font-size="11" fill="#333">Google Maps API</text>
+  <line x1="1020" y1="775" x2="1060" y2="775" stroke="#555" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <text x="1070" y="780" font-size="11" fill="#333">Dep. externa</text>
+
+  <!-- Vertical annotations on right -->
+  <text x="20" y="800" font-size="10" fill="#666">Comunicación interna: HTTP REST · Bearer JWT · CORS configurado por dominio · Middleware Helmet (CSP/XSS)</text>
+</svg>

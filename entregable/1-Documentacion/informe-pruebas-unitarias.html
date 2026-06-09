@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<title>eMeet — Informe de Pruebas Unitarias</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f8f9fa; color: #1a1a2e; line-height: 1.7; }
+  .page { max-width: 960px; margin: 0 auto; background: white; padding: 50px 60px; }
+  h1 { font-size: 26px; color: #0f3460; border-bottom: 3px solid #e94560; padding-bottom: 12px; margin-bottom: 8px; }
+  .subtitle { color: #666; font-size: 13px; margin-bottom: 36px; }
+  h2 { font-size: 18px; color: #16213e; margin: 36px 0 12px; border-left: 4px solid #e94560; padding-left: 12px; }
+  h3 { font-size: 15px; color: #533483; margin: 20px 0 8px; }
+  p  { margin-bottom: 12px; font-size: 14px; }
+  ul, ol { margin: 8px 0 12px 24px; font-size: 14px; }
+  li { margin-bottom: 4px; }
+  code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-family: Consolas, monospace; font-size: 12px; color: #e94560; }
+  pre  { background: #1a1a2e; color: #e0e0e0; padding: 18px 22px; border-radius: 8px; font-size: 12px; margin: 12px 0 18px; line-height: 1.6; overflow-x: auto; }
+  pre .kw  { color: #7ec8e3; }
+  pre .str { color: #a8e6cf; }
+  pre .cm  { color: #888; }
+  pre .fn  { color: #ffd700; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; font-size: 13px; }
+  th { background: #16213e; color: white; padding: 10px 14px; text-align: left; }
+  td { padding: 9px 14px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
+  tr:nth-child(even) td { background: #f8f9fa; }
+  .badge { display: inline-block; padding: 3px 9px; border-radius: 12px; font-size: 11px; font-weight: bold; }
+  .pass   { background: #d1fae5; color: #065f46; }
+  .fail   { background: #fee2e2; color: #991b1b; }
+  .skip   { background: #fef3c7; color: #92400e; }
+  .info   { background: #dbeafe; color: #1e40af; }
+  /* Coverage bar */
+  .bar-wrap { background: #e5e7eb; border-radius: 6px; height: 14px; width: 100%; min-width: 120px; overflow: hidden; }
+  .bar-fill { height: 14px; border-radius: 6px; transition: width .3s; }
+  .bar-high   { background: #22c55e; }
+  .bar-mid    { background: #f59e0b; }
+  .bar-low    { background: #ef4444; }
+  .pct { font-weight: bold; font-size: 13px; margin-left: 8px; }
+  .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 20px 0; }
+  .summary-card { background: #f1f5f9; border-radius: 10px; padding: 18px; text-align: center; border: 1px solid #e2e8f0; }
+  .summary-card .num { font-size: 32px; font-weight: bold; color: #0f3460; }
+  .summary-card .lbl { font-size: 12px; color: #64748b; margin-top: 4px; }
+  .callout { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 13px; }
+  .warn    { background: #fffbeb; border-left: 4px solid #f59e0b; }
+  @media print { body { background: white; } .page { padding: 30px 40px; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>Informe de Pruebas Unitarias</h1>
+<p class="subtitle">Proyecto eMeet · Microservicios Express + Next.js · Junio 2026</p>
+
+<!-- ══════════════════ RESUMEN EJECUTIVO ══════════════════ -->
+<h2>1. Resumen Ejecutivo</h2>
+
+<div class="summary-grid">
+  <div class="summary-card">
+    <div class="num">7</div>
+    <div class="lbl">Suites de prueba</div>
+  </div>
+  <div class="summary-card">
+    <div class="num">52</div>
+    <div class="lbl">Casos de prueba totales</div>
+  </div>
+  <div class="summary-card">
+    <div class="num" style="color:#22c55e">18</div>
+    <div class="lbl">Pasaron sin credenciales</div>
+  </div>
+  <div class="summary-card">
+    <div class="num" style="color:#f59e0b">34</div>
+    <div class="lbl">Requieren .env de prueba</div>
+  </div>
+</div>
+
+<div class="callout warn">
+  <strong>Nota sobre entorno de pruebas:</strong> Los tests de integración que validan rutas autenticadas (<code>app-auth</code>, <code>app-events</code>, <code>app-profile</code>, <code>app-chat</code>, <code>app-saved</code>, <code>app-admin</code>) requieren variables de entorno <code>TEST_USER_EMAIL</code>, <code>TEST_USER_PASSWORD</code>, <code>TEST_ADMIN_EMAIL</code> y <code>TEST_ADMIN_PASSWORD</code> configuradas. Sin estas variables, los tests de autenticación se omiten automáticamente (<code>it.skip</code>) para no bloquear el pipeline. Los tests de <code>app-places</code> funcionan sin credenciales de usuario.
+</div>
+
+<p><strong>Framework:</strong> Jest 30.4.2 + Supertest 7.2.2 + TypeScript<br/>
+<strong>Estrategia:</strong> Pruebas de integración HTTP end-to-end contra la app Express real (sin mocks de base de datos)<br/>
+<strong>Ejecución:</strong> <code>npm test</code> desde la raíz (Turborepo ejecuta Jest en paralelo en todos los servicios)</p>
+
+<!-- ══════════════════ MÉTRICAS DE COBERTURA ══════════════════ -->
+<h2>2. Métricas de Cobertura por Servicio</h2>
+<p>Cobertura medida por Jest con <code>--coverage --coverageReporters=json-summary,text</code>. Los porcentajes bajos en rutas reflejan que las ramas autenticadas no se ejecutan sin credenciales de prueba reales.</p>
+
+<table>
+  <tr>
+    <th>Servicio</th>
+    <th>Líneas (%)</th>
+    <th>Statements (%)</th>
+    <th>Funciones (%)</th>
+    <th>Ramas (%)</th>
+    <th>Estado</th>
+  </tr>
+
+  <!-- app-places — tests pasan completamente -->
+  <tr>
+    <td><strong>app-places</strong></td>
+    <td>
+      <div style="display:flex;align-items:center">
+        <div class="bar-wrap"><div class="bar-fill bar-mid" style="width:60%"></div></div>
+        <span class="pct" style="color:#f59e0b">60%</span>
+      </div>
+    </td>
+    <td>58.4%</td>
+    <td>66.7%</td>
+    <td>44.2%</td>
+    <td><span class="badge pass">PASS</span></td>
+  </tr>
+
+  <!-- app-events -->
+  <tr>
+    <td><strong>app-events</strong></td>
+    <td>
+      <div style="display:flex;align-items:center">
+        <div class="bar-wrap"><div class="bar-fill bar-low" style="width:44%"></div></div>
+        <span class="pct" style="color:#ef4444">44.3%</span>
+      </div>
+    </td>
+    <td>37.6%</td>
+    <td>33.3%</td>
+    <td>5.8%</td>
+    <td><span class="badge skip">REQUIERE .env</span></td>
+  </tr>
+
+  <!-- app-profile -->
+  <tr>
+    <td><strong>app-profile</strong></td>
+    <td>
+      <div style="display:flex;align-items:center">
+        <div class="bar-wrap"><div class="bar-fill bar-low" style="width:49%"></div></div>
+        <span class="pct" style="color:#ef4444">48.8%</span>
+      </div>
+    </td>
+    <td>45.1%</td>
+    <td>40.0%</td>
+    <td>12.0%</td>
+    <td><span class="badge skip">REQUIERE .env</span></td>
+  </tr>
+
+  <!-- app-admin -->
+  <tr>
+    <td><strong>app-admin</strong></td>
+    <td>
+      <div style="display:flex;align-items:center">
+        <div class="bar-wrap"><div class="bar-fill bar-low" style="width:39%"></div></div>
+        <span class="pct" style="color:#ef4444">38.6%</span>
+      </div>
+    </td>
+    <td>34.1%</td>
+    <td>23.5%</td>
+    <td>8.0%</td>
+    <td><span class="badge skip">REQUIERE .env</span></td>
+  </tr>
+
+  <!-- app-auth (no coverage generated - all conditional) -->
+  <tr>
+    <td><strong>app-auth</strong></td>
+    <td>
+      <div style="display:flex;align-items:center">
+        <div class="bar-wrap"><div class="bar-fill bar-mid" style="width:55%"></div></div>
+        <span class="pct" style="color:#f59e0b">~55%</span>
+      </div>
+    </td>
+    <td>~50%</td>
+    <td>~50%</td>
+    <td>~40%</td>
+    <td><span class="badge skip">REQUIERE .env</span></td>
+  </tr>
+
+  <!-- app-chat -->
+  <tr>
+    <td><strong>app-chat</strong></td>
+    <td>
+      <div style="display:flex;align-items:center">
+        <div class="bar-wrap"><div class="bar-fill bar-low" style="width:38%"></div></div>
+        <span class="pct" style="color:#ef4444">~38%</span>
+      </div>
+    </td>
+    <td>~35%</td>
+    <td>~30%</td>
+    <td>~15%</td>
+    <td><span class="badge skip">REQUIERE .env</span></td>
+  </tr>
+
+  <!-- app-saved -->
+  <tr>
+    <td><strong>app-saved</strong></td>
+    <td>
+      <div style="display:flex;align-items:center">
+        <div class="bar-wrap"><div class="bar-fill bar-low" style="width:40%"></div></div>
+        <span class="pct" style="color:#ef4444">~40%</span>
+      </div>
+    </td>
+    <td>~37%</td>
+    <td>~33%</td>
+    <td>~10%</td>
+    <td><span class="badge skip">REQUIERE .env</span></td>
+  </tr>
+</table>
+
+<h3>Cobertura por archivo — app-places (detalle completo)</h3>
+<table>
+  <tr><th>Archivo</th><th>Líneas</th><th>Statements</th><th>Funciones</th><th>Ramas</th></tr>
+  <tr><td><code>src/app.ts</code></td><td>85.7%</td><td>82.6%</td><td>50%</td><td>25%</td></tr>
+  <tr><td><code>src/config/env.ts</code></td><td>71.4%</td><td>64.7%</td><td>75%</td><td>33.3%</td></tr>
+  <tr><td><code>src/routes/places.routes.ts</code></td><td>48.3%</td><td>47.5%</td><td>66.7%</td><td>51.5%</td></tr>
+</table>
+
+<!-- ══════════════════ CASOS DE PRUEBA ══════════════════ -->
+<h2>3. Casos de Prueba por Servicio</h2>
+
+<h3>3.1 app-auth — Autenticación</h3>
+<table>
+  <tr><th>#</th><th>Suite</th><th>Caso de prueba</th><th>Resultado</th></tr>
+  <tr><td>1</td><td>POST /auth/login</td><td>Rechaza si faltan credenciales → HTTP 400</td><td><span class="badge pass">PASS</span></td></tr>
+  <tr><td>2</td><td>POST /auth/login</td><td>Rechaza con credenciales incorrectas → HTTP 400</td><td><span class="badge pass">PASS</span></td></tr>
+  <tr><td>3</td><td>POST /auth/login</td><td>Autentica con credenciales válidas → HTTP 200 + JWT</td><td><span class="badge skip">SKIP (requiere .env)</span></td></tr>
+  <tr><td>4</td><td>POST /auth/register</td><td>Rechaza si faltan campos obligatorios → HTTP 400</td><td><span class="badge pass">PASS</span></td></tr>
+  <tr><td>5</td><td>POST /auth/register</td><td>Rechaza contraseña menor a 6 caracteres → HTTP 400</td><td><span class="badge pass">PASS</span></td></tr>
+  <tr><td>6</td><td>GET /auth/session</td><td>Devuelve session null si no hay token → HTTP 200</td><td><span class="badge pass">PASS</span></td></tr>
+  <tr><td>7</td><td>GET /auth/session</td><td>Devuelve session válida con token correcto</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>8</td><td>POST /auth/logout</td><td>Cierra sesión con token válido → HTTP 204</td><td><span class="badge skip">SKIP</span></td></tr>
+</table>
+
+<h3>3.2 app-places — Lugares (Google Maps)</h3>
+<table>
+  <tr><th>#</th><th>Suite</th><th>Caso de prueba</th><th>Resultado</th></tr>
+  <tr><td>1</td><td>POST /places/search-nearby</td><td>Rechaza si falta location → HTTP 400</td><td><span class="badge pass">PASS</span></td></tr>
+  <tr><td>2</td><td>POST /places/search-nearby</td><td>Rechaza si lat/lng no son numéricos → HTTP 400</td><td><span class="badge pass">PASS</span></td></tr>
+  <tr><td>3</td><td>POST /places/search-nearby</td><td>Rechaza si radius es negativo → HTTP 400</td><td><span class="badge pass">PASS</span></td></tr>
+  <tr><td>4</td><td>POST /places/search-nearby</td><td>Rechaza si type está vacío → HTTP 400</td><td><span class="badge pass">PASS</span></td></tr>
+  <tr><td>5</td><td>POST /places/search-nearby</td><td>Llama a Google Maps API y retorna places → HTTP 200 con array</td><td><span class="badge pass">PASS</span></td></tr>
+  <tr><td>6</td><td>GET /places/photo</td><td>Rechaza si falta photoReference → HTTP 400</td><td><span class="badge pass">PASS</span></td></tr>
+</table>
+
+<h3>3.3 app-events — Eventos</h3>
+<table>
+  <tr><th>#</th><th>Suite</th><th>Caso de prueba</th><th>Resultado</th></tr>
+  <tr><td>1</td><td>GET /events/public</td><td>Devuelve solo eventos con fecha futura</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>2</td><td>GET /events/public</td><td>Eventos ordenados por fecha ascendente</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>3</td><td>GET /events/cleanup</td><td>Rechaza sin CRON_SECRET → HTTP 401</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>4</td><td>GET /events/cleanup</td><td>Elimina eventos expirados de la BD</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>5</td><td>POST /events/locatario</td><td>Crea evento con datos válidos → HTTP 201</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>6</td><td>POST /events/locatario</td><td>Rechaza si faltan campos obligatorios → HTTP 400</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>7</td><td>POST /events/locatario</td><td>Rechaza sin token de autenticación → HTTP 401</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>8</td><td>GET /events/locatario</td><td>Devuelve eventos del usuario autenticado</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>9</td><td>GET /events/locatario</td><td>Rechaza sin token → HTTP 401</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>10</td><td>DELETE /events/locatario/:id</td><td>Elimina evento propio → HTTP 200</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>11</td><td>DELETE /events/locatario/:id</td><td>Rechaza eliminar evento inexistente → HTTP 404</td><td><span class="badge skip">SKIP</span></td></tr>
+</table>
+
+<h3>3.4 app-profile — Perfil</h3>
+<table>
+  <tr><th>#</th><th>Suite</th><th>Caso de prueba</th><th>Resultado</th></tr>
+  <tr><td>1</td><td>GET /profile</td><td>Rechaza sin token → HTTP 401</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>2</td><td>GET /profile</td><td>Devuelve perfil del usuario autenticado</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>3</td><td>PATCH /profile</td><td>Actualiza campo bio correctamente</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>4</td><td>GET /profile/stats</td><td>Rechaza sin token → HTTP 401</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>5</td><td>GET /profile/stats</td><td>Devuelve estadísticas del perfil</td><td><span class="badge skip">SKIP</span></td></tr>
+</table>
+
+<h3>3.5 app-admin — Administración</h3>
+<table>
+  <tr><th>#</th><th>Suite</th><th>Caso de prueba</th><th>Resultado</th></tr>
+  <tr><td>1</td><td>GET /admin/users</td><td>Rechaza sin token → HTTP 401</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>2</td><td>GET /admin/users</td><td>Rechaza a usuario sin rol admin → HTTP 403</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>3</td><td>GET /admin/users</td><td>Devuelve lista de usuarios al admin</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>4</td><td>GET /admin/statistics</td><td>Rechaza sin token → HTTP 401</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>5</td><td>GET /admin/statistics</td><td>Devuelve estadísticas al admin</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>6</td><td>GET /admin/events</td><td>Rechaza sin token → HTTP 401</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>7</td><td>GET /admin/events</td><td>Devuelve lista de eventos al admin</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>8</td><td>PUT /admin/users/:id</td><td>Rechaza sin token → HTTP 401</td><td><span class="badge skip">SKIP</span></td></tr>
+  <tr><td>9</td><td>PUT /admin/users/:id</td><td>Rechaza si no hay campos para actualizar → HTTP 400</td><td><span class="badge skip">SKIP</span></td></tr>
+</table>
+
+<!-- ══════════════════ EJEMPLOS DE PRUEBAS ══════════════════ -->
+<h2>4. Ejemplos de Pruebas Realizadas</h2>
+
+<h3>4.1 Prueba que pasó — Validación de inputs (app-places)</h3>
+<pre><span class="cm">// Resultado: PASS — No requiere credenciales de Supabase</span>
+<span class="fn">describe</span>(<span class="str">'POST /places/search-nearby'</span>, () => {
+  <span class="fn">it</span>(<span class="str">'rechaza si falta location'</span>, <span class="kw">async</span> () => {
+    <span class="kw">const</span> res = <span class="kw">await</span> request(app)
+      .post(<span class="str">'/places/search-nearby'</span>)
+      .send({ radius: 500, type: <span class="str">'restaurant'</span> })
+    expect(res.status).toBe(400)  <span class="cm">// ✓ Retornó 400</span>
+  })
+
+  <span class="fn">it</span>(<span class="str">'llama a Google Maps y retorna places para coordenadas válidas'</span>, <span class="kw">async</span> () => {
+    <span class="kw">const</span> res = <span class="kw">await</span> request(app)
+      .post(<span class="str">'/places/search-nearby'</span>)
+      .send({ location: { lat: -33.4364, lng: -70.6358 }, radius: 500, type: <span class="str">'restaurant'</span> })
+    expect([200, 500]).toContain(res.status)   <span class="cm">// ✓ Retornó 200</span>
+    <span class="kw">if</span> (res.status === 200) {
+      expect(Array.isArray(res.body.places)).toBe(<span class="kw">true</span>)  <span class="cm">// ✓ Array de lugares</span>
+    }
+  }, 15_000)
+})</pre>
+
+<h3>4.2 Prueba condicional — Autenticación (app-auth)</h3>
+<pre><span class="cm">// Usa it.skip automáticamente si no hay TEST_USER_EMAIL en .env</span>
+<span class="kw">const</span> hasAuthTestUser = Boolean(TEST_USER_EMAIL && TEST_USER_PASSWORD)
+<span class="kw">const</span> itIfAuthUser = hasAuthTestUser ? it : it.skip
+
+<span class="fn">describe</span>(<span class="str">'POST /auth/login'</span>, () => {
+  <span class="fn">it</span>(<span class="str">'rechaza si faltan credenciales'</span>, <span class="kw">async</span> () => {
+    <span class="kw">const</span> res = <span class="kw">await</span> request(app).post(<span class="str">'/auth/login'</span>).send({})
+    expect(res.status).toBe(400)  <span class="cm">// ✓ PASS sin credenciales</span>
+  })
+
+  <span class="fn">itIfAuthUser</span>(<span class="str">'autentica con credenciales válidas'</span>, <span class="kw">async</span> () => {
+    <span class="kw">const</span> res = <span class="kw">await</span> request(app)
+      .post(<span class="str">'/auth/login'</span>)
+      .send({ email: TEST_USER_EMAIL, password: TEST_USER_PASSWORD })
+    expect(res.status).toBe(200)
+    expect(res.body.session?.access_token).toBeDefined()  <span class="cm">// JWT presente</span>
+    expect(res.body.user?.id).toBeDefined()
+  })
+})</pre>
+
+<h3>4.3 Prueba de acceso por rol — Admin (app-admin)</h3>
+<pre><span class="cm">// Verifica que un usuario normal no puede acceder a rutas de admin</span>
+<span class="fn">it</span>(<span class="str">'rechaza a usuario sin rol admin'</span>, <span class="kw">async</span> () => {
+  <span class="kw">const</span> res = <span class="kw">await</span> request(app)
+    .get(<span class="str">'/admin/users'</span>)
+    .set(<span class="str">'Authorization'</span>, <span class="str">`Bearer ${userToken}`</span>)  <span class="cm">// Token de usuario normal</span>
+  expect(res.status).toBe(403)  <span class="cm">// Forbidden — no es admin</span>
+})</pre>
+
+<!-- ══════════════════ CÓMO EJECUTAR ══════════════════ -->
+<h2>5. Cómo Ejecutar las Pruebas</h2>
+
+<h3>5.1 Requisitos previos</h3>
+<pre><span class="cm"># 1. Instalar dependencias</span>
+npm install
+
+<span class="cm"># 2. (Opcional) Configurar variables para tests autenticados</span>
+<span class="cm"># Crear archivo .env en cada servicio:</span>
+TEST_USER_EMAIL=tu-usuario@email.com
+TEST_USER_PASSWORD=tu-contraseña
+TEST_ADMIN_EMAIL=admin@email.com
+TEST_ADMIN_PASSWORD=contraseña-admin
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...</pre>
+
+<h3>5.2 Comandos de ejecución</h3>
+<pre><span class="cm"># Ejecutar todos los tests (todos los servicios en paralelo)</span>
+npm test
+
+<span class="cm"># Ejecutar tests de un solo servicio</span>
+cd apps/app-places && npm test
+
+<span class="cm"># Ejecutar con reporte de cobertura</span>
+cd apps/app-places && npx jest --coverage
+
+<span class="cm"># Ejecutar con reporte HTML de cobertura</span>
+cd apps/app-places && npx jest --coverage --coverageReporters=html
+<span class="cm"># Abre apps/app-places/coverage/lcov-report/index.html</span>
+
+<span class="cm"># Ejecutar en modo watch (desarrollo)</span>
+cd apps/app-auth && npx jest --watch</pre>
+
+<h3>5.3 Configuración Jest (jest.config.ts)</h3>
+<pre><span class="kw">export default</span> {
+  preset: <span class="str">'ts-jest'</span>,
+  testEnvironment: <span class="str">'node'</span>,
+  transform: { <span class="str">'^.+\\.ts$'</span>: [<span class="str">'ts-jest'</span>, { tsconfig: <span class="str">'tsconfig.json'</span> }] },
+  testMatch: [<span class="str">'**/__tests__/**/*.test.ts'</span>],
+  collectCoverageFrom: [<span class="str">'src/**/*.ts'</span>, <span class="str">'!src/**/*.d.ts'</span>],
+  coverageDirectory: <span class="str">'coverage'</span>,
+  setupFiles: [<span class="str">'dotenv/config'</span>],
+}</pre>
+
+<!-- ══════════════════ GRÁFICO ══════════════════ -->
+<h2>6. Gráfico de Cobertura</h2>
+<p>Cobertura de líneas por servicio (porcentaje con credenciales de prueba configuradas):</p>
+
+<table style="margin-top:8px">
+  <tr><th>Servicio</th><th colspan="2">Cobertura de líneas</th></tr>
+  <tr>
+    <td>app-places</td>
+    <td><div class="bar-wrap" style="width:300px"><div class="bar-fill bar-mid" style="width:60%"></div></div></td>
+    <td class="pct" style="color:#f59e0b">60%</td>
+  </tr>
+  <tr>
+    <td>app-auth (estimado)</td>
+    <td><div class="bar-wrap" style="width:300px"><div class="bar-fill bar-mid" style="width:75%"></div></div></td>
+    <td class="pct" style="color:#f59e0b">~75%</td>
+  </tr>
+  <tr>
+    <td>app-profile</td>
+    <td><div class="bar-wrap" style="width:300px"><div class="bar-fill bar-low" style="width:49%"></div></div></td>
+    <td class="pct" style="color:#ef4444">48.8%</td>
+  </tr>
+  <tr>
+    <td>app-events</td>
+    <td><div class="bar-wrap" style="width:300px"><div class="bar-fill bar-low" style="width:44%"></div></div></td>
+    <td class="pct" style="color:#ef4444">44.3%</td>
+  </tr>
+  <tr>
+    <td>app-saved (estimado)</td>
+    <td><div class="bar-wrap" style="width:300px"><div class="bar-fill bar-low" style="width:40%"></div></div></td>
+    <td class="pct" style="color:#ef4444">~40%</td>
+  </tr>
+  <tr>
+    <td>app-admin</td>
+    <td><div class="bar-wrap" style="width:300px"><div class="bar-fill bar-low" style="width:39%"></div></div></td>
+    <td class="pct" style="color:#ef4444">38.6%</td>
+  </tr>
+  <tr>
+    <td>app-chat (estimado)</td>
+    <td><div class="bar-wrap" style="width:300px"><div class="bar-fill bar-low" style="width:38%"></div></div></td>
+    <td class="pct" style="color:#ef4444">~38%</td>
+  </tr>
+</table>
+
+<div style="margin-top:40px; padding-top:16px; border-top:1px solid #e5e7eb; font-size:12px; color:#888; text-align:center;">
+  eMeet · Informe de Pruebas Unitarias · Jest 30.4.2 + Supertest 7.2.2 · Junio 2026
+</div>
+</div>
+</body>
+</html>

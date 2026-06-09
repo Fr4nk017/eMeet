@@ -51,6 +51,28 @@ npm run dev    # desarrollo
 npm run build && npm start   # producción
 ```
 
+## Probar con Swagger
+
+Con el servidor corriendo (`npm run dev`), abre el browser en:
+
+```
+http://localhost:3006/docs
+```
+
+| URL | Descripción |
+|-----|-------------|
+| `http://localhost:3006/docs` | Swagger UI interactivo |
+| `http://localhost:3006/docs/spec` | Spec OpenAPI en JSON |
+
+Este servicio no requiere autenticación — los endpoints se pueden ejecutar directamente desde el Swagger UI.
+
+Para verificar que el servidor responde antes de abrir el browser:
+
+```bash
+curl http://localhost:3006/health
+# → {"ok":true,"service":"emeet-app-places",...}
+```
+
 ---
 
 ## Pruebas

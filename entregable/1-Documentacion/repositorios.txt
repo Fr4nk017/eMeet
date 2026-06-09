@@ -1,0 +1,54 @@
+REPOSITORIOS GITHUB — PROYECTO eMEET
+====================================
+Fecha: Junio 2026
+Autor: Fr4nk017
+
+REPOSITORIO PRINCIPAL (Monorepo)
+---------------------------------
+URL: https://github.com/Fr4nk017/eMeet
+Descripción: Monorepo Turborepo con frontend Next.js y todos los microservicios Express.
+             Contiene documentación general, configuración de Turbo y paquetes compartidos.
+Rama principal: main
+
+ESTRUCTURA DEL REPOSITORIO
+----------------------------
+El proyecto es un monorepo unificado. Todos los componentes están en el mismo
+repositorio organizado por carpetas:
+
+  apps/app-web       → Frontend Next.js 14
+  apps/app-auth      → Microservicio de autenticación (:3001)
+  apps/app-profile   → Microservicio de perfil (:3002)
+  apps/app-events    → Microservicio de eventos (:3003)
+  apps/app-saved     → Microservicio de guardados/likes (:3004)
+  apps/app-chat      → Microservicio de chat (:3005)
+  apps/app-places    → Microservicio de lugares (:3006)
+  apps/app-admin     → Microservicio de administración (:3007)
+  packages/db        → Esquema Prisma y migraciones
+  packages/shared    → Tipos y middleware compartidos
+  packages/redis     → Cliente Redis y motor de recomendaciones
+
+COMMITS RECIENTES
+------------------
+3c38090 - fiX
+11da53c - config test
+b0b0a3e - busqueda de ubicaciones reales para la creacion de eventos
+2a2d7cb - funciones corregidas del like
+
+ACCESO DIRECTO A COMPONENTES
+------------------------------
+Frontend:          https://github.com/Fr4nk017/eMeet/tree/main/apps/app-web
+Auth service:      https://github.com/Fr4nk017/eMeet/tree/main/apps/app-auth
+Profile service:   https://github.com/Fr4nk017/eMeet/tree/main/apps/app-profile
+Events service:    https://github.com/Fr4nk017/eMeet/tree/main/apps/app-events
+Saved service:     https://github.com/Fr4nk017/eMeet/tree/main/apps/app-saved
+Chat service:      https://github.com/Fr4nk017/eMeet/tree/main/apps/app-chat
+Places service:    https://github.com/Fr4nk017/eMeet/tree/main/apps/app-places
+Admin service:     https://github.com/Fr4nk017/eMeet/tree/main/apps/app-admin
+DB Schema:         https://github.com/Fr4nk017/eMeet/tree/main/packages/db
+Shared package:    https://github.com/Fr4nk017/eMeet/tree/main/packages/shared
+Redis package:     https://github.com/Fr4nk017/eMeet/tree/main/packages/redis
+
+DESPLIEGUE
+-----------
+Frontend (Vercel):  Configurado en vercel.json (rama main)
+Backend:            Microservicios desplegables independientemente

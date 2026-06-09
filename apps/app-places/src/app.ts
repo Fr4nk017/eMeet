@@ -42,6 +42,15 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'emeet-app-places', timestamp: new Date().toISOString() })
 })
 
+app.get('/docs/spec', (_req, res) => {
+  res.json(swaggerSpec)
+})
+
+app.get('/docs/swagger-init.js', (_req, res) => {
+  res.setHeader('Content-Type', 'application/javascript')
+  res.send("window.onload=()=>SwaggerUIBundle({url:'/docs/spec',dom_id:'#swagger-ui',presets:[SwaggerUIBundle.presets.apis,SwaggerUIBundle.SwaggerUIStandalonePreset],layout:'BaseLayout',deepLinking:true})")
+})
+
 app.get('/docs', (_req, res) => {
   res.setHeader('Content-Type', 'text/html')
   res.send(`<!DOCTYPE html>
@@ -55,15 +64,7 @@ app.get('/docs', (_req, res) => {
 <body>
   <div id="swagger-ui"></div>
   <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-  <script>
-    window.onload = () => SwaggerUIBundle({
-      spec: ${JSON.stringify(swaggerSpec)},
-      dom_id: '#swagger-ui',
-      presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
-      layout: 'BaseLayout',
-      deepLinking: true
-    })
-  </script>
+  <script src="/docs/swagger-init.js"></script>
 </body>
 </html>`)
 })
